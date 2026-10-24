@@ -1,0 +1,211 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  STAFF
+  CLIENT_READONLY
+}
+
+enum Jurisdiction {
+  DTCP
+  TOWN_PANCHAYAT
+  PANCHAYAT_UNION
+}
+
+enum ApprovalType {
+  LAYOUT_APPROVAL
+  BUILDING_PLAN_APPROVAL
+  COMPLETION_CERTIFICATE
+  PATTA_TRANSFER
+}
+
+enum CaseStatus {
+  INTAKE
+  DOCUMENT_COLLECTION
+  APPLICATION_PREP
+  SUBMITTED
+  SCRUTINY
+  ACTION_NEEDED
+  INSPECTION_SCHEDULED
+  INSPECTION_DONE
+  APPROVED
+  CLOSED
+}
+
+enum DocumentType {
+  SALE_DEED
+  ID_PROOF
+  SITE_PLAN
+  BUILDING_PLAN
+  EC
+  PATTA
+  CHITTA
+  TSLR
+  TAX_RECEIPT
+  NOC_FIRE
+  NOC_TRAFFIC
+  OTHER
+}
+
+enum FeeType {
+  SCRUTINY
+  CENTAGE
+  DEVELOPMENT_CHARGE
+  SERVICE_FEE
+}
+
+model User {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+  staffId        String?
+  name           String
+  phone          String          @unique
+  email          String?         @unique
+  role           Role
+  password_hash  String
+  status         String          @default("Active")
+  
+  assignedCases  Case[]          @relation("AssignedStaff")
+  statusChanges  StatusHistory[] @relation("ChangedBy")
+  assignedFollowUps FollowUp[]   @relation("FollowUpAssigned")
+}
+
+model Property {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+  owner_name    String
+  owner_phone   String
+  owner_email   String?
+  address       String
+  village       String
+  taluk         String
+  survey_number String
+  jurisdiction  Jurisdiction?
+  plot_area     String?
+  built_up_area String?
+  floors        String?
+  property_type String?
+  created_at    DateTime     @default(now())
+  updated_at    DateTime     @updatedAt
+
+  cases         Case[]
+}
+
+model Case {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+  property_id String? @db.ObjectId
+  parent_case_id String? @db.ObjectId
+  approval_type      String?      @default("BUILDING_PLAN_APPROVAL")
+  status             String?      @default("INTAKE")
+  application_number String?
+  approval_number    String?
+  assigned_staff_id String? @db.ObjectId
+  created_at         DateTime     @default(now())
+  updated_at         DateTime     @updatedAt
+
+  property           Property?     @relation(fields: [property_id], references: [id])
+  parent_case        Case?        @relation("ParentChildCase", fields: [parent_case_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  child_cases        Case[]       @relation("ParentChildCase")
+  assigned_staff     User?        @relation("AssignedStaff", fields: [assigned_staff_id], references: [id])
+
+  status_history     StatusHistory[]
+  documents          Document[]
+  fees               Fee[]
+
+  fullData           Json?
+  uploadedFiles      Json?
+  linkTracking       Json?
+  reason             String?
+}
+
+model StatusHistory {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+  case_id String @db.ObjectId
+  from_status String
+  to_status   String
+  changed_by String? @db.ObjectId
+  note       String?
+  changed_at DateTime   @default(now())
+
+  case       Case       @relation(fields: [case_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  user       User?      @relation("ChangedBy", fields: [changed_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model Document {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+  case_id String @db.ObjectId
+  document_type DocumentType
+  file_key      String
+  version       Int          @default(1)
+  uploaded_by   String
+  verified      Boolean      @default(false)
+  uploaded_at   DateTime     @default(now())
+
+  case          Case         @relation(fields: [case_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  
+  // Inverse relation for fee receipts
+  fee_receipts  Fee[]        @relation("ReceiptDocument")
+}
+
+model ChecklistTemplate {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+  approval_type            ApprovalType
+  jurisdiction             Jurisdiction
+  required_document_types  DocumentType[]
+
+  @@unique([approval_type, jurisdiction])
+}
+
+model Fee {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+  case_id String @db.ObjectId
+  fee_type            FeeType
+  amount              Float
+  paid                Boolean  @default(false)
+  receipt_document_id String? @db.ObjectId
+  created_at          DateTime @default(now())
+
+  case                Case     @relation(fields: [case_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  receipt_document    Document? @relation("ReceiptDocument", fields: [receipt_document_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model Lead {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+  leadId          String?
+  type            String    @default("Enquiry")
+  name            String
+  phone           String
+  email           String?
+  location        String?
+  projectType     String?
+  propertyDetails String?
+  aadharFile      String?
+  aadharFileName  String?
+  buildingPhoto   String?
+  buildingPhotoName String?
+  status          String    @default("New")
+  assignedTo      String?
+  notes           String?
+  created_at      DateTime  @default(now())
+  updated_at      DateTime  @updatedAt
+}
+
+model FollowUp {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+  leadId         String?   @db.ObjectId
+  caseId         String?   @db.ObjectId
+  type           String
+  notes          String
+  scheduledDate  DateTime
+  status         String    @default("Pending")
+  assignedTo     String?   @db.ObjectId
+  created_at     DateTime  @default(now())
+  updated_at     DateTime  @updatedAt
+
+  assigned_user  User?     @relation("FollowUpAssigned", fields: [assignedTo], references: [id])
+}

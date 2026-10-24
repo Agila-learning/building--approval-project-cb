@@ -1,0 +1,70 @@
+{
+  "expo": {
+    "name": "CB Building Approvals",
+    "slug": "cb-building-approvals",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "cbbuildingapproval",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "com.cbbuildingapprovals.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#022F94",
+        "foregroundImage": "./assets/android-icon-foreground.png"
+      },
+      "navigationBar": {
+        "visible": "immersiveSticky",
+        "barStyle": "dark-content",
+        "backgroundColor": "#00000000"
+      },
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.RECORD_AUDIO"
+      ],
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      "expo-font",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#022F94"
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "The app needs access to your photos to upload building approval documents.",
+          "cameraPermission": "The app needs access to your camera to capture document photos."
+        }
+      ],
+      [
+        "expo-document-picker",
+        {
+          "iCloudContainerEnvironment": "Production"
+        }
+      ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "d95c1ebc-a3a6-4c53-8914-674ee89f3361"
+      }
+    }
+  }
+}
