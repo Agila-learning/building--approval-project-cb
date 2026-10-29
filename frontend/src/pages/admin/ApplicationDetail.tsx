@@ -247,6 +247,19 @@ const ApplicationDetail: React.FC = () => {
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      // Validate photo & signature must be images
+      if (['CUSTOMER PHOTOGRAPH', 'CUSTOMER SIGNATURE', 'PROPERTY SIGNATURE'].includes(docUploadType) && !file.type.startsWith('image/')) {
+        toast.error(`Only image files (JPG, PNG, WEBP) are allowed for ${docUploadType}.`);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        return;
+      }
+
+      if (file.size > 10 * 1024 * 1024) {
+        toast.error('File size exceeds the 10MB limit.');
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        return;
+      }
+
       setIsUploading(true);
       const loadingToast = toast.loading(`Uploading ${file.name}...`);
       

@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Edit, Trash2, UserCog, X, Save } from 'lucide-react';
+import { Plus, Edit, Trash2, UserCog, X, Save, KeyRound } from 'lucide-react';
+import toast from 'react-hot-toast';
+import { getApiUrl } from '../../config/api';
 
 interface StaffMember {
   id: string;
@@ -58,45 +60,98 @@ const StaffList: React.FC = () => {
     setShowModal(true);
   };
 
+  const generateStrongPassword = () => {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%';
+    let p = '';
+    for (let i = 0; i < 9; i++) {
+      p += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    const finalPass = `${p}@1A`;
+    setForm(f => ({ ...f, password: finalPass }));
+    setErrors(prev => ({ ...prev, password: '' }));
+    toast.success('Strong password generated!');
+  };
+
   const validate = () => {
     const e: Record<string, string> = {};
     if (!form.name.trim()) e.name = 'Name is required';
-    if (!form.mobile.trim()) e.mobile = 'Mobile is required';
-    else if (!/^[0-9+\s-]{8,15}$/.test(form.mobile)) e.mobile = 'Enter a valid mobile number';
-    if (!form.email.trim()) e.email = 'Email is required';
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) e.email = 'Enter a valid email';
-    if (!form.password?.trim()) e.password = 'Password is required';
-    else if (form.password.length < 6) e.password = 'Password must be at least 6 characters';
+    
+    // Strict mobile number validation: 10 digits starting with 6,7,8,9
+    const cleanMobile = (form.mobile || '').replace(/\D/g, '');
+    if (!cleanMobile) {
+      e.mobile = 'Mobile number is required';
+    } else if (!/^[6-9]\d{9}$/.test(cleanMobile)) {
+      e.mobile = 'Mobile number must be exactly 10 digits starting with 6, 7, 8, or 9';
+    }
+
+    // Strict email validation
+    const cleanEmail = (form.email || '').trim();
+    if (!cleanEmail) {
+      e.email = 'Email address is required';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      e.email = 'Please enter a valid email address (e.g. name@example.com)';
+    }
+
+    // Password validation: minimum 8 characters
+    if (!editingId && !form.password?.trim()) {
+      e.password = 'Password is required for new staff accounts';
+    } else if (form.password && form.password.length < 8) {
+      e.password = 'Password must be at least 8 characters with letters and numbers';
+    }
+
     return e;
   };
 
   const handleSubmit = async () => {
     const e = validate();
-    if (Object.keys(e).length > 0) { setErrors(e); return; }
+    if (Object.keys(e).length > 0) { 
+      setErrors(e); 
+      toast.error('Please resolve the highlighted errors.');
+      return; 
+    }
 
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:10000/api';
+    const apiUrl = getApiUrl();
+    const cleanPayload = {
+      ...form,
+      mobile: form.mobile.replace(/\D/g, '').slice(-10),
+      email: form.email.trim().toLowerCase(),
+      role: 'STAFF'
+    };
 
     try {
       if (editingId) {
         const res = await fetch(`${apiUrl}/users/${editingId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(form)
+          body: JSON.stringify(cleanPayload)
         });
-        if (res.ok) fetchStaff();
+        if (res.ok) {
+          toast.success('Staff member updated successfully!');
+          fetchStaff();
+          setShowModal(false);
+        } else {
+          const errData = await res.json().catch(() => ({}));
+          toast.error(errData.error || 'Failed to update staff member');
+        }
       } else {
         const res = await fetch(`${apiUrl}/users`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ...form, role: 'STAFF' })
+          body: JSON.stringify(cleanPayload)
         });
-        if (res.ok) fetchStaff();
+        if (res.ok) {
+          toast.success(`Staff created! Credentials emailed to ${cleanPayload.email}`);
+          fetchStaff();
+          setShowModal(false);
+        } else {
+          const errData = await res.json().catch(() => ({}));
+          toast.error(errData.error || 'Failed to create staff member');
+        }
       }
-    } catch (error) {
-      console.error('Failed to save staff member');
+    } catch (error: any) {
+      console.error('Failed to save staff member:', error);
+      toast.error('Network error saving staff member');
     }
-    
-    setShowModal(false);
   };
 
   const handleDelete = async (id: string) => {
@@ -279,12 +334,15 @@ const StaffList: React.FC = () => {
 
               {/* Mobile / Username */}
               <div>
-                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: 'var(--primary-dark)', marginBottom: '0.375rem' }}>Mobile Number (Username) *</label>
+                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: 'var(--primary-dark)', marginBottom: '0.375rem' }}>
+                  Mobile Number (Username) * <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 400 }}>(10 digits starting with 6-9)</span>
+                </label>
                 <input
                   type="tel"
-                  placeholder="e.g. +91 98765 43210"
+                  maxLength={10}
+                  placeholder="e.g. 9876543210"
                   value={form.mobile}
-                  onChange={e => setForm(f => ({ ...f, mobile: e.target.value }))}
+                  onChange={e => setForm(f => ({ ...f, mobile: e.target.value.replace(/\D/g, '').slice(0, 10) }))}
                   style={{ ...inputStyle, borderColor: errors.mobile ? 'var(--error-red)' : 'var(--border-color)' }}
                 />
                 {errors.mobile && <div style={errorStyle}>{errors.mobile}</div>}
@@ -292,10 +350,19 @@ const StaffList: React.FC = () => {
 
               {/* Password */}
               <div>
-                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: 'var(--primary-dark)', marginBottom: '0.375rem' }}>Password *</label>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.375rem' }}>
+                  <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--primary-dark)', margin: 0 }}>Password *</label>
+                  <button 
+                    type="button" 
+                    onClick={generateStrongPassword} 
+                    style={{ background: 'none', border: 'none', color: 'var(--primary)', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.25rem', padding: 0 }}
+                  >
+                    <KeyRound size={13} /> Generate Strong Password
+                  </button>
+                </div>
                 <input
-                  type="password"
-                  placeholder="Create a secure password"
+                  type="text"
+                  placeholder="At least 8 chars (letters, numbers, symbols)"
                   value={form.password || ''}
                   onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
                   style={{ ...inputStyle, borderColor: errors.password ? 'var(--error-red)' : 'var(--border-color)' }}
@@ -310,9 +377,12 @@ const StaffList: React.FC = () => {
                   type="email"
                   placeholder="e.g. rajesh@example.com"
                   value={form.email}
-                  onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
+                  onChange={e => setForm(f => ({ ...f, email: e.target.value.trim() }))}
                   style={{ ...inputStyle, borderColor: errors.email ? 'var(--error-red)' : 'var(--border-color)' }}
                 />
+                <div style={{ fontSize: '0.7rem', color: '#64748b', marginTop: '0.25rem' }}>
+                  Login credentials and portal link will be emailed to this address via Brevo.
+                </div>
                 {errors.email && <div style={errorStyle}>{errors.email}</div>}
               </div>
 

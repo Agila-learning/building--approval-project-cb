@@ -19,4 +19,19 @@ const storage = new CloudinaryStorage({
   } as any,
 });
 
-export const upload = multer({ storage: storage });
+const allowedMimes = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg', 'application/pdf'];
+
+export const upload = multer({
+  storage: storage,
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    if (allowedMimes.includes(file.mimetype.toLowerCase())) {
+      cb(null, true);
+    } else {
+      cb(new Error(`Invalid file type (${file.mimetype}). Only JPG, PNG, WEBP images and PDF documents are allowed.`));
+    }
+  }
+});
+

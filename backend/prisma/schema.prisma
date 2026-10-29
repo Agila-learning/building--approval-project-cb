@@ -209,3 +209,14 @@ model FollowUp {
 
   assigned_user  User?     @relation("FollowUpAssigned", fields: [assignedTo], references: [id])
 }
+
+model Notification {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  title      String
+  message    String
+  type       String   @default("INFO")
+  read       Boolean  @default(false)
+  case_id    String?  @db.ObjectId
+  created_at DateTime @default(now())
+}
+

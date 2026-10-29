@@ -83,6 +83,22 @@ const CustomerUpload: React.FC = () => {
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0 && activeUploadId) {
       const file = e.target.files[0];
+
+      // Strict validation: photo and signature must be image files
+      if ((activeUploadId === 'photo' || activeUploadId === 'signature') && !file.type.startsWith('image/')) {
+        toast.error('Only image files (JPG, PNG, WEBP) are allowed for Photograph and Signature.');
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        setActiveUploadId(null);
+        return;
+      }
+
+      if (file.size > 10 * 1024 * 1024) {
+        toast.error('File size exceeds 10MB limit.');
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        setActiveUploadId(null);
+        return;
+      }
+
       const loadingToast = toast.loading(`Uploading ${file.name} to Cloudinary...`);
       setIsUploading(true);
 

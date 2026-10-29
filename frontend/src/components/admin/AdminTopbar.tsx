@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Search, Bell, ChevronDown, Home, ClipboardList, CheckCircle, Menu } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
+import { getApiUrl } from '../../config/api';
 
 interface Notification {
-  id: number;
+  id: string | number;
   title: string;
   message: string;
   time: string;
@@ -19,23 +20,36 @@ const AdminTopbar: React.FC<AdminTopbarProps> = ({ toggleSidebar }) => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const notifRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    const loadNotifications = () => {
-      const stored = localStorage.getItem('mock_notifications');
-      if (stored) {
-        setNotifications(JSON.parse(stored));
-      } else {
-        const initial = [
-          { id: 1, title: 'New Application', message: 'Ramesh Kumar submitted a new application.', time: '10 mins ago', read: false },
-          { id: 2, title: 'Document Uploaded', message: 'Bala Krishnan uploaded requested documents.', time: '1 hour ago', read: false },
-          { id: 3, title: 'Payment Received', message: '₹25,000 received for APP-260926-001.', time: '2 hours ago', read: true }
-        ];
-        setNotifications(initial);
-        localStorage.setItem('mock_notifications', JSON.stringify(initial));
+  const loadNotifications = async () => {
+    try {
+      const res = await fetch(`${getApiUrl()}/notifications`);
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          setNotifications(data.map((n: any) => ({
+            id: n.id,
+            title: n.title,
+            message: n.message,
+            time: n.created_at ? new Date(n.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Recently',
+            read: n.read || false,
+          })));
+          return;
+        }
       }
-    };
-    
+    } catch (err) {
+      console.warn("Could not fetch backend notifications:", err);
+    }
+
+    // Fallback if network offline
+    const stored = localStorage.getItem('mock_notifications');
+    if (stored) {
+      setNotifications(JSON.parse(stored));
+    }
+  };
+
+  useEffect(() => {
     loadNotifications();
+    const interval = setInterval(loadNotifications, 15000); // 15s polling for real updates
     window.addEventListener('storage', loadNotifications);
     
     const handleClickOutside = (event: MouseEvent) => {
@@ -46,6 +60,7 @@ const AdminTopbar: React.FC<AdminTopbarProps> = ({ toggleSidebar }) => {
     document.addEventListener('mousedown', handleClickOutside);
     
     return () => {
+      clearInterval(interval);
       window.removeEventListener('storage', loadNotifications);
       document.removeEventListener('mousedown', handleClickOutside);
     };
@@ -53,7 +68,12 @@ const AdminTopbar: React.FC<AdminTopbarProps> = ({ toggleSidebar }) => {
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
-  const markAllAsRead = () => {
+  const markAllAsRead = async () => {
+    try {
+      await fetch(`${getApiUrl()}/notifications/mark-all-read`, { method: 'POST' });
+    } catch (e) {
+      console.error(e);
+    }
     const updated = notifications.map(n => ({ ...n, read: true }));
     setNotifications(updated);
     localStorage.setItem('mock_notifications', JSON.stringify(updated));
@@ -131,17 +151,51 @@ const AdminTopbar: React.FC<AdminTopbarProps> = ({ toggleSidebar }) => {
             
             {/* Notification Bell */}
             <div ref={notifRef} style={{ position: 'relative' }}>
-              <div 
-                style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', position: 'relative' }}
+              <button 
+                type="button"
                 onClick={() => setShowNotifications(!showNotifications)}
+                title="Notifications"
+                style={{ 
+                  cursor: 'pointer', 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'center',
+                  width: '36px',
+                  height: '36px',
+                  borderRadius: '50%',
+                  border: '1px solid var(--border-color)',
+                  backgroundColor: showNotifications ? '#f1f5f9' : '#ffffff',
+                  position: 'relative',
+                  padding: 0,
+                  transition: 'background-color 0.2s',
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                }}
               >
-                <Bell size={18} strokeWidth={1.5} color={showNotifications ? 'var(--primary)' : 'inherit'} />
+                <Bell size={18} strokeWidth={2} color="#1e293b" />
                 {unreadCount > 0 && (
-                  <div style={{ position: 'absolute', top: '-4px', right: '-4px', width: '14px', height: '14px', borderRadius: '50%', backgroundColor: 'var(--accent)', border: '1.5px solid #fff', color: '#fff', fontSize: '9px', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    {unreadCount}
-                  </div>
+                  <span style={{ 
+                    position: 'absolute', 
+                    top: '-3px', 
+                    right: '-3px', 
+                    minWidth: '18px', 
+                    height: '18px', 
+                    padding: '0 4px',
+                    borderRadius: '999px', 
+                    backgroundColor: '#ea580c', 
+                    border: '2px solid #ffffff', 
+                    color: '#ffffff', 
+                    fontSize: '10px', 
+                    fontWeight: 700, 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'center',
+                    boxShadow: '0 2px 4px rgba(234,88,12,0.4)',
+                    lineHeight: 1
+                  }}>
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </span>
                 )}
-              </div>
+              </button>
               
               {/* Notification Dropdown */}
               {showNotifications && (

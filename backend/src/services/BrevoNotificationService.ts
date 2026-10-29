@@ -325,4 +325,72 @@ export class BrevoNotificationService implements NotificationService {
     });
     await this.sendEmail(email, name, subject, htmlContent);
   }
+
+  async notifyApplicationSubmitted(params: {
+    customerEmail: string;
+    customerName: string;
+    applicationNumber: string;
+    mobileNumber: string;
+    propertyAddress?: string;
+    trackUrl?: string;
+  }): Promise<void> {
+    const { customerEmail, customerName, applicationNumber, mobileNumber, propertyAddress, trackUrl } = params;
+    const subject = `Application Received: ${applicationNumber} - CB Building Approvals`;
+    const htmlContent = generateEmailTemplate({
+      eyebrow: 'Application Confirmation',
+      headline: 'Application Successfully Submitted',
+      customerName: customerName || 'Valued Applicant',
+      bodyParagraphs: [
+        'Thank you for submitting your building approval application with CB Building Approvals. Our scrutiny team has received your documents and initiated verification.',
+        'You can track the live progress and status of your application anytime using your Application Reference Number and registered Mobile Number.'
+      ],
+      referenceCard: [
+        { label: 'Application Reference No.', value: applicationNumber },
+        { label: 'Registered Mobile Number', value: mobileNumber },
+        { label: 'Property Address', value: propertyAddress || 'Address on record' },
+        { label: 'Current Status', value: 'DOCUMENTS_VERIFICATION' }
+      ],
+      cta: {
+        text: 'Track Your Application Now',
+        url: trackUrl || 'http://localhost:5175/track'
+      }
+    });
+
+    await this.sendEmail(customerEmail, customerName, subject, htmlContent);
+  }
+
+  async notifyStaffCredentials(params: {
+    staffEmail: string;
+    staffName: string;
+    staffId: string;
+    phone: string;
+    password: string;
+    role: string;
+    loginUrl?: string;
+  }): Promise<void> {
+    const { staffEmail, staffName, staffId, phone, password, role, loginUrl } = params;
+    const subject = `Welcome to the Team! Your Login Credentials - CB Building Approvals`;
+    const htmlContent = generateEmailTemplate({
+      eyebrow: 'Employee Portal Onboarding',
+      headline: 'Your Staff Account is Ready',
+      customerName: staffName,
+      bodyParagraphs: [
+        `Welcome to CB Building Approvals! You have been granted access to our internal management portal with the role of ${role}.`,
+        'Please use the following credentials to log in. We recommend changing your password after your first login.'
+      ],
+      referenceCard: [
+        { label: 'Staff ID', value: staffId },
+        { label: 'Registered Mobile (Login)', value: phone },
+        { label: 'Registered Email', value: staffEmail },
+        { label: 'Temporary Password', value: password },
+        { label: 'Assigned Role', value: role }
+      ],
+      cta: {
+        text: 'Log In to Staff Portal',
+        url: loginUrl || 'http://localhost:5175/login'
+      }
+    });
+
+    await this.sendEmail(staffEmail, staffName, subject, htmlContent);
+  }
 }

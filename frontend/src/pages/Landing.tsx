@@ -30,13 +30,26 @@ const Landing: React.FC = () => {
 
   const handleEnquirySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    const cleanPhone = formData.phone.trim().replace(/\D/g, '');
+    if (!/^[6-9]\d{9}$/.test(cleanPhone)) {
+      toast.error('Mobile number must be exactly 10 digits and start with 6, 7, 8, or 9.');
+      return;
+    }
+
+    const cleanEmail = formData.email.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      toast.error('Please enter a valid email address with "@" and domain (e.g. name@example.com).');
+      return;
+    }
+
     setIsSubmitting(true);
     
     try {
       const response = await fetch(`${getApiUrl()}/leads`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...formData, type: 'Enquiry' })
+        body: JSON.stringify({ ...formData, phone: cleanPhone, email: cleanEmail, type: 'Enquiry' })
       });
       
       if (!response.ok) {
@@ -123,7 +136,15 @@ const Landing: React.FC = () => {
               <div>
                 <div style={{ position: 'relative' }}>
                   <div style={{ position: 'absolute', top: '50%', left: '1rem', transform: 'translateY(-50%)', color: '#94a3b8' }}><Phone size={16} /></div>
-                  <input type="tel" required value={formData.phone} onChange={(e) => setFormData({...formData, phone: e.target.value})} placeholder="Mobile Number *" style={{ width: '100%', padding: '0.75rem 1rem 0.75rem 2.5rem', borderRadius: '0.5rem', border: '1px solid var(--border-color)', fontSize: '0.875rem' }} />
+                  <input 
+                    type="tel" 
+                    required 
+                    maxLength={10}
+                    value={formData.phone} 
+                    onChange={(e) => setFormData({...formData, phone: e.target.value.replace(/\D/g, '').slice(0, 10)})} 
+                    placeholder="Mobile Number (Starts with 6,7,8,9) *" 
+                    style={{ width: '100%', padding: '0.75rem 1rem 0.75rem 2.5rem', borderRadius: '0.5rem', border: '1px solid var(--border-color)', fontSize: '0.875rem' }} 
+                  />
                 </div>
               </div>
               <div>

@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { BrevoNotificationService } from '../services/BrevoNotificationService';
+import prisma from '../prisma';
 
 const notificationService = new BrevoNotificationService();
 
@@ -32,3 +33,44 @@ export const sendUploadLink = async (req: Request, res: Response) => {
     res.status(500).json({ error: 'Failed to send email' });
   }
 };
+
+export const getNotifications = async (req: Request, res: Response) => {
+  try {
+    const notifications = await prisma.notification.findMany({
+      orderBy: { created_at: 'desc' },
+      take: 30,
+    });
+    res.status(200).json(notifications);
+  } catch (error) {
+    console.error('Error fetching notifications:', error);
+    res.status(500).json({ error: 'Failed to fetch notifications' });
+  }
+};
+
+export const markAsRead = async (req: Request, res: Response) => {
+  try {
+    const id = req.params.id as string;
+    const updated = await prisma.notification.update({
+      where: { id },
+      data: { read: true },
+    });
+    res.status(200).json(updated);
+  } catch (error) {
+    console.error('Error marking notification as read:', error);
+    res.status(500).json({ error: 'Failed to mark notification as read' });
+  }
+};
+
+export const markAllAsRead = async (req: Request, res: Response) => {
+  try {
+    await prisma.notification.updateMany({
+      where: { read: false },
+      data: { read: true },
+    });
+    res.status(200).json({ success: true });
+  } catch (error) {
+    console.error('Error marking all notifications as read:', error);
+    res.status(500).json({ error: 'Failed to mark all as read' });
+  }
+};
+

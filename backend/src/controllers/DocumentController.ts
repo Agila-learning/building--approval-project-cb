@@ -23,6 +23,19 @@ export class DocumentController {
             uploaded_by: userId,
           },
         });
+
+        try {
+          await prisma.notification.create({
+            data: {
+              title: `Document Uploaded: ${document_type || 'File'}`,
+              message: `Document "${document_type || 'File'}" was uploaded for application ${caseId}.`,
+              type: 'document_uploaded',
+              case_id: String(caseId)
+            }
+          });
+        } catch (nErr) {
+          console.error("Failed to create notification on document upload:", nErr);
+        }
       }
 
       res.json({
@@ -74,6 +87,19 @@ export class DocumentController {
         where: { id: id as string },
         data: { verified },
       });
+
+      try {
+        await prisma.notification.create({
+          data: {
+            title: `Document ${verified ? 'Verified' : 'Flagged'}`,
+            message: `Document "${updatedDoc.document_type}" was ${verified ? 'verified successfully' : 'flagged for reupload'}.`,
+            type: 'document_verification',
+            case_id: updatedDoc.case_id
+          }
+        });
+      } catch (nErr) {
+        console.error("Failed to create notification on verifyDocument:", nErr);
+      }
 
       res.json(updatedDoc);
     } catch (error: any) {

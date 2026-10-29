@@ -95,6 +95,32 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      // 1. Strict validation for Photograph and Signature (Images ONLY)
+      const isPhotoOrSignature = docUploadType.includes('PHOTOGRAPH') || 
+                                 docUploadType.includes('PHOTO') || 
+                                 docUploadType.includes('SIGNATURE');
+
+      if (isPhotoOrSignature) {
+        if (!file.type.startsWith('image/')) {
+          toast.error(`Invalid format! ${docUploadType} must be an image file (JPG, PNG, WEBP).`);
+          if (fileInputRef.current) fileInputRef.current.value = '';
+          return;
+        }
+      } else {
+        const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+        if (!allowedTypes.includes(file.type)) {
+          toast.error(`Invalid format! ${docUploadType} must be an image (JPG, PNG) or PDF document.`);
+          if (fileInputRef.current) fileInputRef.current.value = '';
+          return;
+        }
+      }
+
+      if (file.size > 10 * 1024 * 1024) {
+        toast.error("File size cannot exceed 10MB limit.");
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        return;
+      }
+
       setIsUploading(true);
       const loadingToast = toast.loading(`Uploading ${file.name}...`);
       
@@ -370,10 +396,43 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
       if (!formData.customerName) errors.push('customerName');
       if (!formData.fatherName) errors.push('fatherName');
       if (!formData.dob) errors.push('dob');
-      if (!formData.mobile) errors.push('mobile');
-      if (!formData.email) errors.push('email');
-      if (!formData.aadhar) errors.push('aadhar');
-      if (!formData.pan) errors.push('pan');
+
+      // Mobile: strictly 10 digits starting with 6,7,8,9
+      const cleanMobile = (formData.mobile || '').replace(/\D/g, '');
+      if (!cleanMobile || !/^[6-9]\d{9}$/.test(cleanMobile)) {
+        errors.push('mobile');
+        toast.error('Mobile number must be exactly 10 digits starting with 6, 7, 8, or 9.');
+      }
+
+      // Alternate Mobile: if entered, strictly 10 digits starting with 6,7,8,9
+      if (formData.altMobile) {
+        const cleanAlt = formData.altMobile.replace(/\D/g, '');
+        if (!/^[6-9]\d{9}$/.test(cleanAlt)) {
+          errors.push('altMobile');
+          toast.error('Alternative number must be exactly 10 digits starting with 6, 7, 8, or 9.');
+        }
+      }
+
+      // Email: must contain @ and valid domain
+      const cleanEmail = (formData.email || '').trim();
+      if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+        errors.push('email');
+        toast.error('Please enter a valid email address (e.g. name@example.com).');
+      }
+
+      // Aadhar: strictly 12 digits
+      const cleanAadhar = (formData.aadhar || '').replace(/\D/g, '');
+      if (!cleanAadhar || cleanAadhar.length !== 12) {
+        errors.push('aadhar');
+        toast.error('Aadhar number must be exactly 12 digits.');
+      }
+
+      // PAN: 5 uppercase letters, 4 digits, 1 uppercase letter
+      const cleanPan = (formData.pan || '').trim().toUpperCase();
+      if (!cleanPan || !/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(cleanPan)) {
+        errors.push('pan');
+        toast.error('PAN number must be 10 characters in the format ABCDE1234F.');
+      }
       
       // Residential Address: Require streetName (or area), city, state, pincode. House number is optional.
       if (!formData.residentialAddress.streetName && !formData.residentialAddress.area) {
@@ -591,24 +650,58 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
               <input type="date" value={formData.dob} onChange={e => setFormData({...formData, dob: e.target.value})} style={getInputStyle('dob', formData.dob)} />
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: 'var(--primary-dark)', marginBottom: '0.5rem' }}>Mobile Number *</label>
-              <input type="tel" value={formData.mobile} onChange={e => setFormData({...formData, mobile: e.target.value})} placeholder="+91" style={getInputStyle('mobile', formData.mobile)} />
+              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: 'var(--primary-dark)', marginBottom: '0.5rem' }}>Mobile Number * (10 digits starting with 6-9)</label>
+              <input 
+                type="tel" 
+                maxLength={10}
+                value={formData.mobile} 
+                onChange={e => setFormData({...formData, mobile: e.target.value.replace(/\D/g, '').slice(0, 10)})} 
+                placeholder="e.g. 9876543210" 
+                style={getInputStyle('mobile', formData.mobile)} 
+              />
             </div>
             <div>
               <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: 'var(--primary-dark)', marginBottom: '0.5rem' }}>Alternative Number (Optional)</label>
-              <input type="tel" value={formData.altMobile} onChange={e => setFormData({...formData, altMobile: e.target.value})} placeholder="+91" style={getInputStyle('altMobile', formData.altMobile)} />
+              <input 
+                type="tel" 
+                maxLength={10}
+                value={formData.altMobile} 
+                onChange={e => setFormData({...formData, altMobile: e.target.value.replace(/\D/g, '').slice(0, 10)})} 
+                placeholder="e.g. 9876543211" 
+                style={getInputStyle('altMobile', formData.altMobile)} 
+              />
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: 'var(--primary-dark)', marginBottom: '0.5rem' }}>Aadhar Number *</label>
-              <input type="text" value={formData.aadhar} onChange={e => setFormData({...formData, aadhar: e.target.value})} placeholder="12-digit number" style={getInputStyle('aadhar', formData.aadhar)} />
+              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: 'var(--primary-dark)', marginBottom: '0.5rem' }}>Aadhar Number * (12 digits)</label>
+              <input 
+                type="text" 
+                maxLength={12}
+                value={formData.aadhar} 
+                onChange={e => setFormData({...formData, aadhar: e.target.value.replace(/\D/g, '').slice(0, 12)})} 
+                placeholder="12-digit UID" 
+                style={getInputStyle('aadhar', formData.aadhar)} 
+              />
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: 'var(--primary-dark)', marginBottom: '0.5rem' }}>PAN Number *</label>
-              <input type="text" value={formData.pan} onChange={e => setFormData({...formData, pan: e.target.value})} placeholder="PAN number" style={getInputStyle('pan', formData.pan)} />
+              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: 'var(--primary-dark)', marginBottom: '0.5rem' }}>PAN Number * (e.g. ABCDE1234F)</label>
+              <input 
+                type="text" 
+                maxLength={10}
+                value={formData.pan} 
+                onChange={e => setFormData({...formData, pan: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10)})} 
+                placeholder="ABCDE1234F" 
+                style={getInputStyle('pan', formData.pan)} 
+              />
             </div>
             <div>
               <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: 'var(--primary-dark)', marginBottom: '0.5rem' }}>Email ID *</label>
-              <input type="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} placeholder="Email address" style={getInputStyle('email', formData.email)} />
+              <input 
+                type="email" 
+                value={formData.email} 
+                onChange={e => setFormData({...formData, email: e.target.value.trim()})} 
+                placeholder="name@example.com" 
+                style={getInputStyle('email', formData.email)} 
+              />
             </div>
           </div>
         </div>
