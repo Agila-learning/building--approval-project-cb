@@ -104,10 +104,10 @@ export class BrevoNotificationService implements NotificationService {
   private sender: { name: string, email: string };
 
   constructor() {
-    this.apiKey = process.env.BREVO_API_KEY || '';
+    this.apiKey = process.env.BREVO_API_KEY || process.env.BREVO_SMTP_KEY || '';
     // Brevo requires the sender email to be verified in your account
     this.sender = { 
-      name: 'CB Building Approvals', 
+      name: process.env.BREVO_SENDER_NAME || 'CB Building Approvals', 
       email: process.env.BREVO_SENDER_EMAIL || 'forgeindiaconnectfic@gmail.com' 
     };
   }
