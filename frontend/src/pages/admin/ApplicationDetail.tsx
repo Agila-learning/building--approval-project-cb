@@ -254,7 +254,8 @@ const ApplicationDetail: React.FC = () => {
         formDataUpload.append('file', file);
         formDataUpload.append('upload_preset', 'ml_default');
         
-        const response = await fetch(`https://api.cloudinary.com/v1_1/dfou7lxtg/auto/upload`, {
+        const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || 'yy08owy2';
+        const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/auto/upload`, {
           method: 'POST',
           body: formDataUpload,
         });

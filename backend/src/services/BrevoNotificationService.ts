@@ -1,5 +1,6 @@
 import prisma from '../prisma';
 import { CaseStatus, NotificationService } from './CaseStateService';
+import nodemailer, { Transporter } from 'nodemailer';
 
 function generateEmailTemplate({
   eyebrow,
@@ -101,39 +102,83 @@ function generateEmailTemplate({
 
 export class BrevoNotificationService implements NotificationService {
   private apiKey: string;
-  private sender: { name: string, email: string };
+  private sender: { name: string; email: string };
+  private transporter: Transporter | null = null;
 
   constructor() {
     this.apiKey = process.env.BREVO_API_KEY || process.env.BREVO_SMTP_KEY || '';
-    // Brevo requires the sender email to be verified in your account
     this.sender = { 
-      name: process.env.BREVO_SENDER_NAME || 'CB Building Approvals', 
-      email: process.env.BREVO_SENDER_EMAIL || 'forgeindiaconnectfic@gmail.com' 
+      name: process.env.BREVO_SENDER_NAME || 'CB Builders', 
+      email: process.env.BREVO_SENDER_EMAIL || 'cbbuilders2026@gmail.com' 
     };
+
+    const smtpHost = process.env.BREVO_SMTP_HOST || 'smtp-relay.brevo.com';
+    const smtpPort = parseInt(process.env.BREVO_SMTP_PORT || '587', 10);
+    const smtpUser = process.env.BREVO_SMTP_LOGIN || 'c07bc4001@smtp-brevo.com';
+    const smtpPass = process.env.BREVO_SMTP_KEY || process.env.BREVO_API_KEY || '';
+
+    if (smtpPass) {
+      this.transporter = nodemailer.createTransport({
+        host: smtpHost,
+        port: smtpPort,
+        secure: smtpPort === 465,
+        auth: {
+          user: smtpUser,
+          pass: smtpPass,
+        },
+      });
+    }
+  }
+
+  public async verifyConnection(): Promise<{ success: boolean; message: string }> {
+    if (this.transporter) {
+      try {
+        await this.transporter.verify();
+        return { success: true, message: 'Brevo SMTP Relay connected successfully' };
+      } catch (err: any) {
+        return { success: false, message: `Brevo SMTP verification failed: ${err.message}` };
+      }
+    }
+    return { success: false, message: 'Brevo transporter not configured' };
   }
 
   private async sendEmail(toEmail: string, toName: string, subject: string, htmlContent: string) {
     try {
-      const response = await fetch('https://api.brevo.com/v3/smtp/email', {
-        method: 'POST',
-        headers: {
-          'api-key': this.apiKey,
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
-        body: JSON.stringify({
-          sender: this.sender,
-          to: [{ email: toEmail, name: toName }],
+      // 1. Try Brevo SMTP relay via nodemailer
+      if (this.transporter) {
+        const info = await this.transporter.sendMail({
+          from: `"${this.sender.name}" <${this.sender.email}>`,
+          to: `"${toName}" <${toEmail}>`,
           subject: subject,
-          htmlContent: htmlContent
-        })
-      });
+          html: htmlContent,
+        });
+        console.log(`[Brevo SMTP] Email "${subject}" sent to ${toEmail} (ID: ${info.messageId})`);
+        return;
+      }
 
-      if (!response.ok) {
-        const error = await response.text();
-        console.error('Brevo API Error:', error);
-      } else {
-        console.log(`[Email Sent] ${subject} to ${toEmail}`);
+      // 2. Fallback to Brevo REST API (only if xkeysib key is used)
+      if (this.apiKey) {
+        const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+          method: 'POST',
+          headers: {
+            'api-key': this.apiKey,
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          body: JSON.stringify({
+            sender: this.sender,
+            to: [{ email: toEmail, name: toName }],
+            subject: subject,
+            htmlContent: htmlContent
+          })
+        });
+
+        if (!response.ok) {
+          const error = await response.text();
+          console.error('Brevo API Error:', error);
+        } else {
+          console.log(`[Brevo REST] Email "${subject}" sent to ${toEmail}`);
+        }
       }
     } catch (error) {
       console.error('Failed to send email via Brevo:', error);
