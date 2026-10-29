@@ -31,8 +31,20 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
   const loggedInUser = localStorage.getItem('loggedInUser') || 'Admin';
   const isEmployee = loggedInUser !== 'Admin';
 
-  const [currentStep, setCurrentStep] = useState(2);
+  const [currentStep, setCurrentStep] = useState(1);
   const totalSteps = isCustomer ? 2 : 3;
+
+  React.useEffect(() => {
+    if (isCustomer) {
+      setCurrentStep(1);
+      try {
+        localStorage.removeItem('newApp_currentStep');
+      } catch (e) {
+        // ignore
+      }
+    }
+  }, [isCustomer]);
+
   const [isUploading, setIsUploading] = useState(false);
   const [isSaveMenuOpen, setSaveMenuOpen] = useState(false);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
@@ -164,11 +176,13 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
 
   React.useEffect(() => {
     try {
-      localStorage.setItem('newApp_currentStep', currentStep.toString());
+      if (!isCustomer) {
+        localStorage.setItem('newApp_currentStep', currentStep.toString());
+      }
     } catch (e) {
       console.error("Storage quota exceeded", e);
     }
-  }, [currentStep]);
+  }, [currentStep, isCustomer]);
 
   React.useEffect(() => {
     try {
@@ -187,7 +201,7 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
     }
   }, [formData]);
 
-  const saveApplicationData = async (isPartial: boolean, reason?: string) => {
+  const saveApplicationData = async (isPartial: boolean, reason?: string): Promise<string | false> => {
     try {
       const apiUrl = import.meta.env.VITE_API_URL || 'https://building-approval.onrender.com/api';
       
@@ -244,6 +258,30 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
         reason: reason || ''
       };
       localStorage.setItem('mock_saved_cases', JSON.stringify([mockCase, ...existing]));
+
+      // Also persist to recentApplications so TrackApplication immediately finds it
+      try {
+        const recentStr = localStorage.getItem('recentApplications');
+        const recent = recentStr ? JSON.parse(recentStr) : [];
+        const newRecent = {
+          id: finalAppNumber,
+          application_number: finalAppNumber,
+          applicantName: formData.customerName || 'Applicant',
+          mobile: formData.mobile || '',
+          email: formData.email || '',
+          serviceType: typeMap[formData.serviceType] || 'Building Approval',
+          propertyType: 'Residential',
+          village: formData.propertyDetails?.village || formData.residentialAddress?.area || 'Hosur',
+          status: isPartial ? 'Draft' : 'Submitted',
+          date: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+          submittedDate: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+          fullData: formData,
+          uploadedFiles: uploadedFiles
+        };
+        localStorage.setItem('recentApplications', JSON.stringify([newRecent, ...recent.filter((r: any) => r.id !== finalAppNumber && r.application_number !== finalAppNumber)]));
+      } catch (e) {
+        console.error("Failed to save recentApplications", e);
+      }
 
       localStorage.removeItem('newApp_formData');
       localStorage.removeItem('newApp_currentStep');
@@ -304,7 +342,7 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
         localStorage.setItem('mock_saved_cases', JSON.stringify(updatedLocalCases));
       }
       
-      return true;
+      return finalAppNumber;
     } catch (e) {
       console.error(e);
       return false;
@@ -342,7 +380,7 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
     // Validation for Step 1
     if (currentStep === 1) {
       if (!formData.serviceType) errors.push('serviceType');
-      if (!formData.staff) errors.push('staff');
+      if (!isCustomer && !formData.staff) errors.push('staff');
       if (!formData.customerName) errors.push('customerName');
       if (!formData.fatherName) errors.push('fatherName');
       if (!formData.dob) errors.push('dob');
@@ -351,16 +389,22 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
       if (!formData.aadhar) errors.push('aadhar');
       if (!formData.pan) errors.push('pan');
       
-      if (!formData.residentialAddress.houseNo) errors.push('res_houseNo');
-      if (!formData.residentialAddress.streetName) errors.push('res_streetName');
+      // Residential Address: Require streetName (or area), city, state, pincode. House number is optional.
+      if (!formData.residentialAddress.streetName && !formData.residentialAddress.area) {
+        errors.push('res_streetName');
+      }
       if (!formData.residentialAddress.city) errors.push('res_city');
+      if (!formData.residentialAddress.pincode) errors.push('res_pincode');
       if (!formData.residentialAddress.state) errors.push('res_state');
       
-      const perm = formData.permanentAddress.sameAsResidential ? formData.residentialAddress : formData.permanentAddress;
-      if (!perm.houseNo) errors.push('perm_houseNo');
-      if (!perm.streetName) errors.push('perm_streetName');
-      if (!perm.city) errors.push('perm_city');
-      if (!perm.state) errors.push('perm_state');
+      // Permanent Address: only if different from residential
+      if (!formData.permanentAddress.sameAsResidential) {
+        const perm = formData.permanentAddress;
+        if (!perm.streetName && !perm.area) errors.push('perm_streetName');
+        if (!perm.city) errors.push('perm_city');
+        if (!perm.pincode) errors.push('perm_pincode');
+        if (!perm.state) errors.push('perm_state');
+      }
     }
     
     // Validation for Step 2
@@ -376,19 +420,83 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
 
     if (errors.length > 0) {
       setFormErrors(errors);
-      toast.error("Please fill all mandatory fields (highlighted in red) to proceed.");
+      const fieldLabels: Record<string, string> = {
+        serviceType: 'Service Type',
+        staff: 'Assigned Employee',
+        customerName: 'Customer Name',
+        fatherName: 'Father Name',
+        dob: 'Date of Birth',
+        mobile: 'Mobile Number',
+        email: 'Email ID',
+        aadhar: 'Aadhar Number',
+        pan: 'PAN Number',
+        res_streetName: 'Street Name / Area',
+        res_city: 'City',
+        res_pincode: 'PinCode',
+        res_state: 'State',
+        perm_streetName: 'Permanent Street Name / Area',
+        perm_city: 'Permanent City',
+        perm_pincode: 'Permanent PinCode',
+        perm_state: 'Permanent State',
+        prop_surveyNo: 'Survey Number',
+        prop_pattaNo: 'Patta Number',
+        feesAmount: 'Fees Amount',
+      };
+      const missingList = errors.map(e => fieldLabels[e] || e).join(', ');
+      toast.error(`Please fill mandatory fields: ${missingList}`);
       return;
     }
 
     setFormErrors([]);
     if (currentStep < totalSteps) {
       setCurrentStep(currentStep + 1);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
+  const handleSubmit = async () => {
+    let errors: string[] = [];
+    if (!formData.propertyDetails?.surveyNo) errors.push('prop_surveyNo');
+    if (!formData.propertyDetails?.pattaNo) errors.push('prop_pattaNo');
+
+    if (!isCustomer && currentStep === 3) {
+      if (!formData.feesAmount) errors.push('feesAmount');
+    }
+
+    if (errors.length > 0) {
+      setFormErrors(errors);
+      const fieldLabels: Record<string, string> = {
+        prop_surveyNo: 'Survey Number',
+        prop_pattaNo: 'Patta Number',
+        feesAmount: 'Fees Amount',
+      };
+      const missingList = errors.map(e => fieldLabels[e] || e).join(', ');
+      toast.error(`Please fill mandatory fields: ${missingList}`);
+      return;
+    }
+
+    if (!isCustomer && !checkAllDocumentsUploaded()) {
+      toast.error("Please upload all required documents to submit!");
+      return;
+    }
+
+    const appNumber = await saveApplicationData(false);
+    if (appNumber) {
+      toast.success(`Congratulations! Application #${appNumber} submitted successfully.`);
+      if (isCustomer) {
+        navigate(`/track-application?id=${appNumber}&mobile=${formData.mobile}`);
+      } else if (isEmployee) {
+        navigate('/employee/applications');
+      } else {
+        navigate('/admin/applications');
+      }
     }
   };
 
   const handlePrev = () => {
     if (currentStep > 1) {
       setCurrentStep(currentStep - 1);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
 
@@ -423,9 +531,9 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
     const hasError = formErrors.includes(fieldName) && !value;
     return { 
       width: '100%', 
-      padding: '0.5rem', 
-      border: 'none', 
-      borderBottom: hasError ? '2px solid #ef4444' : '1px solid var(--border-color)', 
+      padding: '0.625rem 0.75rem', 
+      border: hasError ? '1.5px solid #ef4444' : '1px solid var(--border-color)', 
+      borderRadius: '0.375rem',
       backgroundColor: hasError ? '#fef2f2' : 'transparent',
       outline: 'none',
       transition: 'all 0.2s ease-in-out'
@@ -574,36 +682,36 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
             <h4 style={{ fontSize: '0.875rem', fontWeight: 700, color: 'var(--primary-dark)', marginBottom: '1.5rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.5rem' }}>Correspondence Address *</h4>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '1.5rem' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Dno</label>
-                <input type="text" value={formData.residentialAddress.houseNo} onChange={e => setFormData({...formData, residentialAddress: {...formData.residentialAddress, houseNo: e.target.value}})} style={getInputStyle('res_houseNo', formData.residentialAddress.houseNo)} />
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Dno (Optional)</label>
+                <input type="text" placeholder="Door No" value={formData.residentialAddress.houseNo} onChange={e => setFormData({...formData, residentialAddress: {...formData.residentialAddress, houseNo: e.target.value}})} style={getInputStyle('res_houseNo', formData.residentialAddress.houseNo)} />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Street Name</label>
-                <input type="text" value={formData.residentialAddress.streetName} onChange={e => setFormData({...formData, residentialAddress: {...formData.residentialAddress, streetName: e.target.value}})} style={getInputStyle('res_streetName', formData.residentialAddress.streetName)} />
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Street Name / Locality *</label>
+                <input type="text" placeholder="Street Name" value={formData.residentialAddress.streetName} onChange={e => setFormData({...formData, residentialAddress: {...formData.residentialAddress, streetName: e.target.value}})} style={getInputStyle('res_streetName', formData.residentialAddress.streetName)} />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Area</label>
-                <input type="text" value={formData.residentialAddress.area} onChange={e => setFormData({...formData, residentialAddress: {...formData.residentialAddress, area: e.target.value}})} style={getInputStyle('res_area', formData.residentialAddress.area)} />
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Area (Optional)</label>
+                <input type="text" placeholder="Area" value={formData.residentialAddress.area} onChange={e => setFormData({...formData, residentialAddress: {...formData.residentialAddress, area: e.target.value}})} style={getInputStyle('res_area', formData.residentialAddress.area)} />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>City</label>
-                <input type="text" value={formData.residentialAddress.city} onChange={e => setFormData({...formData, residentialAddress: {...formData.residentialAddress, city: e.target.value}})} style={getInputStyle('res_city', formData.residentialAddress.city)} />
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>City / Town *</label>
+                <input type="text" placeholder="City" value={formData.residentialAddress.city} onChange={e => setFormData({...formData, residentialAddress: {...formData.residentialAddress, city: e.target.value}})} style={getInputStyle('res_city', formData.residentialAddress.city)} />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Taluk/District</label>
-                <input type="text" value={formData.residentialAddress.taluk} onChange={e => setFormData({...formData, residentialAddress: {...formData.residentialAddress, taluk: e.target.value}})} style={getInputStyle('res_taluk', formData.residentialAddress.taluk)} />
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Taluk / District (Optional)</label>
+                <input type="text" placeholder="Taluk / District" value={formData.residentialAddress.taluk} onChange={e => setFormData({...formData, residentialAddress: {...formData.residentialAddress, taluk: e.target.value}})} style={getInputStyle('res_taluk', formData.residentialAddress.taluk)} />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>PinCode</label>
-                <input type="text" value={formData.residentialAddress.pincode} onChange={e => setFormData({...formData, residentialAddress: {...formData.residentialAddress, pincode: e.target.value}})} style={getInputStyle('res_pincode', formData.residentialAddress.pincode)} />
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>PinCode *</label>
+                <input type="text" placeholder="PinCode" value={formData.residentialAddress.pincode} onChange={e => setFormData({...formData, residentialAddress: {...formData.residentialAddress, pincode: e.target.value}})} style={getInputStyle('res_pincode', formData.residentialAddress.pincode)} />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>State</label>
-                <input type="text" value={formData.residentialAddress.state} onChange={e => setFormData({...formData, residentialAddress: {...formData.residentialAddress, state: e.target.value}})} style={getInputStyle('res_state', formData.residentialAddress.state)} />
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>State *</label>
+                <input type="text" placeholder="State" value={formData.residentialAddress.state} onChange={e => setFormData({...formData, residentialAddress: {...formData.residentialAddress, state: e.target.value}})} style={getInputStyle('res_state', formData.residentialAddress.state)} />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Landmark</label>
-                <input type="text" value={formData.residentialAddress.landmark} onChange={e => setFormData({...formData, residentialAddress: {...formData.residentialAddress, landmark: e.target.value}})} style={getInputStyle('res_landmark', formData.residentialAddress.landmark)} />
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Landmark (Optional)</label>
+                <input type="text" placeholder="Landmark" value={formData.residentialAddress.landmark} onChange={e => setFormData({...formData, residentialAddress: {...formData.residentialAddress, landmark: e.target.value}})} style={getInputStyle('res_landmark', formData.residentialAddress.landmark)} />
               </div>
             </div>
           </div>
@@ -614,42 +722,42 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
               <h4 style={{ fontSize: '0.875rem', fontWeight: 700, color: 'var(--primary-dark)' }}>Permanent Address *</h4>
               <label style={{ fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', color: 'var(--text-secondary)', fontWeight: 500 }}>
                 <input type="checkbox" checked={formData.permanentAddress.sameAsResidential} onChange={e => setFormData({...formData, permanentAddress: {...formData.permanentAddress, sameAsResidential: e.target.checked}})} style={{ accentColor: 'var(--primary)' }} />
-                Same
+                Same as Correspondence
               </label>
             </div>
             
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '1.5rem', opacity: formData.permanentAddress.sameAsResidential ? 0.5 : 1, pointerEvents: formData.permanentAddress.sameAsResidential ? 'none' : 'auto' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Dno</label>
-                <input type="text" value={formData.permanentAddress.sameAsResidential ? formData.residentialAddress.houseNo : formData.permanentAddress.houseNo} onChange={e => setFormData({...formData, permanentAddress: {...formData.permanentAddress, houseNo: e.target.value}})} style={getInputStyle('perm_houseNo', formData.permanentAddress.sameAsResidential ? formData.residentialAddress.houseNo : formData.permanentAddress.houseNo)} />
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Dno (Optional)</label>
+                <input type="text" placeholder="Door No" value={formData.permanentAddress.sameAsResidential ? formData.residentialAddress.houseNo : formData.permanentAddress.houseNo} onChange={e => setFormData({...formData, permanentAddress: {...formData.permanentAddress, houseNo: e.target.value}})} style={getInputStyle('perm_houseNo', formData.permanentAddress.sameAsResidential ? formData.residentialAddress.houseNo : formData.permanentAddress.houseNo)} />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Street Name</label>
-                <input type="text" value={formData.permanentAddress.sameAsResidential ? formData.residentialAddress.streetName : formData.permanentAddress.streetName} onChange={e => setFormData({...formData, permanentAddress: {...formData.permanentAddress, streetName: e.target.value}})} style={getInputStyle('perm_streetName', formData.permanentAddress.sameAsResidential ? formData.residentialAddress.streetName : formData.permanentAddress.streetName)} />
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Street Name / Locality *</label>
+                <input type="text" placeholder="Street Name" value={formData.permanentAddress.sameAsResidential ? formData.residentialAddress.streetName : formData.permanentAddress.streetName} onChange={e => setFormData({...formData, permanentAddress: {...formData.permanentAddress, streetName: e.target.value}})} style={getInputStyle('perm_streetName', formData.permanentAddress.sameAsResidential ? formData.residentialAddress.streetName : formData.permanentAddress.streetName)} />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Area</label>
-                <input type="text" value={formData.permanentAddress.sameAsResidential ? formData.residentialAddress.area : formData.permanentAddress.area} onChange={e => setFormData({...formData, permanentAddress: {...formData.permanentAddress, area: e.target.value}})} style={getInputStyle('perm_area', formData.permanentAddress.sameAsResidential ? formData.residentialAddress.area : formData.permanentAddress.area)} />
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Area (Optional)</label>
+                <input type="text" placeholder="Area" value={formData.permanentAddress.sameAsResidential ? formData.residentialAddress.area : formData.permanentAddress.area} onChange={e => setFormData({...formData, permanentAddress: {...formData.permanentAddress, area: e.target.value}})} style={getInputStyle('perm_area', formData.permanentAddress.sameAsResidential ? formData.residentialAddress.area : formData.permanentAddress.area)} />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>City</label>
-                <input type="text" value={formData.permanentAddress.sameAsResidential ? formData.residentialAddress.city : formData.permanentAddress.city} onChange={e => setFormData({...formData, permanentAddress: {...formData.permanentAddress, city: e.target.value}})} style={getInputStyle('perm_city', formData.permanentAddress.sameAsResidential ? formData.residentialAddress.city : formData.permanentAddress.city)} />
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>City / Town *</label>
+                <input type="text" placeholder="City" value={formData.permanentAddress.sameAsResidential ? formData.residentialAddress.city : formData.permanentAddress.city} onChange={e => setFormData({...formData, permanentAddress: {...formData.permanentAddress, city: e.target.value}})} style={getInputStyle('perm_city', formData.permanentAddress.sameAsResidential ? formData.residentialAddress.city : formData.permanentAddress.city)} />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Taluk/District</label>
-                <input type="text" value={formData.permanentAddress.sameAsResidential ? formData.residentialAddress.taluk : formData.permanentAddress.taluk} onChange={e => setFormData({...formData, permanentAddress: {...formData.permanentAddress, taluk: e.target.value}})} style={getInputStyle('perm_taluk', formData.permanentAddress.sameAsResidential ? formData.residentialAddress.taluk : formData.permanentAddress.taluk)} />
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Taluk / District (Optional)</label>
+                <input type="text" placeholder="Taluk / District" value={formData.permanentAddress.sameAsResidential ? formData.residentialAddress.taluk : formData.permanentAddress.taluk} onChange={e => setFormData({...formData, permanentAddress: {...formData.permanentAddress, taluk: e.target.value}})} style={getInputStyle('perm_taluk', formData.permanentAddress.sameAsResidential ? formData.residentialAddress.taluk : formData.permanentAddress.taluk)} />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>PinCode</label>
-                <input type="text" value={formData.permanentAddress.sameAsResidential ? formData.residentialAddress.pincode : formData.permanentAddress.pincode} onChange={e => setFormData({...formData, permanentAddress: {...formData.permanentAddress, pincode: e.target.value}})} style={getInputStyle('perm_pincode', formData.permanentAddress.sameAsResidential ? formData.residentialAddress.pincode : formData.permanentAddress.pincode)} />
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>PinCode *</label>
+                <input type="text" placeholder="PinCode" value={formData.permanentAddress.sameAsResidential ? formData.residentialAddress.pincode : formData.permanentAddress.pincode} onChange={e => setFormData({...formData, permanentAddress: {...formData.permanentAddress, pincode: e.target.value}})} style={getInputStyle('perm_pincode', formData.permanentAddress.sameAsResidential ? formData.residentialAddress.pincode : formData.permanentAddress.pincode)} />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>State</label>
-                <input type="text" value={formData.permanentAddress.sameAsResidential ? formData.residentialAddress.state : formData.permanentAddress.state} onChange={e => setFormData({...formData, permanentAddress: {...formData.permanentAddress, state: e.target.value}})} style={getInputStyle('perm_state', formData.permanentAddress.sameAsResidential ? formData.residentialAddress.state : formData.permanentAddress.state)} />
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>State *</label>
+                <input type="text" placeholder="State" value={formData.permanentAddress.sameAsResidential ? formData.residentialAddress.state : formData.permanentAddress.state} onChange={e => setFormData({...formData, permanentAddress: {...formData.permanentAddress, state: e.target.value}})} style={getInputStyle('perm_state', formData.permanentAddress.sameAsResidential ? formData.residentialAddress.state : formData.permanentAddress.state)} />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Landmark</label>
-                <input type="text" value={formData.permanentAddress.sameAsResidential ? formData.residentialAddress.landmark : formData.permanentAddress.landmark} onChange={e => setFormData({...formData, permanentAddress: {...formData.permanentAddress, landmark: e.target.value}})} style={getInputStyle('perm_landmark', formData.permanentAddress.sameAsResidential ? formData.residentialAddress.landmark : formData.permanentAddress.landmark)} />
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Landmark (Optional)</label>
+                <input type="text" placeholder="Landmark" value={formData.permanentAddress.sameAsResidential ? formData.residentialAddress.landmark : formData.permanentAddress.landmark} onChange={e => setFormData({...formData, permanentAddress: {...formData.permanentAddress, landmark: e.target.value}})} style={getInputStyle('perm_landmark', formData.permanentAddress.sameAsResidential ? formData.residentialAddress.landmark : formData.permanentAddress.landmark)} />
               </div>
             </div>
           </div>
@@ -678,47 +786,47 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '1.5rem', marginBottom: '2.5rem' }}>
         <div>
           <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Survey Number *</label>
-          <input type="text" value={formData.propertyDetails?.surveyNo || ''} onChange={e => setFormData({...formData, propertyDetails: {...formData.propertyDetails, surveyNo: e.target.value}})} style={getInputStyle('prop_surveyNo', formData.propertyDetails?.surveyNo)} />
+          <input type="text" placeholder="e.g. 124/2A" value={formData.propertyDetails?.surveyNo || ''} onChange={e => setFormData({...formData, propertyDetails: {...formData.propertyDetails, surveyNo: e.target.value}})} style={getInputStyle('prop_surveyNo', formData.propertyDetails?.surveyNo)} />
         </div>
         <div>
           <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Patta Number *</label>
-          <input type="text" value={formData.propertyDetails?.pattaNo || ''} onChange={e => setFormData({...formData, propertyDetails: {...formData.propertyDetails, pattaNo: e.target.value}})} style={getInputStyle('prop_pattaNo', formData.propertyDetails?.pattaNo)} />
+          <input type="text" placeholder="e.g. 8421" value={formData.propertyDetails?.pattaNo || ''} onChange={e => setFormData({...formData, propertyDetails: {...formData.propertyDetails, pattaNo: e.target.value}})} style={getInputStyle('prop_pattaNo', formData.propertyDetails?.pattaNo)} />
         </div>
         <div>
-          <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Dno</label>
-          <input type="text" value={formData.propertyDetails?.dno || ''} onChange={e => setFormData({...formData, propertyDetails: {...formData.propertyDetails, dno: e.target.value}})} style={getInputStyle('prop_dno', formData.propertyDetails?.dno)} />
+          <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Dno (Optional)</label>
+          <input type="text" placeholder="Door No" value={formData.propertyDetails?.dno || ''} onChange={e => setFormData({...formData, propertyDetails: {...formData.propertyDetails, dno: e.target.value}})} style={getInputStyle('prop_dno', formData.propertyDetails?.dno)} />
         </div>
         <div>
-          <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Street Name</label>
-          <input type="text" value={formData.propertyDetails?.streetName || ''} onChange={e => setFormData({...formData, propertyDetails: {...formData.propertyDetails, streetName: e.target.value}})} style={getInputStyle('prop_streetName', formData.propertyDetails?.streetName)} />
+          <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Street Name (Optional)</label>
+          <input type="text" placeholder="Street Name" value={formData.propertyDetails?.streetName || ''} onChange={e => setFormData({...formData, propertyDetails: {...formData.propertyDetails, streetName: e.target.value}})} style={getInputStyle('prop_streetName', formData.propertyDetails?.streetName)} />
         </div>
         <div>
-          <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Village</label>
-          <input type="text" value={formData.propertyDetails?.village || ''} onChange={e => setFormData({...formData, propertyDetails: {...formData.propertyDetails, village: e.target.value}})} style={getInputStyle('prop_village', formData.propertyDetails?.village)} />
+          <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Village (Optional)</label>
+          <input type="text" placeholder="Village" value={formData.propertyDetails?.village || ''} onChange={e => setFormData({...formData, propertyDetails: {...formData.propertyDetails, village: e.target.value}})} style={getInputStyle('prop_village', formData.propertyDetails?.village)} />
         </div>
         <div>
-          <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Panchayat</label>
-          <input type="text" value={formData.propertyDetails?.panchayat || ''} onChange={e => setFormData({...formData, propertyDetails: {...formData.propertyDetails, panchayat: e.target.value}})} style={getInputStyle('prop_panchayat', formData.propertyDetails?.panchayat)} />
+          <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Panchayat (Optional)</label>
+          <input type="text" placeholder="Panchayat" value={formData.propertyDetails?.panchayat || ''} onChange={e => setFormData({...formData, propertyDetails: {...formData.propertyDetails, panchayat: e.target.value}})} style={getInputStyle('prop_panchayat', formData.propertyDetails?.panchayat)} />
         </div>
         <div>
-          <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>City</label>
-          <input type="text" value={formData.propertyDetails?.city || ''} onChange={e => setFormData({...formData, propertyDetails: {...formData.propertyDetails, city: e.target.value}})} style={getInputStyle('prop_city', formData.propertyDetails?.city)} />
+          <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>City (Optional)</label>
+          <input type="text" placeholder="City" value={formData.propertyDetails?.city || ''} onChange={e => setFormData({...formData, propertyDetails: {...formData.propertyDetails, city: e.target.value}})} style={getInputStyle('prop_city', formData.propertyDetails?.city)} />
         </div>
         <div>
-          <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Taluk/District</label>
-          <input type="text" value={formData.propertyDetails?.taluk || ''} onChange={e => setFormData({...formData, propertyDetails: {...formData.propertyDetails, taluk: e.target.value}})} style={getInputStyle('prop_taluk', formData.propertyDetails?.taluk)} />
+          <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Taluk/District (Optional)</label>
+          <input type="text" placeholder="Taluk/District" value={formData.propertyDetails?.taluk || ''} onChange={e => setFormData({...formData, propertyDetails: {...formData.propertyDetails, taluk: e.target.value}})} style={getInputStyle('prop_taluk', formData.propertyDetails?.taluk)} />
         </div>
         <div>
-          <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>PinCode</label>
-          <input type="text" value={formData.propertyDetails?.pincode || ''} onChange={e => setFormData({...formData, propertyDetails: {...formData.propertyDetails, pincode: e.target.value}})} style={getInputStyle('prop_pincode', formData.propertyDetails?.pincode)} />
+          <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>PinCode (Optional)</label>
+          <input type="text" placeholder="PinCode" value={formData.propertyDetails?.pincode || ''} onChange={e => setFormData({...formData, propertyDetails: {...formData.propertyDetails, pincode: e.target.value}})} style={getInputStyle('prop_pincode', formData.propertyDetails?.pincode)} />
         </div>
         <div>
-          <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>State</label>
-          <input type="text" value={formData.propertyDetails?.state || ''} onChange={e => setFormData({...formData, propertyDetails: {...formData.propertyDetails, state: e.target.value}})} style={getInputStyle('prop_state', formData.propertyDetails?.state)} />
+          <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>State (Optional)</label>
+          <input type="text" placeholder="State" value={formData.propertyDetails?.state || ''} onChange={e => setFormData({...formData, propertyDetails: {...formData.propertyDetails, state: e.target.value}})} style={getInputStyle('prop_state', formData.propertyDetails?.state)} />
         </div>
         <div>
-          <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Landmark</label>
-          <input type="text" value={formData.propertyDetails?.landmark || ''} onChange={e => setFormData({...formData, propertyDetails: {...formData.propertyDetails, landmark: e.target.value}})} style={getInputStyle('prop_landmark', formData.propertyDetails?.landmark)} />
+          <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Landmark (Optional)</label>
+          <input type="text" placeholder="Landmark" value={formData.propertyDetails?.landmark || ''} onChange={e => setFormData({...formData, propertyDetails: {...formData.propertyDetails, landmark: e.target.value}})} style={getInputStyle('prop_landmark', formData.propertyDetails?.landmark)} />
         </div>
       </div>
     </div>
@@ -848,13 +956,14 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
     <div style={{ paddingBottom: '3rem', margin: '0 auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '2rem' }}>
         <button 
-          onClick={() => isEmployee ? navigate('/employee/applications') : navigate('/admin/applications')}
+          onClick={() => isCustomer ? navigate('/') : isEmployee ? navigate('/employee/applications') : navigate('/admin/applications')}
           style={{ padding: '0.5rem', borderRadius: '0.25rem', backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-color)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          title="Back"
         >
           <ArrowLeft size={20} color="var(--primary-dark)" />
         </button>
         <div>
-          <h2 className="heading-2" style={{ marginBottom: '0.25rem' }}>New Application Process</h2>
+          <h2 className="heading-2" style={{ marginBottom: '0.25rem' }}>{isCustomer ? 'Start Building Approval Application' : 'New Application Process'}</h2>
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Step {currentStep} of {totalSteps}</p>
         </div>
       </div>
@@ -870,6 +979,7 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
       {currentStep < totalSteps && (
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem', backgroundColor: 'white', borderRadius: '0.5rem', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
           <button 
+            type="button"
             onClick={handlePrev}
             disabled={currentStep === 1}
             style={{ 
@@ -885,9 +995,10 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
           </button>
           
           <button 
+            type="button"
             onClick={handleNext}
             className="btn-primary"
-            style={{ padding: '0.75rem 1.5rem', borderRadius: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+            style={{ padding: '0.75rem 1.5rem', borderRadius: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}
           >
             Next <ArrowRight size={18} />
           </button>
@@ -895,8 +1006,9 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
       )}
       
       {currentStep === totalSteps && (
-        <div style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', padding: '1rem', backgroundColor: 'transparent' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem', backgroundColor: 'white', borderRadius: '0.5rem', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
           <button 
+            type="button"
             onClick={handlePrev}
             style={{ 
               padding: '0.75rem 1.5rem', borderRadius: '0.5rem', 
@@ -908,6 +1020,26 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
             }}
           >
             <ArrowLeft size={18} /> {isCustomer ? 'Back to Personal Details' : 'Back to Property Details'}
+          </button>
+
+          <button 
+            type="button"
+            onClick={handleSubmit}
+            style={{ 
+              padding: '0.75rem 2rem', 
+              borderRadius: '0.5rem', 
+              backgroundColor: '#10b981', 
+              color: 'white', 
+              border: 'none',
+              fontWeight: 600, 
+              cursor: 'pointer',
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: '0.5rem',
+              boxShadow: '0 4px 6px -1px rgba(16, 185, 129, 0.4)'
+            }}
+          >
+            <CheckCircle size={18} /> Submit Application
           </button>
         </div>
       )}
@@ -994,16 +1126,8 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
             </div>
           )}
           <button 
-            onClick={async () => {
-              if (!checkAllDocumentsUploaded()) {
-                 toast.error("Please upload all required documents to submit!");
-                 return;
-              }
-              await saveApplicationData(false);
-              toast.success("Congratulations! Application Submitted successfully.");
-              if (isEmployee) navigate('/employee/applications');
-              else navigate('/admin/applications');
-            }}
+            type="button"
+            onClick={handleSubmit}
             style={{
               padding: '1rem',
               borderRadius: '50%',

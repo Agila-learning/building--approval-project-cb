@@ -68,30 +68,53 @@ const TrackApplication: React.FC = () => {
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const idParam = params.get('id');
+    const mobileParam = params.get('mobile');
     if (idParam) setAppNumber(idParam);
+    if (mobileParam) setMobileNumber(mobileParam);
   }, [location]);
 
-  const handleTrack = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleTrack = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     if (!appNumber.trim() || !mobileNumber.trim()) return;
 
     const stored = localStorage.getItem('recentApplications');
     const apps: any[] = stored ? JSON.parse(stored) : [];
+    const savedCasesStr = localStorage.getItem('mock_saved_cases');
+    const savedCases: any[] = savedCasesStr ? JSON.parse(savedCasesStr) : [];
 
-    const found = apps.find(
-      app => app.id.toLowerCase() === appNumber.trim().toLowerCase() &&
-             app.mobile?.toString().replace(/\s/g, '') === mobileNumber.trim().replace(/\s/g, '')
-    );
+    const allApps = [
+      ...apps,
+      ...savedCases.map((c: any) => ({
+        id: c.id || c.application_number,
+        application_number: c.application_number || c.id,
+        applicantName: c.property?.owner_name || c.fullData?.customerName || 'Applicant',
+        mobile: c.property?.owner_phone || c.fullData?.mobile || '',
+        serviceType: c.approval_type,
+        status: c.status,
+        date: c.created_at ? new Date(c.created_at).toLocaleDateString('en-GB') : new Date().toLocaleDateString('en-GB'),
+        submittedDate: c.created_at ? new Date(c.created_at).toLocaleDateString('en-GB') : new Date().toLocaleDateString('en-GB'),
+        ...c
+      }))
+    ];
+
+    const cleanAppNum = appNumber.trim().toLowerCase().replace(/^app-/, '');
+    const cleanMobile = mobileNumber.trim().replace(/\D/g, '').slice(-10);
+
+    const found = allApps.find(app => {
+      const appId = (app.id || app.application_number || '').toString().toLowerCase().replace(/^app-/, '');
+      const appMobile = (app.mobile || app.property?.owner_phone || app.fullData?.mobile || '').toString().replace(/\D/g, '').slice(-10);
+      return appId === cleanAppNum && (!cleanMobile || appMobile === cleanMobile);
+    });
 
     if (found) {
-      const liveStatus = getApplicationStatus(found.id, found.status);
+      const liveStatus = getApplicationStatus(found.id || found.application_number, found.status);
       setAppData(found);
       setCurrentStatus(liveStatus);
       setIsTracking(true);
       setError('');
 
       // Load customer docs
-      const docsStored = localStorage.getItem(`customerDocs_${found.id}`);
+      const docsStored = localStorage.getItem(`customerDocs_${found.id || found.application_number}`);
       if (docsStored) {
         const docs = JSON.parse(docsStored);
         setCustomerDocs(docs.filter((d: any) => Object.keys(DOC_LABELS).includes(d.id)));
