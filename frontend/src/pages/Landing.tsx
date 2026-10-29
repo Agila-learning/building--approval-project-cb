@@ -8,6 +8,7 @@ import TrackingSection from '../components/TrackingSection';
 import WhyChooseUsSection from '../components/WhyChooseUsSection';
 import CtaSection from '../components/CtaSection';
 import toast from 'react-hot-toast';
+import { getApiUrl } from '../config/api';
 
 const Landing: React.FC = () => {
   const [isEnquireModalOpen, setIsEnquireModalOpen] = useState(false);
@@ -32,22 +33,22 @@ const Landing: React.FC = () => {
     setIsSubmitting(true);
     
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'https://building-approval.onrender.com/api';
-      const response = await fetch(`${apiUrl}/leads`, {
+      const response = await fetch(`${getApiUrl()}/leads`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...formData, type: 'Enquiry' })
       });
       
       if (!response.ok) {
-        throw new Error('Failed to submit');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to submit');
       }
 
       toast.success('Thank you! Your enquiry has been submitted. Our team will contact you shortly.');
       setIsEnquireModalOpen(false);
       setFormData({ name: '', phone: '', email: '', location: '' });
-    } catch (error) {
-      toast.error('Failed to submit enquiry.');
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to submit enquiry.');
     } finally {
       setIsSubmitting(false);
     }
