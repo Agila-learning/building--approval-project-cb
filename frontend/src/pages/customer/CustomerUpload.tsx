@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { Upload, CheckCircle2, FileText, ShieldCheck, AlertCircle, X, HelpCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { uploadFileToCloudinary } from '../../config/api';
 
 const CustomerUpload: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -86,20 +87,8 @@ const CustomerUpload: React.FC = () => {
       setIsUploading(true);
 
       try {
-        const formDataUpload = new FormData();
-        formDataUpload.append('file', file);
-        formDataUpload.append('upload_preset', 'ml_default');
-
-        const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || 'yy08owy2';
-        const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/auto/upload`, {
-          method: 'POST',
-          body: formDataUpload,
-        });
-
-        const data = await response.json();
-        if (data.secure_url) {
-          const cloudinaryUrl = data.secure_url;
-          setDocuments(docs => {
+        const cloudinaryUrl = await uploadFileToCloudinary(file);
+        setDocuments(docs => {
             const newDocs = docs.map(doc => 
               doc.id === activeUploadId ? { 
                 ...doc, 
@@ -120,9 +109,6 @@ const CustomerUpload: React.FC = () => {
             return newDocs;
           });
           toast.success(`${file.name} uploaded successfully!`, { id: loadingToast });
-        } else {
-          throw new Error(data.error?.message || 'Upload failed');
-        }
       } catch (error: any) {
         console.error('Cloudinary upload error:', error);
         toast.error(`Upload failed: ${error.message}`, { id: loadingToast, duration: 5000 });

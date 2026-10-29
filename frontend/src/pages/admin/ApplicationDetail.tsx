@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { ArrowLeft, ArrowRight, User, Building, FileText, Upload, CheckCircle, X, Save, Send, Download } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { uploadFileToCloudinary } from '../../config/api';
 import { recentApplications } from '../../data/mockData';
 
 const ApplicationDetail: React.FC = () => {
@@ -250,22 +251,9 @@ const ApplicationDetail: React.FC = () => {
       const loadingToast = toast.loading(`Uploading ${file.name}...`);
       
       try {
-        const formDataUpload = new FormData();
-        formDataUpload.append('file', file);
-        formDataUpload.append('upload_preset', 'ml_default');
-        
-        const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || 'yy08owy2';
-        const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/auto/upload`, {
-          method: 'POST',
-          body: formDataUpload,
-        });
-        
-        const data = await response.json();
-        
-        if (data.secure_url) {
-          const imageUrl = data.secure_url;
-          const newUploadedFiles = { ...uploadedFiles, [docUploadType]: imageUrl };
-          setUploadedFiles(newUploadedFiles);
+        const imageUrl = await uploadFileToCloudinary(file);
+        const newUploadedFiles = { ...uploadedFiles, [docUploadType]: imageUrl };
+        setUploadedFiles(newUploadedFiles);
           
           if (id) {
             const apiUrl = import.meta.env.VITE_API_URL || 'https://building-approval.onrender.com/api';
@@ -294,9 +282,6 @@ const ApplicationDetail: React.FC = () => {
           }
           
           toast.success(`${file.name} attached for ${docUploadType}`, { id: loadingToast });
-        } else {
-          throw new Error(data.error?.message || 'Upload failed');
-        }
       } catch (error: any) {
         console.error("Cloudinary upload error:", error);
         toast.error(`Upload failed: ${error.message}`, { id: loadingToast, duration: 5000 });

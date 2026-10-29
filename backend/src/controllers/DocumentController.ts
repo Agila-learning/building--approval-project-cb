@@ -12,17 +12,25 @@ export class DocumentController {
         return res.status(400).json({ error: 'No file uploaded' });
       }
 
-      // Create document record in database
-      const doc = await prisma.document.create({
-        data: {
-          case_id: caseId,
-          document_type: document_type,
-          file_key: file.path, // Cloudinary URL
-          uploaded_by: userId,
-        },
-      });
+      // Create document record in database if caseId is provided
+      let doc = null;
+      if (caseId) {
+        doc = await prisma.document.create({
+          data: {
+            case_id: caseId,
+            document_type: document_type || 'OTHER',
+            file_key: file.path, // Cloudinary URL
+            uploaded_by: userId,
+          },
+        });
+      }
 
-      res.json({ message: 'Document uploaded successfully', document: doc, url: file.path });
+      res.json({
+        message: 'Document uploaded successfully',
+        document: doc,
+        url: file.path,
+        secure_url: file.path,
+      });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
