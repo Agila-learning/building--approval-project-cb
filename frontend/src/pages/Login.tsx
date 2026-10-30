@@ -24,27 +24,31 @@ const Login: React.FC = () => {
       }
     }
 
-    // Dynamic Staff Login via Backend
+    // Dynamic Staff / Admin Login via Backend
     try {
       const apiUrl = getApiUrl();
       const response = await fetch(`${apiUrl}/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: email, password })
+        body: JSON.stringify({ identifier: email.trim(), email: email.trim(), phone: email.trim(), password })
       });
 
       if (response.ok) {
         const data = await response.json();
         localStorage.setItem('token', data.token);
         localStorage.setItem('loggedInUser', data.user.name);
-        // Assuming non-admin users go to /employee
+        localStorage.setItem('userRole', data.user.role);
+        if (data.user.email) localStorage.setItem('userEmail', data.user.email);
+        if (data.user.staffId) localStorage.setItem('staffId', data.user.staffId);
+        
+        toast.success(`Welcome back, ${data.user.name}!`);
         if (data.user.role === 'ADMIN') {
           navigate('/admin');
         } else {
           navigate('/employee');
         }
       } else {
-        const errData = await response.json();
+        const errData = await response.json().catch(() => ({}));
         toast.error(errData.error || 'User not found or invalid credentials.');
       }
     } catch (error) {
