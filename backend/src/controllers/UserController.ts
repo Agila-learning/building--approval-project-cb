@@ -78,7 +78,7 @@ export const createUser = async (req: Request, res: Response) => {
 
     // 3. Create Real Notification in DB
     try {
-      await prisma.notification.create({
+      await (prisma as any).notification.create({
         data: {
           title: 'New Staff Member Added',
           message: `${newUser.name} (${staffId}) was registered as ${role}.`,
