@@ -3,16 +3,18 @@ export const getApiUrl = (): string => {
 
   if (typeof window !== 'undefined') {
     const hostname = window.location.hostname;
-    // If user is accessing from another system / phone on LAN or network (not localhost)
+    // If running in cloud production (Render, Vercel, Netlify, etc.)
+    if (hostname.includes('onrender.com') || hostname.includes('vercel.app') || hostname.includes('netlify.app')) {
+      return 'https://building-approval-project-cb.onrender.com/api';
+    }
+    // If accessing from another system / phone on LAN (not localhost)
     if (hostname && hostname !== 'localhost' && hostname !== '127.0.0.1') {
-      if (!envUrl || envUrl.includes('localhost') || envUrl.includes('127.0.0.1') || envUrl.includes('onrender.com')) {
-        return `http://${hostname}:10000/api`;
-      }
+      return `http://${hostname}:10000/api`;
     }
   }
 
-  // Fallback for local development or empty config
-  if (!envUrl || envUrl.includes('onrender.com')) {
+  // Local development fallback
+  if (!envUrl || envUrl.includes('building-approval.onrender.com')) {
     envUrl = 'http://localhost:10000/api';
   }
 

@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, User, Building, FileText, Upload, CheckCircle, X, Save, Send, Download } from 'lucide-react';
+import { ArrowLeft, ArrowRight, User, Building, FileText, Upload, CheckCircle, X, Save, Send, Download, AlertTriangle, RotateCcw, Eye } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { uploadFileToCloudinary, getApiUrl } from '../../config/api';
+import { validateUploadFile } from '../../utils/imageValidation';
 import { recentApplications } from '../../data/mockData';
 
 const ApplicationDetail: React.FC = () => {
@@ -135,6 +136,8 @@ const ApplicationDetail: React.FC = () => {
   const [modalTab, setModalTab] = useState<'upload' | 'view'>('upload');
   const [isReuploadModalOpen, setIsReuploadModalOpen] = useState(false);
   const [selectedForReupload, setSelectedForReupload] = useState<string[]>([]);
+  const [reuploadNote, setReuploadNote] = useState('');
+  const [isSendingReupload, setIsSendingReupload] = useState(false);
   const [formErrors, setFormErrors] = useState<string[]>([]);
   const [uploadedFiles, setUploadedFiles] = useState<{
     'CUSTOMER PHOTOGRAPH'?: string;
@@ -246,15 +249,10 @@ const ApplicationDetail: React.FC = () => {
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      // Validate photo & signature must be images
-      if (['CUSTOMER PHOTOGRAPH', 'CUSTOMER SIGNATURE', 'PROPERTY SIGNATURE'].includes(docUploadType) && !file.type.startsWith('image/')) {
-        toast.error(`Only image files (JPG, PNG, WEBP) are allowed for ${docUploadType}.`);
-        if (fileInputRef.current) fileInputRef.current.value = '';
-        return;
-      }
-
-      if (file.size > 10 * 1024 * 1024) {
-        toast.error('File size exceeds the 10MB limit.');
+      // Strict image & document verification
+      const validation = await validateUploadFile(file, docUploadType);
+      if (!validation.valid) {
+        toast.error(validation.error || 'Invalid file uploaded', { duration: 6000 });
         if (fileInputRef.current) fileInputRef.current.value = '';
         return;
       }
@@ -1151,47 +1149,349 @@ const ApplicationDetail: React.FC = () => {
     );
   };
 
-  const renderDocumentVerificationScreen = () => (
-    <div className="card" style={{ padding: '3rem 2rem', textAlign: 'center' }}>
-      <CheckCircle size={48} color="var(--primary)" style={{ margin: '0 auto 1.5rem' }} />
-      <h3 style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--primary-dark)', marginBottom: '1rem' }}>Document Verification</h3>
-      <p style={{ color: 'var(--text-secondary)', marginBottom: '2rem' }}>Please review the uploaded documents and confirm verification.</p>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '1rem', marginBottom: '3rem' }}>
-        {Object.entries(uploadedFiles).filter(([k,v]) => v && !['RECEIPT','FINAL_APPROVAL','receiptNumber'].includes(k)).map(([key, _value]) => (
-          <div key={key} style={{ padding: '1rem', border: '1px solid var(--border-color)', borderRadius: '0.5rem' }}>
-             <div style={{ fontWeight: 600, fontSize: '0.875rem', marginBottom: '0.5rem', color: 'var(--primary-dark)' }}>{key}</div>
-             <button onClick={() => { setDocUploadType(key); setModalTab('view'); setIsUploadModalOpen(true); }} style={{ padding: '0.5rem', fontSize: '0.75rem', backgroundColor: 'var(--bg-secondary)', border: 'none', borderRadius: '0.25rem', cursor: 'pointer' }}>View File</button>
+  const handleRequestReuploadSubmit = async () => {
+    if (selectedForReupload.length === 0) {
+      toast.error('Please select at least one document for re-upload.');
+      return;
+    }
+
+    setIsSendingReupload(true);
+    const apiUrl = getApiUrl();
+    const note = reuploadNote.trim() || 'Please re-upload clear and correct documents as requested.';
+
+    try {
+      if (id) {
+        await fetch(`${apiUrl}/cases/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            status: 'DOCUMENTS_PENDING',
+            requestedReuploads: selectedForReupload,
+            reason: note,
+          }),
+        });
+      }
+
+      // Sync local storage
+      const existingStr = localStorage.getItem('mock_saved_cases');
+      if (existingStr && id) {
+        const existing = JSON.parse(existingStr);
+        const index = existing.findIndex((c: any) => c.id === id || c.application_number === id);
+        if (index !== -1) {
+          existing[index].status = 'DOCUMENTS_PENDING';
+          existing[index].requestedReuploads = selectedForReupload;
+          existing[index].reason = note;
+          localStorage.setItem('mock_saved_cases', JSON.stringify(existing));
+        }
+      }
+
+      setApplicationStatus('DOCUMENTS_PENDING');
+      setIsReuploadModalOpen(false);
+      toast.success(`Re-upload requested for ${selectedForReupload.length} document(s).`);
+
+      // WhatsApp link convenience
+      if (formData.mobile) {
+        let phoneNumber = formData.mobile.replace(/\D/g, '');
+        if (phoneNumber.length === 10) phoneNumber = '91' + phoneNumber;
+        const uploadUrl = `${window.location.origin}/upload/${id}`;
+        const message = encodeURIComponent(
+          `Dear ${formData.customerName || 'Customer'},\n\nRe-upload is requested for your Building Approval application (${id}):\nDocuments: ${selectedForReupload.join(', ')}\nNote: ${note}\n\nPlease upload here: ${uploadUrl}`
+        );
+        window.open(`https://wa.me/${phoneNumber}?text=${message}`, '_blank');
+      }
+    } catch (e: any) {
+      console.error('Error requesting reupload:', e);
+      toast.error('Failed to send re-upload request: ' + e.message);
+    } finally {
+      setIsSendingReupload(false);
+    }
+  };
+
+  const renderDocumentVerificationScreen = () => {
+    const docEntries = Object.entries(uploadedFiles).filter(
+      ([k, v]) => v && !['RECEIPT', 'FINAL_APPROVAL', 'receiptNumber', 'username', 'password'].includes(k)
+    );
+
+    return (
+      <div className="card" style={{ padding: '2.5rem 2rem' }}>
+        <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
+          <div style={{ display: 'inline-flex', padding: '1rem', borderRadius: '50%', backgroundColor: '#e0f2fe', color: '#0284c7', marginBottom: '1rem' }}>
+            <FileText size={36} />
           </div>
-        ))}
+          <h2 style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--primary-dark)', margin: '0 0 0.5rem 0' }}>
+            Document Verification & Review
+          </h2>
+          <p style={{ color: 'var(--text-secondary)', maxWidth: '600px', margin: '0 auto', fontSize: '0.9rem' }}>
+            Review the documents submitted by the customer. Inspect each document, flag any invalid documents for customer re-upload, or confirm verification to advance to Government Receipt & Submission.
+          </p>
+        </div>
+
+        {/* Documents Grid */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '1.25rem', marginBottom: '2.5rem' }}>
+          {docEntries.length > 0 ? (
+            docEntries.map(([key, value]) => {
+              const isMarked = selectedForReupload.includes(key);
+              const fileStr = String(value);
+              const isPdf = fileStr.startsWith('data:application/pdf') || fileStr.toLowerCase().endsWith('.pdf');
+
+              return (
+                <div
+                  key={key}
+                  style={{
+                    border: isMarked ? '2px solid #ef4444' : '1px solid var(--border-color)',
+                    borderRadius: '0.75rem',
+                    padding: '1.25rem',
+                    backgroundColor: isMarked ? '#fef2f2' : 'var(--bg-surface)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.75rem' }}>
+                      <span style={{ fontWeight: 700, fontSize: '0.875rem', color: isMarked ? '#b91c1c' : 'var(--primary-dark)' }}>
+                        {key}
+                      </span>
+                      <span
+                        style={{
+                          fontSize: '0.7rem',
+                          fontWeight: 600,
+                          padding: '0.2rem 0.5rem',
+                          borderRadius: '1rem',
+                          backgroundColor: isMarked ? '#fee2e2' : '#dcfce7',
+                          color: isMarked ? '#b91c1c' : '#15803d'
+                        }}
+                      >
+                        {isMarked ? 'Needs Re-upload' : 'Uploaded'}
+                      </span>
+                    </div>
+
+                    <div
+                      onClick={() => { setDocUploadType(key); setModalTab('view'); setIsUploadModalOpen(true); }}
+                      style={{
+                        height: '110px',
+                        backgroundColor: '#f8fafc',
+                        border: '1px dashed var(--border-color)',
+                        borderRadius: '0.5rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer',
+                        overflow: 'hidden',
+                        marginBottom: '1rem'
+                      }}
+                      title="Click to preview document"
+                    >
+                      {isPdf ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', color: '#0284c7' }}>
+                          <FileText size={32} />
+                          <span style={{ fontSize: '0.75rem', marginTop: '0.25rem', fontWeight: 600 }}>PDF Document</span>
+                        </div>
+                      ) : (
+                        <img
+                          src={fileStr}
+                          alt={key}
+                          style={{ maxHeight: '100%', maxWidth: '100%', objectFit: 'contain' }}
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                          }}
+                        />
+                      )}
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <button
+                      type="button"
+                      onClick={() => { setDocUploadType(key); setModalTab('view'); setIsUploadModalOpen(true); }}
+                      style={{
+                        padding: '0.4rem 0.75rem',
+                        fontSize: '0.75rem',
+                        fontWeight: 600,
+                        backgroundColor: 'var(--bg-secondary)',
+                        color: 'var(--primary)',
+                        border: '1px solid var(--border-color)',
+                        borderRadius: '0.375rem',
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.35rem'
+                      }}
+                    >
+                      <Eye size={13} /> View
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedForReupload(prev =>
+                          prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
+                        );
+                      }}
+                      style={{
+                        padding: '0.4rem 0.75rem',
+                        fontSize: '0.75rem',
+                        fontWeight: 600,
+                        backgroundColor: isMarked ? '#b91c1c' : '#fee2e2',
+                        color: isMarked ? '#ffffff' : '#b91c1c',
+                        border: 'none',
+                        borderRadius: '0.375rem',
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.35rem'
+                      }}
+                    >
+                      <RotateCcw size={13} />
+                      {isMarked ? 'Cancel Flag' : 'Flag Re-upload'}
+                    </button>
+                  </div>
+                </div>
+              );
+            })
+          ) : (
+            <div style={{ gridColumn: '1 / -1', padding: '3rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
+              No customer documents uploaded yet.
+            </div>
+          )}
+        </div>
+
+        {/* Verification & Action Bar */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', paddingTop: '1.5rem', borderTop: '1px solid var(--border-color)' }}>
+          <div>
+            {selectedForReupload.length > 0 && (
+              <span style={{ fontSize: '0.875rem', color: '#b91c1c', fontWeight: 600 }}>
+                {selectedForReupload.length} document(s) flagged for re-upload
+              </span>
+            )}
+          </div>
+
+          <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              onClick={() => setIsReuploadModalOpen(true)}
+              disabled={selectedForReupload.length === 0}
+              style={{
+                padding: '0.75rem 1.5rem',
+                fontSize: '0.95rem',
+                fontWeight: 600,
+                backgroundColor: selectedForReupload.length === 0 ? '#f1f5f9' : '#ef4444',
+                color: selectedForReupload.length === 0 ? '#94a3b8' : 'white',
+                border: 'none',
+                borderRadius: '0.5rem',
+                cursor: selectedForReupload.length === 0 ? 'not-allowed' : 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.5rem'
+              }}
+            >
+              <RotateCcw size={18} /> Request Re-upload from Customer
+            </button>
+
+            <button
+              type="button"
+              onClick={async () => {
+                setApplicationStatus('DOCUMENTS_VERIFIED');
+                const apiUrl = getApiUrl();
+                if (id) {
+                  try {
+                    await fetch(`${apiUrl}/cases/${id}`, {
+                      method: 'PUT',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ status: 'DOCUMENTS_VERIFIED', requestedReuploads: [] })
+                    });
+                  } catch (e) {
+                    console.error(e);
+                  }
+                }
+                const existingStr = localStorage.getItem('mock_saved_cases');
+                if (existingStr && id) {
+                  const existing = JSON.parse(existingStr);
+                  const index = existing.findIndex((c: any) => c.id === id || c.application_number === id);
+                  if (index !== -1) {
+                    existing[index].status = 'DOCUMENTS_VERIFIED';
+                    existing[index].requestedReuploads = [];
+                    localStorage.setItem('mock_saved_cases', JSON.stringify(existing));
+                  }
+                }
+                toast.success('All documents verified! Advancing to Receipt & Govt Portal Step.');
+              }}
+              className="btn-primary"
+              style={{ padding: '0.75rem 1.75rem', fontSize: '0.95rem', display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}
+            >
+              <CheckCircle size={18} /> Confirm Verification & Proceed
+            </button>
+          </div>
+        </div>
+
+        {/* Modal: Request Reupload */}
+        {isReuploadModalOpen && (
+          <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100, padding: '1rem' }}>
+            <div className="card" style={{ maxWidth: '520px', width: '100%', padding: '2rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+                <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--primary-dark)', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <AlertTriangle size={22} color="#ef4444" /> Request Document Re-upload
+                </h3>
+                <button onClick={() => setIsReuploadModalOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }}>
+                  <X size={20} />
+                </button>
+              </div>
+
+              <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
+                The application will be updated to <strong>Action Required (Documents Pending)</strong>. The customer will receive notifications and a direct link to re-upload only the selected documents.
+              </p>
+
+              <div style={{ marginBottom: '1.25rem' }}>
+                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.5rem', textTransform: 'uppercase' }}>
+                  Documents to be re-uploaded:
+                </label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                  {selectedForReupload.map(doc => (
+                    <span key={doc} style={{ padding: '0.35rem 0.75rem', borderRadius: '1rem', backgroundColor: '#fee2e2', color: '#b91c1c', fontSize: '0.8rem', fontWeight: 600 }}>
+                      {doc}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ marginBottom: '1.5rem' }}>
+                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.5rem', textTransform: 'uppercase' }}>
+                  Instructions / Reason for Rejection:
+                </label>
+                <textarea
+                  rows={3}
+                  value={reuploadNote}
+                  onChange={(e) => setReuploadNote(e.target.value)}
+                  placeholder="e.g. Photograph is not clear / Passport photo format required instead of ID card."
+                  style={{ width: '100%', padding: '0.75rem', borderRadius: '0.375rem', border: '1px solid var(--border-color)', fontSize: '0.875rem' }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+                <button
+                  type="button"
+                  onClick={() => setIsReuploadModalOpen(false)}
+                  style={{ padding: '0.6rem 1.25rem', backgroundColor: '#f1f5f9', color: '#475569', border: 'none', borderRadius: '0.375rem', fontWeight: 600, cursor: 'pointer' }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={isSendingReupload}
+                  onClick={handleRequestReuploadSubmit}
+                  style={{ padding: '0.6rem 1.5rem', backgroundColor: '#ef4444', color: 'white', border: 'none', borderRadius: '0.375rem', fontWeight: 600, cursor: isSendingReupload ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
+                >
+                  <Send size={16} /> {isSendingReupload ? 'Sending Request...' : 'Send Request to Customer'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
-      <button 
-        onClick={async () => {
-           setApplicationStatus('DOCUMENTS_VERIFIED');
-           const apiUrl = getApiUrl();
-           if (id) {
-             try {
-               await fetch(`${apiUrl}/cases/${id}`, {
-                 method: 'PUT',
-                 headers: { 'Content-Type': 'application/json' },
-                 body: JSON.stringify({ status: 'DOCUMENTS_VERIFIED' })
-               });
-             } catch (e) { console.error(e); }
-           }
-           const existingStr = localStorage.getItem('mock_saved_cases');
-           if (existingStr && id) {
-             let existing = JSON.parse(existingStr);
-             const index = existing.findIndex((c: any) => c.id === id);
-             if (index !== -1) { existing[index].status = 'DOCUMENTS_VERIFIED'; localStorage.setItem('mock_saved_cases', JSON.stringify(existing)); }
-           }
-           toast.success('Documents verified successfully!');
-        }}
-        className="btn-primary"
-        style={{ padding: '1rem 2rem', fontSize: '1.125rem', display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}
-      >
-        <CheckCircle size={24} /> Confirm Verification
-      </button>
-    </div>
-  );
+    );
+  };
 
   const renderReceiptUploadScreen = () => (
     <div className="card" style={{ padding: '3rem 2rem' }}>

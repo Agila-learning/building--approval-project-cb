@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeft, ArrowRight, User, Building, FileText, Upload, CheckCircle, X, Save } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { uploadFileToCloudinary, getApiUrl } from '../../config/api';
+import { validateUploadFile } from '../../utils/imageValidation';
 
 interface NewApplicationProps {
   isCustomer?: boolean;
@@ -94,28 +95,10 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      // 1. Strict validation for Photograph and Signature (Images ONLY)
-      const isPhotoOrSignature = docUploadType.includes('PHOTOGRAPH') || 
-                                 docUploadType.includes('PHOTO') || 
-                                 docUploadType.includes('SIGNATURE');
-
-      if (isPhotoOrSignature) {
-        if (!file.type.startsWith('image/')) {
-          toast.error(`Invalid format! ${docUploadType} must be an image file (JPG, PNG, WEBP).`);
-          if (fileInputRef.current) fileInputRef.current.value = '';
-          return;
-        }
-      } else {
-        const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
-        if (!allowedTypes.includes(file.type)) {
-          toast.error(`Invalid format! ${docUploadType} must be an image (JPG, PNG) or PDF document.`);
-          if (fileInputRef.current) fileInputRef.current.value = '';
-          return;
-        }
-      }
-
-      if (file.size > 10 * 1024 * 1024) {
-        toast.error("File size cannot exceed 10MB limit.");
+      // Strict image & document verification (prevents uploading Aadhaar/PAN/documents for photo or signature)
+      const validation = await validateUploadFile(file, docUploadType);
+      if (!validation.valid) {
+        toast.error(validation.error || 'Invalid file uploaded', { duration: 6000 });
         if (fileInputRef.current) fileInputRef.current.value = '';
         return;
       }

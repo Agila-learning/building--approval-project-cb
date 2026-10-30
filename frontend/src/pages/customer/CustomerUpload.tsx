@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import { Upload, CheckCircle2, FileText, ShieldCheck, AlertCircle, X, HelpCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { uploadFileToCloudinary, getApiUrl } from '../../config/api';
+import { validateUploadFile } from '../../utils/imageValidation';
 
 const CustomerUpload: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -23,36 +24,77 @@ const CustomerUpload: React.FC = () => {
   ]);
 
   useEffect(() => {
-    const loadDocs = () => {
+    const docMapping: any = {
+      'SALE DEED': 'sale_deed',
+      'PATTA': 'patta',
+      'FMB': 'fmb',
+      'PAN CARD': 'pan',
+      'AADHAR CARD': 'aadhar',
+      'CUSTOMER PHOTOGRAPH': 'photo',
+      'CUSTOMER SIGNATURE': 'signature',
+      'BUILDING PLAN': 'building_plan'
+    };
+
+    const loadDocs = async () => {
       const savedDocs = localStorage.getItem(`customerDocs_${id}`);
       let currentDocs = savedDocs ? JSON.parse(savedDocs) : documents;
       
+      let reqList: string[] = [];
       const localCasesStr = localStorage.getItem('mock_saved_cases');
-      let reqIds: string[] = [];
       if (localCasesStr) {
         const localCases = JSON.parse(localCasesStr);
         const caseData = localCases.find((c: any) => (c.application_number || c.id) === id);
-        if (caseData && caseData.requestedReuploads && caseData.requestedReuploads.length > 0) {
-          const docMapping: any = {
-            'SALE DEED': 'sale_deed',
-            'PATTA': 'patta',
-            'FMB': 'fmb',
-            'PAN CARD': 'pan',
-            'AADHAR CARD': 'aadhar',
-            'CUSTOMER PHOTOGRAPH': 'photo',
-            'CUSTOMER SIGNATURE': 'signature',
-            'BUILDING PLAN': 'building_plan'
-          };
-          reqIds = caseData.requestedReuploads.map((r: string) => docMapping[r]).filter(Boolean);
-          setRequestedDocIds(reqIds);
-          
-          currentDocs = currentDocs.map((d: any) => {
-            if (reqIds.includes(d.id)) {
-              return { ...d, status: 'Needs Reupload', fileName: null, fileData: null };
+        if (caseData?.requestedReuploads) reqList = caseData.requestedReuploads;
+      }
+
+      // Also fetch from live MongoDB API
+      if (id) {
+        try {
+          const apiUrl = getApiUrl();
+          const res = await fetch(`${apiUrl}/cases/${id}`);
+          if (res.ok) {
+            const apiCase = await res.json();
+            if (apiCase.requestedReuploads && apiCase.requestedReuploads.length > 0) {
+              reqList = apiCase.requestedReuploads;
+            } else if (apiCase.fullData?.requestedReuploads && apiCase.fullData.requestedReuploads.length > 0) {
+              reqList = apiCase.fullData.requestedReuploads;
             }
-            return d;
-          });
+
+            if (apiCase.uploadedFiles) {
+              const reverseMap: any = {
+                'CUSTOMER PHOTOGRAPH': 'photo',
+                'CUSTOMER SIGNATURE': 'signature',
+                'AADHAR CARD': 'aadhar',
+                'PAN CARD': 'pan',
+                'SALE DEED': 'sale_deed',
+                'PATTA': 'patta',
+                'FMB': 'fmb',
+                'BUILDING PLAN': 'building_plan'
+              };
+              currentDocs = currentDocs.map((d: any) => {
+                const foundKey = Object.keys(reverseMap).find(k => reverseMap[k] === d.id);
+                if (foundKey && apiCase.uploadedFiles[foundKey]) {
+                  return { ...d, fileData: apiCase.uploadedFiles[foundKey], fileName: `${foundKey}.jpg`, status: 'Uploaded' };
+                }
+                return d;
+              });
+            }
+          }
+        } catch (e) {
+          console.error("Error fetching case for customer upload:", e);
         }
+      }
+
+      if (reqList.length > 0) {
+        const reqIds = reqList.map((r: string) => docMapping[r] || r.toLowerCase().replace(/\s+/g, '_')).filter(Boolean);
+        setRequestedDocIds(reqIds);
+        
+        currentDocs = currentDocs.map((d: any) => {
+          if (reqIds.includes(d.id)) {
+            return { ...d, status: 'Needs Reupload', fileName: null, fileData: null };
+          }
+          return d;
+        });
       }
       
       setDocuments(currentDocs);
@@ -84,16 +126,21 @@ const CustomerUpload: React.FC = () => {
     if (e.target.files && e.target.files.length > 0 && activeUploadId) {
       const file = e.target.files[0];
 
-      // Strict validation: photo and signature must be image files
-      if ((activeUploadId === 'photo' || activeUploadId === 'signature') && !file.type.startsWith('image/')) {
-        toast.error('Only image files (JPG, PNG, WEBP) are allowed for Photograph and Signature.');
-        if (fileInputRef.current) fileInputRef.current.value = '';
-        setActiveUploadId(null);
-        return;
-      }
+      const docTypeMapping: Record<string, string> = {
+        'photo': 'CUSTOMER PHOTOGRAPH',
+        'signature': 'CUSTOMER SIGNATURE',
+        'aadhar': 'AADHAR CARD',
+        'pan': 'PAN CARD',
+        'sale_deed': 'SALE DEED',
+        'patta': 'PATTA',
+        'fmb': 'FMB',
+        'building_plan': 'BUILDING PLAN'
+      };
+      const docType = docTypeMapping[activeUploadId] || activeUploadId.toUpperCase();
 
-      if (file.size > 10 * 1024 * 1024) {
-        toast.error('File size exceeds 10MB limit.');
+      const validation = await validateUploadFile(file, docType);
+      if (!validation.valid) {
+        toast.error(validation.error || 'Invalid file uploaded', { duration: 6000 });
         if (fileInputRef.current) fileInputRef.current.value = '';
         setActiveUploadId(null);
         return;
@@ -183,10 +230,29 @@ const CustomerUpload: React.FC = () => {
             mappedFiles[docMapping[d.id]] = d.fileData;
           }
         });
+
+        // Also update local storage
+        const localCasesStr = localStorage.getItem('mock_saved_cases');
+        if (localCasesStr) {
+          const localCases = JSON.parse(localCasesStr);
+          const cIdx = localCases.findIndex((c: any) => (c.application_number || c.id) === id);
+          if (cIdx !== -1) {
+            localCases[cIdx].status = 'DOCUMENTS_VERIFICATION';
+            localCases[cIdx].requestedReuploads = [];
+            localCases[cIdx].uploadedFiles = { ...localCases[cIdx].uploadedFiles, ...mappedFiles };
+            localStorage.setItem('mock_saved_cases', JSON.stringify(localCases));
+          }
+        }
+
         await fetch(`${apiUrl}/cases/${id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ uploadedFiles: mappedFiles })
+          body: JSON.stringify({
+            status: 'DOCUMENTS_VERIFICATION',
+            requestedReuploads: [],
+            uploadedFiles: mappedFiles,
+            linkTracking: { customerUploaded: true, uploadDate: new Date().toISOString() }
+          })
         });
       } catch (err) {
         console.error("Failed to sync customer reupload to MongoDB API:", err);
@@ -239,7 +305,9 @@ const CustomerUpload: React.FC = () => {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
+            status: 'DOCUMENTS_VERIFICATION',
             uploadedFiles: mappedFiles,
+            requestedReuploads: [],
             linkTracking: { customerUploaded: true, uploadDate: new Date().toISOString() }
           })
         });

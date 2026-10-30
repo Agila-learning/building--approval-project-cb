@@ -112,76 +112,70 @@ export class BrevoNotificationService implements NotificationService {
       email: process.env.BREVO_SENDER_EMAIL || 'cbbuilders2026@gmail.com' 
     };
 
+    const initialPort = parseInt(process.env.BREVO_SMTP_PORT || '587', 10);
+    this.transporter = this.createTransporter(initialPort);
+  }
+
+  private createTransporter(port: number): Transporter {
     const smtpHost = process.env.BREVO_SMTP_HOST || 'smtp-relay.brevo.com';
-    const smtpPort = parseInt(process.env.BREVO_SMTP_PORT || '587', 10);
     const smtpUser = process.env.BREVO_SMTP_LOGIN || 'c07bc4001@smtp-brevo.com';
     const smtpPass = process.env.BREVO_SMTP_KEY || process.env.BREVO_API_KEY || '';
 
-    if (smtpPass) {
-      this.transporter = nodemailer.createTransport({
-        host: smtpHost,
-        port: smtpPort,
-        secure: smtpPort === 465,
-        auth: {
-          user: smtpUser,
-          pass: smtpPass,
-        },
-      });
-    }
+    return nodemailer.createTransport({
+      host: smtpHost,
+      port: port,
+      secure: port === 465,
+      auth: {
+        user: smtpUser,
+        pass: smtpPass,
+      },
+      connectionTimeout: 8000,
+      greetingTimeout: 8000,
+      socketTimeout: 10000,
+    });
   }
 
   public async verifyConnection(): Promise<{ success: boolean; message: string }> {
-    if (this.transporter) {
+    const preferredPort = parseInt(process.env.BREVO_SMTP_PORT || '587', 10);
+    const portsToTry = [preferredPort, 2525, 465].filter((v, i, a) => a.indexOf(v) === i);
+
+    for (const port of portsToTry) {
       try {
-        await this.transporter.verify();
-        return { success: true, message: 'Brevo SMTP Relay connected successfully' };
+        const t = this.createTransporter(port);
+        await t.verify();
+        this.transporter = t;
+        return { success: true, message: `Brevo SMTP Relay connected successfully on port ${port}` };
       } catch (err: any) {
-        return { success: false, message: `Brevo SMTP verification failed: ${err.message}` };
+        // Continue to try next port
       }
     }
-    return { success: false, message: 'Brevo transporter not configured' };
+    return { success: false, message: 'Brevo SMTP verification failed on ports 587, 2525, 465' };
   }
 
   private async sendEmail(toEmail: string, toName: string, subject: string, htmlContent: string) {
-    try {
-      // 1. Try Brevo SMTP relay via nodemailer
-      if (this.transporter) {
-        const info = await this.transporter.sendMail({
+    const portsToTry = [2525, 587, 465];
+    let sent = false;
+
+    for (const port of portsToTry) {
+      try {
+        const t = this.createTransporter(port);
+        const info = await t.sendMail({
           from: `"${this.sender.name}" <${this.sender.email}>`,
           to: `"${toName}" <${toEmail}>`,
           subject: subject,
           html: htmlContent,
         });
-        console.log(`[Brevo SMTP] Email "${subject}" sent to ${toEmail} (ID: ${info.messageId})`);
-        return;
+        console.log(`[Brevo SMTP] Email "${subject}" sent to ${toEmail} on port ${port} (ID: ${info.messageId})`);
+        this.transporter = t;
+        sent = true;
+        break;
+      } catch (smtpErr: any) {
+        console.warn(`[Brevo SMTP] Port ${port} failed (${smtpErr.message}), trying next port...`);
       }
+    }
 
-      // 2. Fallback to Brevo REST API (only if xkeysib key is used)
-      if (this.apiKey) {
-        const response = await fetch('https://api.brevo.com/v3/smtp/email', {
-          method: 'POST',
-          headers: {
-            'api-key': this.apiKey,
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
-          },
-          body: JSON.stringify({
-            sender: this.sender,
-            to: [{ email: toEmail, name: toName }],
-            subject: subject,
-            htmlContent: htmlContent
-          })
-        });
-
-        if (!response.ok) {
-          const error = await response.text();
-          console.error('Brevo API Error:', error);
-        } else {
-          console.log(`[Brevo REST] Email "${subject}" sent to ${toEmail}`);
-        }
-      }
-    } catch (error) {
-      console.error('Failed to send email via Brevo:', error);
+    if (!sent) {
+      console.error(`Failed to send email to ${toEmail} across all Brevo SMTP ports.`);
     }
   }
 
