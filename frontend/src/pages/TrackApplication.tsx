@@ -21,33 +21,49 @@ const STAGES: StageConfig[] = [
 ];
 
 const STATUS_TO_STAGE_INDEX: Record<string, number> = {
+  'Draft':                  0,
   'New':                    0,
+  'INTAKE':                 1,
+  'Submitted':              1,
+  'SUBMITTED':              1,
   'DOCUMENTS_PENDING':      1,
   'Documents Pending':      1,
   'Action Required':        1,
   'ACTION_NEEDED':          1,
-  'INTAKE':                 1,
   'DOCUMENTS_VERIFICATION': 2,
   'Verification':           2,
-  'DOCUMENTS_VERIFIED':     2,
+  'Document Verification':  2,
+  'DOCUMENTS_VERIFIED':     3,
+  'Documents Verified':     3,
   'Under Review':           3,
   'APPLICATION_PREP':       3,
+  'Application Prepared':   3,
   'SUBMITTED_FOR_APPROVAL': 4,
-  'Submitted':              4,
-  'SUBMITTED':              4,
-  'Gov Verification':       5,
-  'SCRUTINY':               5,
-  'Site Inspection':        6,
-  'INSPECTION_SCHEDULED':   6,
+  'Govt Submission':        4,
+  'Government Submission':  4,
+  'GOVT_SUBMISSION':        4,
+  'Site Inspection':        5,
+  'INSPECTION_SCHEDULED':   5,
+  'Inspection Scheduled':   5,
   'INSPECTION_DONE':        6,
+  'Gov Verification':       6,
+  'SCRUTINY':               6,
+  'Government Scrutiny':    6,
+  'Scrutiny':               6,
   'Approved':               7,
   'APPROVED':               7,
+  'Final Approval':         7,
+  'Sanctioned':             7,
+  'CLOSED':                 7,
   'Rejected':               -1,
   'REJECTED':               -1,
 };
 
 const STATUS_COLORS: Record<string, string> = {
+  'Draft':                  '#94a3b8',
   'New':                    '#94a3b8',
+  'Submitted':              'var(--info-green)',
+  'SUBMITTED':              'var(--info-green)',
   'DOCUMENTS_PENDING':      'var(--warning-gold)',
   'Documents Pending':      'var(--warning-gold)',
   'Action Required':        'var(--warning-gold)',
@@ -55,19 +71,26 @@ const STATUS_COLORS: Record<string, string> = {
   'INTAKE':                 'var(--warning-gold)',
   'DOCUMENTS_VERIFICATION': 'var(--primary)',
   'Verification':           'var(--primary)',
+  'Document Verification':  'var(--primary)',
   'DOCUMENTS_VERIFIED':     'var(--info-green)',
+  'Documents Verified':     'var(--info-green)',
   'Under Review':           'var(--primary)',
   'APPLICATION_PREP':       'var(--primary)',
-  'Submitted':              'var(--info-green)',
-  'SUBMITTED':              'var(--info-green)',
+  'Application Prepared':   'var(--primary)',
   'SUBMITTED_FOR_APPROVAL': 'var(--info-green)',
+  'Govt Submission':        'var(--info-green)',
+  'Government Submission':  'var(--info-green)',
+  'GOVT_SUBMISSION':        'var(--info-green)',
   'Gov Verification':       'var(--primary-dark)',
   'SCRUTINY':               'var(--primary-dark)',
+  'Government Scrutiny':    'var(--primary-dark)',
   'Site Inspection':        'var(--warning-gold)',
   'INSPECTION_SCHEDULED':   'var(--warning-gold)',
   'INSPECTION_DONE':        'var(--warning-gold)',
   'Approved':               'var(--success-green)',
   'APPROVED':               'var(--success-green)',
+  'Final Approval':         'var(--success-green)',
+  'Sanctioned':             'var(--success-green)',
   'Rejected':               'var(--error-red)',
   'REJECTED':               'var(--error-red)',
 };
@@ -83,6 +106,101 @@ const STANDARD_DOCS = [
   { key: 'BUILDING PLAN', label: 'Building Plan / Layout' },
 ];
 
+export const getLocationDisplay = (caseData: any): string => {
+  if (!caseData) return 'Not Provided';
+
+  const prop = caseData.property || {};
+  const pd = caseData.fullData?.propertyDetails || {};
+  const rd = caseData.fullData?.residentialAddress || {};
+
+  // Check direct address
+  if (prop.address && typeof prop.address === 'string') {
+    const cleanAddr = prop.address.trim();
+    if (cleanAddr && !cleanAddr.toLowerCase().includes('unknown') && cleanAddr !== 'Coimbatore, Tamil Nadu') {
+      return cleanAddr;
+    }
+  }
+
+  // Check propertyDetails
+  const propParts = [
+    pd.village || pd.panchayat || prop.village,
+    pd.taluk || prop.taluk,
+    pd.city,
+    pd.district || prop.district,
+    pd.pincode ? `PIN: ${pd.pincode}` : ''
+  ].filter(p => Boolean(p) && p !== 'Unknown' && p !== 'TBD');
+
+  if (propParts.length > 0) {
+    return propParts.join(', ');
+  }
+
+  // Check residentialAddress
+  const resParts = [
+    rd.houseNo ? `D.No ${rd.houseNo}` : (rd.dno ? `D.No ${rd.dno}` : ''),
+    rd.streetName || rd.street,
+    rd.area,
+    rd.village || rd.city,
+    rd.taluk,
+    rd.district,
+    rd.pincode ? `PIN: ${rd.pincode}` : ''
+  ].filter(p => Boolean(p) && p !== 'Unknown' && p !== 'TBD');
+
+  if (resParts.length > 0) {
+    return resParts.join(', ');
+  }
+
+  if (prop.village && prop.village !== 'Unknown' && prop.village !== 'TBD') {
+    return `${prop.village}${prop.taluk && prop.taluk !== 'TBD' ? ', ' + prop.taluk : ''}`;
+  }
+
+  if (caseData.location && typeof caseData.location === 'string' && caseData.location !== 'Coimbatore, Tamil Nadu') {
+    return caseData.location;
+  }
+
+  return 'Tamil Nadu';
+};
+
+export const getSubmissionDateDisplay = (caseData: any): string => {
+  if (!caseData) return 'N/A';
+
+  const rawDate = 
+    caseData.created_at || 
+    caseData.createdAt || 
+    caseData.submittedAt || 
+    caseData.fullData?.createdAt || 
+    caseData.fullData?.submittedAt || 
+    caseData.submittedDate || 
+    caseData.date;
+
+  if (!rawDate) return 'N/A';
+
+  if (typeof rawDate === 'string') {
+    // If dd/mm/yyyy or dd-mm-yyyy format
+    const match = rawDate.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+    if (match) {
+      const d = parseInt(match[1], 10);
+      const m = parseInt(match[2], 10) - 1;
+      const y = parseInt(match[3], 10);
+      const parsed = new Date(y, m, d);
+      if (!isNaN(parsed.getTime())) {
+        return parsed.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+      }
+    }
+
+    const parsed = new Date(rawDate);
+    if (!isNaN(parsed.getTime())) {
+      return parsed.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    }
+    return rawDate;
+  }
+
+  if (rawDate instanceof Date && !isNaN(rawDate.getTime())) {
+    return rawDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  }
+
+  return 'N/A';
+};
+
 const TrackApplication: React.FC = () => {
   const location = useLocation();
   const [appNumber, setAppNumber] = useState('');
@@ -96,18 +214,25 @@ const TrackApplication: React.FC = () => {
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
-    const idParam = params.get('id');
-    const mobileParam = params.get('mobile');
+    const idParam = params.get('id') || params.get('ref') || params.get('app');
+    const mobileParam = params.get('mobile') || params.get('phone');
     if (idParam) setAppNumber(idParam);
     if (mobileParam) setMobileNumber(mobileParam.replace(/\D/g, '').slice(0, 10));
+
+    if (idParam && mobileParam && mobileParam.replace(/\D/g, '').length >= 10) {
+      handleTrack(undefined, idParam, mobileParam.replace(/\D/g, '').slice(-10));
+    }
   }, [location]);
 
-  const handleTrack = async (e?: React.FormEvent) => {
+  const handleTrack = async (e?: React.FormEvent, overrideApp?: string, overrideMobile?: string) => {
     if (e) e.preventDefault();
     setError('');
 
-    const cleanAppNum = appNumber.trim().replace(/^app-/i, '');
-    const cleanMobile = mobileNumber.trim().replace(/\D/g, '').slice(-10);
+    const targetApp = (overrideApp !== undefined ? overrideApp : appNumber).trim();
+    const targetMobile = (overrideMobile !== undefined ? overrideMobile : mobileNumber).trim();
+
+    const cleanAppNum = targetApp.replace(/^app-/i, '');
+    const cleanMobile = targetMobile.replace(/\D/g, '').slice(-10);
 
     if (!cleanAppNum) {
       setError('Please enter your Application Reference Number.');
@@ -361,7 +486,7 @@ const TrackApplication: React.FC = () => {
                       <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 600, marginBottom: '0.25rem' }}>PROPERTY LOCATION</div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 500, color: 'var(--primary-dark)' }}>
                         <MapPin size={16} color="var(--primary)" /> 
-                        {appData.property?.address || appData.property?.village || appData.location || 'Coimbatore, Tamil Nadu'}
+                        {getLocationDisplay(appData)}
                       </div>
                     </div>
 
@@ -369,7 +494,7 @@ const TrackApplication: React.FC = () => {
                       <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 600, marginBottom: '0.25rem' }}>SUBMISSION DATE</div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 500, color: 'var(--primary-dark)' }}>
                         <Calendar size={16} color="var(--primary)" /> 
-                        {appData.created_at ? new Date(appData.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : (appData.date || 'Today')}
+                        {getSubmissionDateDisplay(appData)}
                       </div>
                     </div>
                   </div>

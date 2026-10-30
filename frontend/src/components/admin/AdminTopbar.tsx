@@ -49,8 +49,9 @@ const AdminTopbar: React.FC<AdminTopbarProps> = ({ toggleSidebar }) => {
 
   useEffect(() => {
     loadNotifications();
-    const interval = setInterval(loadNotifications, 15000); // 15s polling for real updates
+    const interval = setInterval(loadNotifications, 3000); // 3s real-time polling
     window.addEventListener('storage', loadNotifications);
+    window.addEventListener('focus', loadNotifications);
     
     const handleClickOutside = (event: MouseEvent) => {
       if (notifRef.current && !notifRef.current.contains(event.target as Node)) {
@@ -62,6 +63,7 @@ const AdminTopbar: React.FC<AdminTopbarProps> = ({ toggleSidebar }) => {
     return () => {
       clearInterval(interval);
       window.removeEventListener('storage', loadNotifications);
+      window.removeEventListener('focus', loadNotifications);
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, []);

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Calendar, ArrowRight, User } from 'lucide-react';
 import { followUps } from '../../data/mockData';
+import { getApiUrl } from '../../config/api';
 
 const UpcomingFollowups: React.FC = () => {
   const navigate = useNavigate();
@@ -10,7 +11,7 @@ const UpcomingFollowups: React.FC = () => {
   useEffect(() => {
     const fetchLeads = async () => {
       try {
-        const apiUrl = import.meta.env.VITE_API_URL || 'https://building-approval.onrender.com/api';
+        const apiUrl = getApiUrl();
         const res = await fetch(`${apiUrl}/leads`);
         if (res.ok) {
           const data = await res.json();

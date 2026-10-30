@@ -66,16 +66,35 @@ export class CaseController {
       let property_id = data.property_id;
       if (!property_id && data.property) {
         const prop = data.property.create || data.property;
-        if (prop && (prop.owner_name || prop.address || prop.village)) {
+        const full = data.fullData || {};
+        const pd = full.propertyDetails || {};
+        const rd = full.residentialAddress || {};
+
+        const constructedAddress = (prop.address && prop.address.trim().length > 1) 
+          ? prop.address.trim() 
+          : [pd.dno, pd.streetName, pd.village, pd.panchayat, pd.city, pd.taluk, pd.pincode].filter(Boolean).join(', ') ||
+            [rd.houseNo, rd.streetName, rd.area, rd.city, rd.taluk, rd.pincode].filter(Boolean).join(', ');
+
+        const constructedVillage = (prop.village && prop.village !== 'Unknown' && prop.village !== 'TBD') 
+          ? prop.village 
+          : (pd.village || pd.panchayat || rd.area || rd.city || 'TBD');
+
+        const constructedTaluk = (prop.taluk && prop.taluk !== 'Unknown' && prop.taluk !== 'TBD') 
+          ? prop.taluk 
+          : (pd.taluk || rd.taluk || 'TBD');
+
+        const constructedSurvey = prop.survey_number || pd.surveyNo || 'TBD';
+
+        if (prop && (prop.owner_name || constructedAddress || constructedVillage)) {
           const newProperty = await prisma.property.create({
             data: {
               owner_name: prop.owner_name || data.fullData?.customerName || 'Draft Owner',
               owner_phone: cleanMobile || prop.owner_phone || '9999999999',
               owner_email: cleanEmail || prop.owner_email || null,
-              address: prop.address || '',
-              village: prop.village || '',
-              taluk: prop.taluk || '',
-              survey_number: prop.survey_number || 'TBD',
+              address: constructedAddress || '',
+              village: constructedVillage,
+              taluk: constructedTaluk,
+              survey_number: constructedSurvey,
               plot_area: prop.plot_area || null,
               built_up_area: prop.built_up_area || null,
               floors: prop.floors || null,

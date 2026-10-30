@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Search, Calendar, Plus, Eye } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { getApiUrl } from '../../config/api';
 
 const DenseField = ({ label, type = 'text', value, onChange, icon, options, readOnly, disabled, extraIcon, onIconClick }: any) => {
   return (
@@ -64,7 +65,7 @@ const Receipts: React.FC = () => {
   const fetchPendingCases = async () => {
     setLoadingCases(true);
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'https://building-approval.onrender.com/api';
+      const apiUrl = getApiUrl();
       const res = await fetch(`${apiUrl}/cases`);
       if (res.ok) {
         const cases = await res.json();
@@ -134,7 +135,7 @@ const Receipts: React.FC = () => {
       // If linked to an existing case, update the fee collection in MongoDB
       if (selectedCaseRaw && receiptAmountNum > 0) {
         try {
-          const apiUrl = import.meta.env.VITE_API_URL || 'https://building-approval.onrender.com/api';
+          const apiUrl = getApiUrl();
           const targetId = selectedCaseRaw.id || selectedCaseRaw._id;
           const total = Number(selectedCaseRaw.fees?.total ?? selectedCaseRaw.fullData?.fees?.total ?? (selectedCaseRaw.fullData?.feesAmount ? parseFloat(selectedCaseRaw.fullData.feesAmount) : 0)) || 0;
           const prevPaid = Number(selectedCaseRaw.fees?.paid ?? selectedCaseRaw.fullData?.fees?.paid ?? (selectedCaseRaw.fullData?.paidAmount ? parseFloat(selectedCaseRaw.fullData.paidAmount) : 0)) || 0;

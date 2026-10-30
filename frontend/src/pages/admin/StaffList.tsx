@@ -36,7 +36,7 @@ const StaffList: React.FC = () => {
 
   const fetchStaff = async () => {
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:10000/api'}/users`);
+      const res = await fetch(`${getApiUrl()}/users`);
       if (res.ok) {
         const data = await res.json();
         setStaffMembers(data);
@@ -155,9 +155,8 @@ const StaffList: React.FC = () => {
   };
 
   const handleDelete = async (id: string) => {
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:10000/api';
     try {
-      const res = await fetch(`${apiUrl}/users/${id}`, { method: 'DELETE' });
+      const res = await fetch(`${getApiUrl()}/users/${id}`, { method: 'DELETE' });
       if (res.ok) fetchStaff();
     } catch (error) {
       console.error('Failed to delete staff member');
@@ -167,9 +166,8 @@ const StaffList: React.FC = () => {
 
   const toggleStatus = async (staff: StaffMember) => {
     const newStatus = staff.status === 'Active' ? 'Inactive' : 'Active';
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:10000/api';
     try {
-      const res = await fetch(`${apiUrl}/users/${staff.id}`, {
+      const res = await fetch(`${getApiUrl()}/users/${staff.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus })
@@ -348,6 +346,22 @@ const StaffList: React.FC = () => {
                 {errors.mobile && <div style={errorStyle}>{errors.mobile}</div>}
               </div>
 
+              {/* Email */}
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: 'var(--primary-dark)', marginBottom: '0.375rem' }}>Email Address *</label>
+                <input
+                  type="email"
+                  placeholder="e.g. rajesh@example.com"
+                  value={form.email}
+                  onChange={e => setForm(f => ({ ...f, email: e.target.value.trim() }))}
+                  style={{ ...inputStyle, borderColor: errors.email ? 'var(--error-red)' : 'var(--border-color)' }}
+                />
+                <div style={{ fontSize: '0.7rem', color: '#64748b', marginTop: '0.25rem' }}>
+                  Login credentials and portal link will be emailed to this address via Brevo.
+                </div>
+                {errors.email && <div style={errorStyle}>{errors.email}</div>}
+              </div>
+
               {/* Password */}
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.375rem' }}>
@@ -368,22 +382,6 @@ const StaffList: React.FC = () => {
                   style={{ ...inputStyle, borderColor: errors.password ? 'var(--error-red)' : 'var(--border-color)' }}
                 />
                 {errors.password && <div style={errorStyle}>{errors.password}</div>}
-              </div>
-
-              {/* Email */}
-              <div>
-                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: 'var(--primary-dark)', marginBottom: '0.375rem' }}>Email Address *</label>
-                <input
-                  type="email"
-                  placeholder="e.g. rajesh@example.com"
-                  value={form.email}
-                  onChange={e => setForm(f => ({ ...f, email: e.target.value.trim() }))}
-                  style={{ ...inputStyle, borderColor: errors.email ? 'var(--error-red)' : 'var(--border-color)' }}
-                />
-                <div style={{ fontSize: '0.7rem', color: '#64748b', marginTop: '0.25rem' }}>
-                  Login credentials and portal link will be emailed to this address via Brevo.
-                </div>
-                {errors.email && <div style={errorStyle}>{errors.email}</div>}
               </div>
 
               {/* Status */}

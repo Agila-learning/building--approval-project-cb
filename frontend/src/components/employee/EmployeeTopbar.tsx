@@ -55,8 +55,14 @@ const EmployeeTopbar: React.FC<EmployeeTopbarProps> = ({ toggleSidebar }) => {
 
   useEffect(() => {
     fetchLiveNotifications();
-    const interval = setInterval(fetchLiveNotifications, 15000);
-    return () => clearInterval(interval);
+    const interval = setInterval(fetchLiveNotifications, 3000);
+    window.addEventListener('storage', fetchLiveNotifications);
+    window.addEventListener('focus', fetchLiveNotifications);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('storage', fetchLiveNotifications);
+      window.removeEventListener('focus', fetchLiveNotifications);
+    };
   }, []);
 
   useEffect(() => {

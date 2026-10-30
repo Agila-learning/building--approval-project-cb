@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Save, Receipt, Printer, FileText, Clock } from 'lucide-react';
 import html2pdf from 'html2pdf.js';
+import { getApiUrl } from '../../config/api';
 
 const PaymentDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -20,7 +21,7 @@ const PaymentDetail: React.FC = () => {
   useEffect(() => {
     const fetchPaymentDetails = async () => {
       try {
-        const apiUrl = import.meta.env.VITE_API_URL || 'https://building-approval.onrender.com/api';
+        const apiUrl = getApiUrl();
         const res = await fetch(`${apiUrl}/cases/${id}`);
         let c: any = null;
         if (res.ok) {
@@ -123,7 +124,7 @@ const PaymentDetail: React.FC = () => {
 
     setIsSaving(true);
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'https://building-approval.onrender.com/api';
+      const apiUrl = getApiUrl();
       const targetId = caseRecord?.id || payment.mongoId || payment.id;
       
       const existingCharges = caseRecord?.fees?.charges || caseRecord?.fullData?.fees?.charges || [];

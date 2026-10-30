@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { Upload, CheckCircle2, FileText, ShieldCheck, AlertCircle, X, HelpCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { uploadFileToCloudinary } from '../../config/api';
+import { uploadFileToCloudinary, getApiUrl } from '../../config/api';
 
 const CustomerUpload: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -164,7 +164,7 @@ const CustomerUpload: React.FC = () => {
     addNotification('Document Uploaded', `Customer reuploaded requested documents for application ${id}.`);
     window.dispatchEvent(new Event('storage'));
 
-    const apiUrl = import.meta.env.VITE_API_URL || 'https://building-approval.onrender.com/api';
+    const apiUrl = getApiUrl();
     if (id) {
       try {
         const docMapping: any = {
@@ -216,7 +216,7 @@ const CustomerUpload: React.FC = () => {
     addNotification('New Application', `Customer submitted documents for application ${id}.`);
     window.dispatchEvent(new Event('storage'));
 
-    const apiUrl = import.meta.env.VITE_API_URL || 'https://building-approval.onrender.com/api';
+    const apiUrl = getApiUrl();
     if (id) {
       try {
         const docMapping: any = {

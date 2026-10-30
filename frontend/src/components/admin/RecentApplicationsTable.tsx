@@ -2,6 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AlertTriangle, ArrowRight } from 'lucide-react';
 import { getApplicationStatus } from '../../utils/statusHelper';
+import { getApiUrl } from '../../config/api';
 
 const RecentApplicationsTable: React.FC = () => {
   const navigate = useNavigate();
@@ -10,7 +11,7 @@ const RecentApplicationsTable: React.FC = () => {
   React.useEffect(() => {
     const fetchCases = async () => {
       try {
-        const apiUrl = import.meta.env.VITE_API_URL || 'https://building-approval.onrender.com/api';
+        const apiUrl = getApiUrl();
         const res = await fetch(`${apiUrl}/cases`);
         let mappedApps = [];
         

@@ -2,6 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { Receipt } from 'lucide-react';
 import FilterPanel from '../../components/admin/FilterPanel';
+import { getApiUrl } from '../../config/api';
 
 const PaymentsList: React.FC = () => {
   const [payments, setPayments] = React.useState<any[]>([]);
@@ -11,7 +12,7 @@ const PaymentsList: React.FC = () => {
   React.useEffect(() => {
     const fetchCases = async () => {
       try {
-        const apiUrl = import.meta.env.VITE_API_URL || 'https://building-approval.onrender.com/api';
+        const apiUrl = getApiUrl();
         const res = await fetch(`${apiUrl}/cases`);
         let casesData = [];
         if (res.ok) {

@@ -9,16 +9,16 @@ const Footer: React.FC = () => {
           
           {/* Brand Info */}
           <div style={{ flex: '1 1 250px' }}>
-            <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', textDecoration: 'none', marginBottom: '1rem' }}>
-              <div style={{ color: 'var(--text-secondary)', display: 'flex', alignItems: 'center' }}>
-                <img src="/assets/logo_icon.png" alt="CB Building Approvals Logo" style={{ width: '36px', height: '36px', objectFit: 'contain', filter: 'grayscale(1) contrast(4) invert(1) brightness(1.5)', mixBlendMode: 'screen' }} />
+            <Link to="/" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', textDecoration: 'none', marginBottom: '1rem' }}>
+              <div style={{ width: '48px', height: '48px', backgroundColor: '#ffffff', borderRadius: '0.625rem', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.25)', flexShrink: 0 }}>
+                <img src="/assets/logo.jpeg" alt="C.B. Building Approvals Logo" style={{ width: '100%', height: '100%', objectFit: 'contain', borderRadius: '0.375rem' }} />
               </div>
               <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <div style={{ fontSize: '1.125rem', fontWeight: 800, lineHeight: 1, color: 'var(--text-secondary)', fontFamily: 'var(--font-heading)', letterSpacing: '0.05em' }}>
-                  CB BUILDING APPROVALS
+                <div style={{ fontSize: '1.15rem', fontWeight: 900, lineHeight: 1.1, color: '#ffffff', fontFamily: 'var(--font-heading)', letterSpacing: '0.05em' }}>
+                  C.B. BUILDING APPROVALS
                 </div>
-                <div style={{ fontSize: '0.6rem', fontWeight: 500, color: 'rgba(255,255,255,0.5)', letterSpacing: '0.02em', marginTop: '0.125rem' }}>
-                  Building Approval & Documentation
+                <div style={{ fontSize: '0.625rem', fontWeight: 600, color: '#fbbf24', letterSpacing: '0.03em', marginTop: '0.2rem' }}>
+                  YOUR APPROVALS OUR RESPONSIBILITY
                 </div>
               </div>
             </Link>

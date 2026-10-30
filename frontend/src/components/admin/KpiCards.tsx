@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Users, FileText, AlertTriangle, Building, CheckCircle2 } from 'lucide-react';
 import { getApplicationStatus } from '../../utils/statusHelper';
+import { getApiUrl } from '../../config/api';
 
 const isDocsPending = (status: string) => {
   const s = (status || '').toUpperCase();
@@ -30,7 +31,7 @@ const KpiCards: React.FC = () => {
   useEffect(() => {
     const fetchCases = async () => {
       try {
-        const apiUrl = import.meta.env.VITE_API_URL || 'https://building-approval.onrender.com/api';
+        const apiUrl = getApiUrl();
         const res = await fetch(`${apiUrl}/cases`);
         let apps: any[] = [];
         if (res.ok) {

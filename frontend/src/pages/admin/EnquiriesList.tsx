@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Users, Search, Phone, Mail, FileText, CheckCircle, FilePlus, XCircle, X, ExternalLink, Loader2, UserPlus, UserCheck, Edit } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { getApiUrl } from '../../config/api';
 
 const EnquiriesList: React.FC = () => {
   const navigate = useNavigate();
@@ -22,7 +23,7 @@ const EnquiriesList: React.FC = () => {
   useEffect(() => {
     const loadLeads = async () => {
       try {
-        const apiUrl = import.meta.env.VITE_API_URL || 'https://building-approval.onrender.com/api';
+        const apiUrl = getApiUrl();
         const res = await fetch(`${apiUrl}/leads`);
         if (res.ok) {
           const data = await res.json();
@@ -66,7 +67,7 @@ const EnquiriesList: React.FC = () => {
   useEffect(() => {
     const fetchStaff = async () => {
       try {
-        const apiUrl = import.meta.env.VITE_API_URL || 'https://building-approval.onrender.com/api';
+        const apiUrl = getApiUrl();
         const res = await fetch(`${apiUrl}/users`);
         if (res.ok) {
           const data = await res.json();
@@ -124,7 +125,7 @@ const EnquiriesList: React.FC = () => {
     }
 
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'https://building-approval.onrender.com/api';
+      const apiUrl = getApiUrl();
       const currentLead = leads.find(l => l.id === leadId);
       await fetch(`${apiUrl}/leads/${leadId}/status`, {
         method: 'PUT',
@@ -148,7 +149,7 @@ const EnquiriesList: React.FC = () => {
     const updatedLeads = leads.map(lead => lead.id === id ? { ...lead, status: 'Contacted' } : lead);
     setLeads(updatedLeads);
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'https://building-approval.onrender.com/api';
+      const apiUrl = getApiUrl();
       await fetch(`${apiUrl}/leads/${id}/status`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -170,7 +171,7 @@ const EnquiriesList: React.FC = () => {
     setRejectionRemarks('');
     
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'https://building-approval.onrender.com/api';
+      const apiUrl = getApiUrl();
       await fetch(`${apiUrl}/leads/${id}/status`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -185,7 +186,7 @@ const EnquiriesList: React.FC = () => {
 
   const handleCreateApplication = async (lead: any) => {
     setIsCreatingId(lead.id);
-    const apiUrl = import.meta.env.VITE_API_URL || 'https://building-approval.onrender.com/api';
+    const apiUrl = getApiUrl();
     
     try {
       // 1. Update Lead status to 'Application Created'

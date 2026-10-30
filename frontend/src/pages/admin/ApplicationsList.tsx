@@ -4,6 +4,7 @@ import { Plus, Info, Pencil, ArrowUpDown, Search, FileText, ArrowRight, X, Filte
 import StatusBadge from '../../components/admin/StatusBadge';
 import { recentApplications } from '../../data/mockData';
 import { getApplicationStatus } from '../../utils/statusHelper';
+import { getApiUrl } from '../../config/api';
 
 const isDocsPendingStatus = (status: string, rawStatus?: string) => {
   const s = (status || '').toUpperCase();
@@ -73,7 +74,7 @@ const ApplicationsList: React.FC = () => {
 
   const fetchCases = React.useCallback(async () => {
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'https://building-approval.onrender.com/api';
+      const apiUrl = getApiUrl();
       const res = await fetch(`${apiUrl}/cases`);
       if (res.ok) {
         const casesData = await res.json();
@@ -631,7 +632,7 @@ const ApplicationsList: React.FC = () => {
                           onClick={async () => {
                             if (window.confirm('Are you sure you want to revert this application to Documents Pending?')) {
                               try {
-                                const apiUrl = import.meta.env.VITE_API_URL || 'https://building-approval.onrender.com/api';
+                                const apiUrl = getApiUrl();
                                 await fetch(`${apiUrl}/cases/${app.id}`, {
                                   method: 'PUT',
                                   headers: { 'Content-Type': 'application/json' },

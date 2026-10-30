@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { recentApplications } from '../../data/mockData';
+import { getApiUrl } from '../../config/api';
 
 const ApplicationPDF: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -26,7 +27,7 @@ const ApplicationPDF: React.FC = () => {
 
       const fetchFromApi = async () => {
         try {
-          const apiUrl = import.meta.env.VITE_API_URL || 'https://building-approval.onrender.com/api';
+          const apiUrl = getApiUrl();
           const res = await fetch(`${apiUrl}/cases/${id}`);
           if (res.ok) {
             const c = await res.json();

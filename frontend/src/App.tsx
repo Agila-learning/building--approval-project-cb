@@ -110,6 +110,7 @@ function App() {
                 <Routes>
                   <Route path="/" element={<Landing />} />
                   <Route path="/track-application" element={<TrackApplication />} />
+                  <Route path="/track" element={<TrackApplication />} />
                 </Routes>
               </main>
               <Footer />

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, FileText, X, Pencil, Info, ArrowUpDown, Plus } from 'lucide-react';
-
+import { getApiUrl } from '../../config/api';
 
 const CustomerLeads: React.FC = () => {
   const navigate = useNavigate();
@@ -17,7 +17,7 @@ const CustomerLeads: React.FC = () => {
   useEffect(() => {
     const loadLeads = async () => {
       try {
-        const apiUrl = import.meta.env.VITE_API_URL || 'https://building-approval.onrender.com/api';
+        const apiUrl = getApiUrl();
         const res = await fetch(`${apiUrl}/leads`);
         if (res.ok) {
           const data = await res.json();
@@ -89,7 +89,7 @@ const CustomerLeads: React.FC = () => {
     setRejectionRemarks('');
     
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'https://building-approval.onrender.com/api';
+      const apiUrl = getApiUrl();
       await fetch(`${apiUrl}/leads/${id}/status`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },

@@ -1,10 +1,25 @@
 export const getApiUrl = (): string => {
-  let url = import.meta.env.VITE_API_URL || 'http://localhost:10000/api';
-  url = url.trim().replace(/\/+$/, '');
-  if (!url.endsWith('/api')) {
-    url = `${url}/api`;
+  let envUrl = (import.meta.env.VITE_API_URL || '').trim().replace(/\/+$/, '');
+
+  if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname;
+    // If user is accessing from another system / phone on LAN or network (not localhost)
+    if (hostname && hostname !== 'localhost' && hostname !== '127.0.0.1') {
+      if (!envUrl || envUrl.includes('localhost') || envUrl.includes('127.0.0.1') || envUrl.includes('onrender.com')) {
+        return `http://${hostname}:10000/api`;
+      }
+    }
   }
-  return url;
+
+  // Fallback for local development or empty config
+  if (!envUrl || envUrl.includes('onrender.com')) {
+    envUrl = 'http://localhost:10000/api';
+  }
+
+  if (!envUrl.endsWith('/api')) {
+    envUrl = `${envUrl}/api`;
+  }
+  return envUrl;
 };
 
 export const API_BASE_URL = getApiUrl();

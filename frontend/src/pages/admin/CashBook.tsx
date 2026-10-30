@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Search, ArrowUpRight, ArrowDownRight, DollarSign, Wallet, Download } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { getApiUrl } from '../../config/api';
 
 interface Transaction {
   id: string;
@@ -31,7 +32,7 @@ const CashBook: React.FC = () => {
 
     // 1. Fetch collections/receipts from backend cases
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'https://building-approval.onrender.com/api';
+      const apiUrl = getApiUrl();
       const res = await fetch(`${apiUrl}/cases`);
       if (res.ok) {
         const cases = await res.json();

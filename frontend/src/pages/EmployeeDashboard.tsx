@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { getEmployeeFollowUps, updateFollowUpStatus } from '../utils/employeeUtils';
 import type { EmployeeFollowUp } from '../utils/employeeUtils';
+import { getApiUrl } from '../config/api';
 
 const EmployeeDashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -25,7 +26,7 @@ const EmployeeDashboard: React.FC = () => {
 
   const fetchCases = async (user: string) => {
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'https://building-approval.onrender.com/api';
+      const apiUrl = getApiUrl();
       const res = await fetch(`${apiUrl}/cases`);
       if (res.ok) {
         const casesData = await res.json();

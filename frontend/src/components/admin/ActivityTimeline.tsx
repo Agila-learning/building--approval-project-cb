@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Activity, ArrowRight, FileText, CheckCircle, CreditCard, Play } from 'lucide-react';
 import { recentActivity } from '../../data/mockData';
+import { getApiUrl } from '../../config/api';
 
 const ActivityTimeline: React.FC = () => {
   const navigate = useNavigate();
@@ -10,7 +11,7 @@ const ActivityTimeline: React.FC = () => {
   useEffect(() => {
     const fetchRecentCases = async () => {
       try {
-        const apiUrl = import.meta.env.VITE_API_URL || 'https://building-approval.onrender.com/api';
+        const apiUrl = getApiUrl();
         const res = await fetch(`${apiUrl}/cases`);
         if (res.ok) {
           const cases = await res.json();

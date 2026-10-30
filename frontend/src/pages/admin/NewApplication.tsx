@@ -16,8 +16,7 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
   React.useEffect(() => {
     const fetchStaff = async () => {
       try {
-        const apiUrl = import.meta.env.VITE_API_URL || 'https://building-approval.onrender.com/api';
-        const res = await fetch(`${apiUrl}/users`);
+        const res = await fetch(`${getApiUrl()}/users`);
         if (res.ok) {
           const data = await res.json();
           setStaffList(data.filter((s: any) => s.status === 'Active' && s.role === 'STAFF'));
@@ -215,8 +214,6 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
 
   const saveApplicationData = async (isPartial: boolean, reason?: string): Promise<string | false> => {
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'https://building-approval.onrender.com/api';
-      
       const typeMap: Record<string, string> = {
         'building': 'BUILDING_PLAN_APPROVAL',
         'plan': 'LAYOUT_APPROVAL',
@@ -232,7 +229,7 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
       // Fetch from API to get highest number
       let existingApi = [];
       try {
-        const allCasesRes = await fetch(`${apiUrl}/cases`);
+        const allCasesRes = await fetch(`${getApiUrl()}/cases`);
         if (allCasesRes.ok) existingApi = await allCasesRes.json();
       } catch (e) {
         console.error(e);
@@ -252,18 +249,33 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
       
       const finalAppNumber = `${nextAppNum}`;
 
+      const propertyFullAddress = [
+        formData.residentialAddress?.houseNo,
+        formData.residentialAddress?.streetName,
+        formData.propertyDetails?.village || formData.residentialAddress?.area,
+        formData.propertyDetails?.city || formData.residentialAddress?.city,
+        formData.propertyDetails?.taluk || formData.residentialAddress?.taluk,
+        formData.propertyDetails?.pincode || formData.residentialAddress?.pincode
+      ].filter(Boolean).join(', ');
+
+      const propertyVillage = formData.propertyDetails?.village || formData.propertyDetails?.panchayat || formData.residentialAddress?.area || formData.residentialAddress?.city || 'TBD';
+      const propertyTaluk = formData.propertyDetails?.taluk || formData.residentialAddress?.taluk || 'TBD';
+
       const mockCase = {
         id: finalAppNumber,
         application_number: finalAppNumber,
         property: {
           owner_name: formData.customerName || 'Draft Owner',
           owner_phone: formData.mobile || '',
-          jurisdiction: 'DTCP',
-          village: formData.residentialAddress.area || ''
+          jurisdiction: formData.propertyDetails?.panchayat || 'DTCP',
+          address: propertyFullAddress,
+          village: propertyVillage,
+          taluk: propertyTaluk,
+          survey_number: formData.propertyDetails?.surveyNo || 'TBD'
         },
         fullData: formData,
         uploadedFiles: uploadedFiles,
-        approval_type: typeMap[formData.serviceType] || 'Draft',
+        approval_type: typeMap[formData.serviceType] || 'BUILDING_PLAN_APPROVAL',
         status: isPartial ? 'Draft' : 'Submitted',
         assigned_staff: { name: formData.staff },
         created_at: new Date().toISOString(),
@@ -283,8 +295,12 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
           email: formData.email || '',
           serviceType: typeMap[formData.serviceType] || 'Building Approval',
           propertyType: 'Residential',
-          village: formData.propertyDetails?.village || formData.residentialAddress?.area || 'Hosur',
+          address: propertyFullAddress,
+          village: propertyVillage,
+          taluk: propertyTaluk,
+          location: propertyVillage,
           status: isPartial ? 'Draft' : 'Submitted',
+          created_at: new Date().toISOString(),
           date: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
           submittedDate: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
           fullData: formData,
@@ -306,9 +322,9 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
             owner_name: formData.customerName || 'Draft Owner',
             owner_phone: formData.mobile || '0000000000',
             owner_email: formData.email || '',
-            address: `${formData.propertyDetails?.dno || ''} ${formData.propertyDetails?.streetName || ''}`.trim() || formData.residentialAddress?.area || '',
-            village: formData.propertyDetails?.village || formData.residentialAddress?.area || 'Unknown',
-            taluk: formData.propertyDetails?.taluk || formData.residentialAddress?.taluk || 'Unknown',
+            address: propertyFullAddress,
+            village: propertyVillage,
+            taluk: propertyTaluk,
             survey_number: formData.propertyDetails?.surveyNo || 'TBD',
             jurisdiction: formData.propertyDetails?.panchayat || 'DTCP'
           }
@@ -331,7 +347,7 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
         }
 
         try {
-          await fetch(`${apiUrl}/leads/${formData.leadId}/status`, {
+          await fetch(`${getApiUrl()}/leads/${formData.leadId}/status`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ status: 'Application Created' })
@@ -341,7 +357,7 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
         }
       }
       
-      const res = await fetch(`${apiUrl}/cases`, {
+      const res = await fetch(`${getApiUrl()}/cases`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -870,14 +886,6 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
         <div>
           <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Patta Number *</label>
           <input type="text" placeholder="e.g. 8421" value={formData.propertyDetails?.pattaNo || ''} onChange={e => setFormData({...formData, propertyDetails: {...formData.propertyDetails, pattaNo: e.target.value}})} style={getInputStyle('prop_pattaNo', formData.propertyDetails?.pattaNo)} />
-        </div>
-        <div>
-          <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Dno (Optional)</label>
-          <input type="text" placeholder="Door No" value={formData.propertyDetails?.dno || ''} onChange={e => setFormData({...formData, propertyDetails: {...formData.propertyDetails, dno: e.target.value}})} style={getInputStyle('prop_dno', formData.propertyDetails?.dno)} />
-        </div>
-        <div>
-          <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Street Name (Optional)</label>
-          <input type="text" placeholder="Street Name" value={formData.propertyDetails?.streetName || ''} onChange={e => setFormData({...formData, propertyDetails: {...formData.propertyDetails, streetName: e.target.value}})} style={getInputStyle('prop_streetName', formData.propertyDetails?.streetName)} />
         </div>
         <div>
           <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Village (Optional)</label>

@@ -8,9 +8,9 @@ import { BrevoNotificationService } from './services/BrevoNotificationService';
 
 const PORT = process.env.PORT || 10000;
 
-app.listen(PORT, async () => {
+app.listen(Number(PORT), '0.0.0.0', async () => {
   console.log(`\n==================================================`);
-  console.log(`🚀 Building Approval Backend running on port ${PORT}`);
+  console.log(`🚀 Building Approval Backend running on port ${PORT} (0.0.0.0)`);
   console.log(`==================================================`);
 
   // 1. Verify MongoDB Atlas

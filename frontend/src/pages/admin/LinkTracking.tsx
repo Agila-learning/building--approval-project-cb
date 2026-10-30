@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Link as LinkIcon, Send, CheckCircle2, Clock, XCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { getApiUrl } from '../../config/api';
 
 const LinkTracking: React.FC = () => {
   const [applications, setApplications] = useState<any[]>([]);
@@ -9,7 +10,7 @@ const LinkTracking: React.FC = () => {
   useEffect(() => {
     const loadData = async () => {
       let apiCases: any[] = [];
-      const apiUrl = import.meta.env.VITE_API_URL || 'https://building-approval.onrender.com/api';
+      const apiUrl = getApiUrl();
       try {
         const res = await fetch(`${apiUrl}/cases`);
         if (res.ok) apiCases = await res.json();
@@ -66,7 +67,7 @@ const LinkTracking: React.FC = () => {
   }, []);
 
   const handleSendLink = async (appId: string) => {
-    const apiUrl = import.meta.env.VITE_API_URL || 'https://building-approval.onrender.com/api';
+    const apiUrl = getApiUrl();
     const app = applications.find(a => a.id === appId);
     const hasEmail = app?.originalCase?.fullData?.email || app?.originalCase?.property?.email;
     const sentStatus = hasEmail ? 'success' : 'failed';

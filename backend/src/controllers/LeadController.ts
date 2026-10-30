@@ -44,6 +44,19 @@ export const createLead = async (req: Request, res: Response) => {
       });
     }
 
+    try {
+      await prisma.notification.create({
+        data: {
+          title: `New ${type}: ${name}`,
+          message: `${name} submitted a new ${type.toLowerCase()} (${newLead.leadId}) from ${location || 'online'}. Phone: ${phone}.`,
+          type: type === 'Lead' ? 'lead_created' : 'enquiry_created',
+          case_id: newLead.leadId
+        }
+      });
+    } catch (notifErr) {
+      console.error('Failed to create notification for lead:', notifErr);
+    }
+
     res.status(201).json(newLead);
   } catch (error) {
     console.error('Error creating lead:', error);

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Building2 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { getApiUrl } from '../config/api';
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -25,7 +26,7 @@ const Login: React.FC = () => {
 
     // Dynamic Staff Login via Backend
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'https://building-approval.onrender.com/api';
+      const apiUrl = getApiUrl();
       const response = await fetch(`${apiUrl}/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

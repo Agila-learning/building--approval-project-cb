@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { ArrowLeft, ArrowRight, User, Building, FileText, Upload, CheckCircle, X, Save, Send, Download } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { uploadFileToCloudinary } from '../../config/api';
+import { uploadFileToCloudinary, getApiUrl } from '../../config/api';
 import { recentApplications } from '../../data/mockData';
 
 const ApplicationDetail: React.FC = () => {
@@ -16,8 +16,7 @@ const ApplicationDetail: React.FC = () => {
   React.useEffect(() => {
     const fetchStaff = async () => {
       try {
-        const apiUrl = import.meta.env.VITE_API_URL || 'https://building-approval.onrender.com/api';
-        const res = await fetch(`${apiUrl}/users`);
+        const res = await fetch(`${getApiUrl()}/users`);
         if (res.ok) {
           const data = await res.json();
           setStaffList(data.filter((s: any) => s.status === 'Active' && s.role === 'STAFF'));
@@ -201,7 +200,7 @@ const ApplicationDetail: React.FC = () => {
       
       const loadCaseFromApi = async () => {
         try {
-          const apiUrl = import.meta.env.VITE_API_URL || 'https://building-approval.onrender.com/api';
+          const apiUrl = getApiUrl();
           const res = await fetch(`${apiUrl}/cases/${id}`);
           if (res.ok) {
             const c = await res.json();
@@ -269,7 +268,7 @@ const ApplicationDetail: React.FC = () => {
         setUploadedFiles(newUploadedFiles);
           
           if (id) {
-            const apiUrl = import.meta.env.VITE_API_URL || 'https://building-approval.onrender.com/api';
+            const apiUrl = getApiUrl();
             try {
               fetch(`${apiUrl}/cases/${id}`, {
                 method: 'PUT',
@@ -404,7 +403,7 @@ const ApplicationDetail: React.FC = () => {
 
   const saveApplicationData = async (isPartial: boolean, reason?: string) => {
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'https://building-approval.onrender.com/api';
+      const apiUrl = getApiUrl();
       
       const typeMap: Record<string, string> = {
         'building': 'BUILDING_PLAN_APPROVAL',
@@ -935,14 +934,6 @@ const ApplicationDetail: React.FC = () => {
           <input type="text" value={formData.propertyDetails?.pattaNo || ''} onChange={e => setFormData({...formData, propertyDetails: {...formData.propertyDetails, pattaNo: e.target.value}})} style={getInputStyle('prop_pattaNo', formData.propertyDetails?.pattaNo)} />
         </div>
         <div>
-          <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Dno</label>
-          <input type="text" value={formData.propertyDetails?.dno || ''} onChange={e => setFormData({...formData, propertyDetails: {...formData.propertyDetails, dno: e.target.value}})} style={getInputStyle('prop_dno', formData.propertyDetails?.dno)} />
-        </div>
-        <div>
-          <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Street Name</label>
-          <input type="text" value={formData.propertyDetails?.streetName || ''} onChange={e => setFormData({...formData, propertyDetails: {...formData.propertyDetails, streetName: e.target.value}})} style={getInputStyle('prop_streetName', formData.propertyDetails?.streetName)} />
-        </div>
-        <div>
           <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Village</label>
           <input type="text" value={formData.propertyDetails?.village || ''} onChange={e => setFormData({...formData, propertyDetails: {...formData.propertyDetails, village: e.target.value}})} style={getInputStyle('prop_village', formData.propertyDetails?.village)} />
         </div>
@@ -1176,7 +1167,7 @@ const ApplicationDetail: React.FC = () => {
       <button 
         onClick={async () => {
            setApplicationStatus('DOCUMENTS_VERIFIED');
-           const apiUrl = import.meta.env.VITE_API_URL || 'https://building-approval.onrender.com/api';
+           const apiUrl = getApiUrl();
            if (id) {
              try {
                await fetch(`${apiUrl}/cases/${id}`, {
@@ -1244,7 +1235,7 @@ const ApplicationDetail: React.FC = () => {
              }
              
              setApplicationStatus('SUBMITTED_FOR_APPROVAL');
-             const apiUrl = import.meta.env.VITE_API_URL || 'https://building-approval.onrender.com/api';
+             const apiUrl = getApiUrl();
              if (id) {
                try {
                  await fetch(`${apiUrl}/cases/${id}`, {
@@ -1295,7 +1286,7 @@ const ApplicationDetail: React.FC = () => {
           onClick={async () => {
              if (!uploadedFiles['FINAL_APPROVAL']) { toast.error("Please upload the final approval file"); return; }
              setApplicationStatus('COMPLETED');
-             const apiUrl = import.meta.env.VITE_API_URL || 'https://building-approval.onrender.com/api';
+             const apiUrl = getApiUrl();
              if (id) {
                try {
                  await fetch(`${apiUrl}/cases/${id}`, {

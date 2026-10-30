@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { FileText, Eye, FileDown } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { getApiUrl } from '../../config/api';
 
 const Reports: React.FC = () => {
   const [reportData, setReportData] = useState<any[]>([]);
@@ -28,7 +29,7 @@ const Reports: React.FC = () => {
 
     const fetchReport = async () => {
       try {
-        const apiUrl = import.meta.env.VITE_API_URL || 'https://building-approval.onrender.com/api';
+        const apiUrl = getApiUrl();
 
         // Fetch all API cases
         let apiCases: any[] = [];
