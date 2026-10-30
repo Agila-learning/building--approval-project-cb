@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, FileText, X, Pencil, Info, ArrowUpDown, Plus } from 'lucide-react';
+import { Search, FileText, X, Pencil, Info, ArrowUpDown, Plus, UserCheck } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { getApiUrl } from '../../config/api';
 
 const CustomerLeads: React.FC = () => {
   const navigate = useNavigate();
   const [leads, setLeads] = useState<any[]>([]);
+  const [staffMembers, setStaffMembers] = useState<any[]>([]);
   const [rejectingLeadId, setRejectingLeadId] = useState<string | null>(null);
   const [rejectionRemarks, setRejectionRemarks] = useState('');
   const [viewingLead, setViewingLead] = useState<any | null>(null);
@@ -13,6 +15,22 @@ const CustomerLeads: React.FC = () => {
   const [filterOn, setFilterOn] = useState('select');
   const [subFilter, setSubFilter] = useState('select');
   const [searchTerm, setSearchTerm] = useState('');
+
+  useEffect(() => {
+    const fetchStaff = async () => {
+      try {
+        const apiUrl = getApiUrl();
+        const res = await fetch(`${apiUrl}/users`);
+        if (res.ok) {
+          const uList = await res.json();
+          setStaffMembers(uList.filter((u: any) => u.status === 'Active' && u.role === 'STAFF'));
+        }
+      } catch (err) {
+        console.error("Failed to load staff list:", err);
+      }
+    };
+    fetchStaff();
+  }, []);
 
   useEffect(() => {
     const loadLeads = async () => {
@@ -101,6 +119,29 @@ const CustomerLeads: React.FC = () => {
   };
 
 
+
+  const handleAssignWorker = async (leadId: string, staffName: string) => {
+    setLeads(prev => prev.map(l => l.id === leadId ? { ...l, assignedTo: staffName } : l));
+    if (viewingLead && viewingLead.id === leadId) {
+      setViewingLead((prev: any) => ({ ...prev, assignedTo: staffName }));
+    }
+    try {
+      const apiUrl = getApiUrl();
+      const currentLead = leads.find(l => l.id === leadId);
+      await fetch(`${apiUrl}/leads/${leadId}/status`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          status: currentLead?.status || 'New',
+          assignedTo: staffName 
+        })
+      });
+      toast.success(staffName ? `Assigned to ${staffName}` : 'Lead unassigned');
+    } catch (e) {
+      console.error(e);
+      toast.error('Failed to update assignment');
+    }
+  };
 
   const filteredLeads = leads.filter(lead => {
     const searchLower = searchTerm.toLowerCase();
@@ -259,8 +300,28 @@ const CustomerLeads: React.FC = () => {
                   <td style={{ padding: '0.75rem 1rem', fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
                     {lead.projectType}
                   </td>
-                  <td style={{ padding: '0.75rem 1rem', fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
-                    {lead.assignedTo || 'Unassigned'}
+                  <td style={{ padding: '0.75rem 1rem' }}>
+                    <select
+                      value={lead.assignedTo || ''}
+                      onChange={(e) => handleAssignWorker(lead.id, e.target.value)}
+                      style={{
+                        padding: '0.35rem 0.6rem',
+                        fontSize: '0.8rem',
+                        borderRadius: '0.375rem',
+                        border: '1px solid var(--border-color)',
+                        backgroundColor: lead.assignedTo ? '#eff6ff' : '#fff',
+                        color: lead.assignedTo ? 'var(--primary)' : 'var(--text-secondary)',
+                        fontWeight: lead.assignedTo ? 600 : 400,
+                        cursor: 'pointer',
+                        outline: 'none',
+                        maxWidth: '150px'
+                      }}
+                    >
+                      <option value="">Unassigned</option>
+                      {staffMembers.map((s: any) => (
+                        <option key={s.id} value={s.name}>{s.name} ({s.staffId || 'Staff'})</option>
+                      ))}
+                    </select>
                   </td>
                   <td style={{ padding: '0.75rem 1rem', fontSize: '0.875rem', fontWeight: 600, color: 'var(--primary-dark)' }}>
                     {lead.days !== undefined ? `${lead.days} ${lead.days === 1 ? 'day' : 'days'}` : '—'}
@@ -337,6 +398,29 @@ const CustomerLeads: React.FC = () => {
               <div>
                 <strong style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Location</strong>
                 <div style={{ fontSize: '0.875rem', fontWeight: 500 }}>{viewingLead.location}</div>
+              </div>
+              <div>
+                <strong style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Assigned Worker</strong>
+                <select
+                  value={viewingLead.assignedTo || ''}
+                  onChange={(e) => handleAssignWorker(viewingLead.id, e.target.value)}
+                  style={{
+                    display: 'block',
+                    width: '100%',
+                    marginTop: '0.25rem',
+                    padding: '0.5rem',
+                    fontSize: '0.875rem',
+                    borderRadius: '0.375rem',
+                    border: '1px solid var(--border-color)',
+                    backgroundColor: '#fff',
+                    fontWeight: 500
+                  }}
+                >
+                  <option value="">Unassigned</option>
+                  {staffMembers.map((s: any) => (
+                    <option key={s.id} value={s.name}>{s.name} ({s.staffId || 'Staff'})</option>
+                  ))}
+                </select>
               </div>
               <div style={{ gridColumn: 'span 2' }}>
                 <strong style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Property Details</strong>

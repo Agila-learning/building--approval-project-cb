@@ -200,6 +200,10 @@ export class CaseController {
       const withPrefix = cleanId.startsWith('APP-') ? cleanId : `APP-${cleanId}`;
       const withoutPrefix = cleanId.replace(/^APP-/, '');
 
+      const userRole = (req.headers['x-user-role'] || req.query.role || (req as any).user?.role || '') as string;
+      const staffName = (req.headers['x-user-name'] || req.query.staffName || req.query.staff || '') as string;
+      const staffId = (req.headers['x-staff-id'] || req.query.staffId || '') as string;
+
       const caseData = await prisma.case.findFirst({
         where: isObjectId
           ? { OR: [{ id: cleanId }, { application_number: cleanId }, { application_number: withPrefix }, { application_number: withoutPrefix }] }
@@ -215,6 +219,19 @@ export class CaseController {
       });
 
       if (!caseData) return res.status(404).json({ error: 'Case not found' });
+
+      // Worker Isolation: If caller is STAFF, verify they are assigned to this case
+      if (userRole.toUpperCase() === 'STAFF') {
+        const isAssigned = (staffId && caseData.assigned_staff_id === staffId) ||
+          (staffName && caseData.assigned_staff?.name && caseData.assigned_staff.name.toLowerCase() === staffName.toLowerCase()) ||
+          (staffName && caseData.assigned_staff?.staffId && caseData.assigned_staff.staffId.toLowerCase() === staffName.toLowerCase()) ||
+          (staffName && (caseData.fullData as any)?.staff && String((caseData.fullData as any).staff).toLowerCase() === staffName.toLowerCase());
+
+        if (!isAssigned) {
+          return res.status(403).json({ error: 'Forbidden: You are not assigned to view or manage this application.' });
+        }
+      }
+
       res.json(caseData);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
@@ -224,17 +241,55 @@ export class CaseController {
   async listCases(req: Request, res: Response) {
     try {
       const { status, jurisdiction, assigned_staff_id } = req.query;
+      const userRole = (req.headers['x-user-role'] || req.query.role || (req as any).user?.role || '') as string;
+      const staffName = (req.headers['x-user-name'] || req.query.staffName || req.query.staff || '') as string;
+      const staffId = (req.headers['x-staff-id'] || assigned_staff_id || '') as string;
+
+      const whereCondition: any = {};
+      if (status) whereCondition.status = String(status);
+
+      // Worker Isolation: Workers must only see cases assigned to them!
+      if (userRole.toUpperCase() === 'STAFF' || (staffName && userRole.toUpperCase() !== 'ADMIN' && staffName !== 'Admin')) {
+        let staffUserId = staffId ? String(staffId) : '';
+        if (!staffUserId && staffName) {
+          const userRecord = await prisma.user.findFirst({
+            where: {
+              OR: [
+                { name: { equals: String(staffName), mode: 'insensitive' } },
+                { staffId: { equals: String(staffName), mode: 'insensitive' } },
+                { email: { equals: String(staffName), mode: 'insensitive' } }
+              ]
+            }
+          });
+          if (userRecord) staffUserId = userRecord.id;
+        }
+
+        const orClauses: any[] = [];
+        if (staffUserId && /^[0-9a-fA-F]{24}$/.test(staffUserId)) {
+          orClauses.push({ assigned_staff_id: staffUserId });
+        }
+        if (staffName) {
+          orClauses.push({ assigned_staff: { name: { equals: String(staffName), mode: 'insensitive' } } });
+          orClauses.push({ assigned_staff: { staffId: { equals: String(staffName), mode: 'insensitive' } } });
+        }
+
+        if (orClauses.length === 0) {
+          return res.json([]);
+        }
+
+        whereCondition.OR = orClauses;
+      } else if (assigned_staff_id) {
+        whereCondition.assigned_staff_id = String(assigned_staff_id);
+      }
       
       const cases = await prisma.case.findMany({
-        where: {
-          ...(status ? { status: String(status) } : {}),
-          ...(assigned_staff_id ? { assigned_staff_id: String(assigned_staff_id) } : {}),
-        },
+        where: whereCondition,
         include: { property: true, assigned_staff: true, documents: true },
         orderBy: { created_at: 'desc' }
       });
       res.json(cases);
     } catch (error: any) {
+      console.error("Error listing cases:", error);
       res.status(400).json({ error: error.message });
     }
   }
@@ -249,7 +304,7 @@ export class CaseController {
         where: isObjectId
           ? { OR: [{ id }, { application_number: id }] }
           : { application_number: id },
-        include: { property: true }
+        include: { property: true, assigned_staff: true }
       });
 
       if (!existing) {
@@ -293,16 +348,95 @@ export class CaseController {
       if (data.status !== undefined) updatePayload.status = data.status;
       if (data.approval_type !== undefined) updatePayload.approval_type = data.approval_type;
       if (data.approval_number !== undefined) updatePayload.approval_number = data.approval_number;
-      if (data.fullData !== undefined) updatePayload.fullData = data.fullData;
       if (data.uploadedFiles !== undefined) updatePayload.uploadedFiles = data.uploadedFiles;
       if (data.linkTracking !== undefined) updatePayload.linkTracking = data.linkTracking;
       if (data.reason !== undefined) updatePayload.reason = data.reason;
+
+      // Handle Worker Assignment / Reassignment
+      let staffAssignedChanged = false;
+      let newlyAssignedStaffUser: any = null;
+      let targetStaffName = data.staff !== undefined ? data.staff : (data.assignedStaff !== undefined ? data.assignedStaff : data.assigned_staff?.name);
+
+      if (data.assigned_staff_id !== undefined) {
+        updatePayload.assigned_staff_id = data.assigned_staff_id || null;
+        if (data.assigned_staff_id && data.assigned_staff_id !== existing.assigned_staff_id) {
+          staffAssignedChanged = true;
+          newlyAssignedStaffUser = await prisma.user.findUnique({ where: { id: data.assigned_staff_id } });
+        }
+      } else if (targetStaffName !== undefined) {
+        if (!targetStaffName || targetStaffName === 'Unassigned' || targetStaffName === 'None') {
+          updatePayload.assigned_staff_id = null;
+          if (existing.assigned_staff_id) staffAssignedChanged = true;
+        } else {
+          newlyAssignedStaffUser = await prisma.user.findFirst({
+            where: {
+              OR: [
+                { name: { equals: String(targetStaffName), mode: 'insensitive' } },
+                { staffId: { equals: String(targetStaffName), mode: 'insensitive' } },
+                { email: { equals: String(targetStaffName), mode: 'insensitive' } },
+                ...( /^[0-9a-fA-F]{24}$/.test(String(targetStaffName)) ? [{ id: String(targetStaffName) }] : [])
+              ]
+            }
+          });
+          if (newlyAssignedStaffUser) {
+            updatePayload.assigned_staff_id = newlyAssignedStaffUser.id;
+            targetStaffName = newlyAssignedStaffUser.name;
+            if (newlyAssignedStaffUser.id !== existing.assigned_staff_id) {
+              staffAssignedChanged = true;
+            }
+          }
+        }
+      }
+
+      if (data.fullData !== undefined) {
+        updatePayload.fullData = {
+          ...data.fullData,
+          ...(targetStaffName !== undefined ? { staff: targetStaffName } : {})
+        };
+      } else if (targetStaffName !== undefined) {
+        updatePayload.fullData = {
+          ...(existing.fullData as any || {}),
+          staff: targetStaffName
+        };
+      }
 
       const updated = await prisma.case.update({
         where: { id: existing.id },
         data: updatePayload,
         include: { property: true, assigned_staff: true, documents: true }
       });
+
+      // Send Worker Assignment Notification & Email
+      if (staffAssignedChanged && newlyAssignedStaffUser) {
+        try {
+          const appIdentifier = updated.application_number || updated.id;
+          await prisma.notification.create({
+            data: {
+              title: `Worker Assigned: ${appIdentifier}`,
+              message: `Application ${appIdentifier} assigned to ${newlyAssignedStaffUser.name} (${newlyAssignedStaffUser.staffId || 'Staff'}).`,
+              type: 'case_assigned',
+              case_id: appIdentifier
+            }
+          });
+
+          if (newlyAssignedStaffUser.email) {
+            const origin = req.headers.origin || 'http://localhost:5175';
+            notificationService.notifyCaseAssignedToStaff({
+              staffEmail: newlyAssignedStaffUser.email,
+              staffName: newlyAssignedStaffUser.name,
+              applicationNumber: appIdentifier,
+              customerName: updated.property?.owner_name || (updated.fullData as any)?.customerName || 'Valued Applicant',
+              mobileNumber: updated.property?.owner_phone || (updated.fullData as any)?.mobile || '',
+              propertyAddress: updated.property?.address || (updated.fullData as any)?.propertyDetails?.streetName || '',
+              portalUrl: `${origin}/employee/applications/${appIdentifier}`
+            }).catch(err => {
+              console.error("Failed to send staff assignment email:", err);
+            });
+          }
+        } catch (assignErr) {
+          console.error("Error creating assignment notification:", assignErr);
+        }
+      }
 
       // Create real-time notification on step/status update or document update
       try {

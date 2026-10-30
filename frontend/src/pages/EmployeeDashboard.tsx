@@ -27,20 +27,28 @@ const EmployeeDashboard: React.FC = () => {
   const fetchCases = async (user: string) => {
     try {
       const apiUrl = getApiUrl();
-      const res = await fetch(`${apiUrl}/cases`);
+      const staffIdVal = localStorage.getItem('staffId') || '';
+      const res = await fetch(`${apiUrl}/cases?role=STAFF&staffName=${encodeURIComponent(user)}&staffId=${encodeURIComponent(staffIdVal)}`, {
+        headers: {
+          'x-user-role': 'STAFF',
+          'x-user-name': user,
+          'x-staff-id': staffIdVal
+        }
+      });
       if (res.ok) {
         const casesData = await res.json();
         const mappedApps = casesData.map((c: any) => ({
-          id: c.id,
-          customer: c.property?.owner_name || 'Unknown',
-          mobile: c.property?.owner_phone || '',
-          location: c.property?.jurisdiction || c.property?.village || '',
+          id: c.application_number || c.id,
+          mongoId: c.id,
+          customer: c.property?.owner_name || (c.fullData as any)?.customerName || 'Unknown',
+          mobile: c.property?.owner_phone || (c.fullData as any)?.mobile || '',
+          location: c.property?.address || (c.fullData as any)?.propertyDetails?.streetName || c.property?.village || '',
           type: 'Building',
-          appType: c.approval_type,
+          appType: c.approval_type || (c.fullData as any)?.serviceType || 'Building Approval',
           status: c.status,
-          assignedTo: c.assigned_staff?.name || 'Unassigned',
-          date: new Date(c.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
-        })).filter((app: any) => app.assignedTo === user);
+          assignedTo: c.assigned_staff?.name || (c.fullData as any)?.staff || 'Assigned',
+          date: c.created_at ? new Date(c.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'
+        }));
         
         setApplications(mappedApps);
       }
@@ -221,9 +229,37 @@ const EmployeeDashboard: React.FC = () => {
                         </span>
                       </div>
                       <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 500 }}>Date: {app.date}</div>
-                      <button className="btn-primary" style={{ padding: '0.4rem 1rem', fontSize: '0.875rem' }} onClick={() => navigate(`/employee/applications/${app.id}`)}>
-                        Process Application
-                      </button>
+                      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginTop: '0.25rem' }}>
+                        {app.mobile && (
+                          <button
+                            onClick={() => {
+                              const cleanMobile = (app.mobile || '').replace(/\D/g, '').slice(-10);
+                              const uploadUrl = `${window.location.origin}/upload/${app.id}`;
+                              const text = `Dear ${app.customer},\n\nGreetings from C.B. Building Approvals.\nYour building approval application (${app.id}) is in progress. Please upload your required documents using your secure personal link below:\n\n${uploadUrl}\n\nRequired documents checklist:\n1. Customer Photo & Signature\n2. Aadhar Card & PAN Card\n3. Land Document / Sale Deed\n4. Patta & FMB Copy\n5. Proposed Building Plan\n\nThank you!\nCB Building Approvals`;
+                              window.open(`https://wa.me/91${cleanMobile}?text=${encodeURIComponent(text)}`, '_blank');
+                            }}
+                            title="Share Upload Link via WhatsApp"
+                            style={{
+                              backgroundColor: '#25D366',
+                              color: '#fff',
+                              border: 'none',
+                              borderRadius: '0.375rem',
+                              padding: '0.4rem 0.6rem',
+                              fontSize: '0.75rem',
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '0.35rem'
+                            }}
+                          >
+                            <MessageCircle size={14} /> WhatsApp
+                          </button>
+                        )}
+                        <button className="btn-primary" style={{ padding: '0.4rem 1rem', fontSize: '0.875rem' }} onClick={() => navigate(`/employee/applications/${app.id}`)}>
+                          Process Application
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>

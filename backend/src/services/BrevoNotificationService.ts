@@ -387,4 +387,39 @@ export class BrevoNotificationService implements NotificationService {
 
     await this.sendEmail(staffEmail, staffName, subject, htmlContent);
   }
+
+  async notifyCaseAssignedToStaff(params: {
+    staffEmail: string;
+    staffName: string;
+    applicationNumber: string;
+    customerName: string;
+    mobileNumber?: string;
+    propertyAddress?: string;
+    portalUrl?: string;
+  }): Promise<void> {
+    const { staffEmail, staffName, applicationNumber, customerName, mobileNumber, propertyAddress, portalUrl } = params;
+    const subject = `New Project Assigned: ${applicationNumber} - CB Building Approvals`;
+    const htmlContent = generateEmailTemplate({
+      eyebrow: 'Project Assignment',
+      headline: 'New Application Assigned to You',
+      customerName: staffName,
+      bodyParagraphs: [
+        `You have been assigned as the case officer for application ${applicationNumber} by Admin.`,
+        'Please review the client documentation, verify required documents, and begin processing the application.'
+      ],
+      referenceCard: [
+        { label: 'Application No.', value: applicationNumber },
+        { label: 'Customer Name', value: customerName },
+        { label: 'Customer Mobile', value: mobileNumber || 'On file' },
+        { label: 'Property Address', value: propertyAddress || 'Address on file' }
+      ],
+      cta: {
+        text: 'Open Application in Staff Portal',
+        url: portalUrl || 'http://localhost:5175/employee/applications'
+      }
+    });
+
+    await this.sendEmail(staffEmail, staffName, subject, htmlContent);
+  }
 }
+

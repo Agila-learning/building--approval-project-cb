@@ -1,32 +1,79 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Filter, Plus, Copy } from 'lucide-react';
+import { Search, Filter, Plus, Copy, MessageCircle, Link as LinkIcon, CheckCircle2 } from 'lucide-react';
+import toast from 'react-hot-toast';
+import { getApiUrl } from '../../config/api';
 
 const MyApplications: React.FC = () => {
   const navigate = useNavigate();
   const [employeeName, setEmployeeName] = useState('Employee');
+  const [employeeId, setEmployeeId] = useState('');
   const [applications, setApplications] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState('All');
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  const loadData = () => {
-    const user = localStorage.getItem('loggedInUser') || 'Employee';
-    setEmployeeName(user);
-
-    const storedApps = localStorage.getItem('recentApplications');
-    if (storedApps) {
-      const allApps = JSON.parse(storedApps);
-      // Filter for applications assigned to this employee
-      const assignedApps = allApps.filter((app: any) => app.assignedTo === user || app.assignedStaff === user || app.staff === user);
-      setApplications(assignedApps);
+  const fetchAssignedCases = useCallback(async (userName: string, staffIdVal: string) => {
+    try {
+      const apiUrl = getApiUrl();
+      const res = await fetch(`${apiUrl}/cases?role=STAFF&staffName=${encodeURIComponent(userName)}&staffId=${encodeURIComponent(staffIdVal)}`, {
+        headers: {
+          'x-user-role': 'STAFF',
+          'x-user-name': userName,
+          'x-staff-id': staffIdVal
+        }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const mapped = data.map((c: any) => ({
+          id: c.application_number || c.id,
+          mongoId: c.id,
+          customer: c.property?.owner_name || c.fullData?.customerName || 'Customer',
+          mobile: c.property?.owner_phone || c.fullData?.mobile || '',
+          email: c.property?.owner_email || c.fullData?.email || '',
+          location: c.property?.address || c.fullData?.propertyDetails?.streetName || c.property?.village || 'Tamil Nadu',
+          appType: c.approval_type || c.fullData?.serviceType || 'Building Approval',
+          status: c.status || 'DOCUMENTS_PENDING',
+          date: c.created_at ? new Date(c.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—',
+          uploadedFiles: c.uploadedFiles || {}
+        }));
+        setApplications(mapped);
+      }
+    } catch (err) {
+      console.error("Failed to fetch assigned cases for staff:", err);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    loadData();
-    window.addEventListener('storage', loadData);
-    return () => window.removeEventListener('storage', loadData);
-  }, []);
+    const user = localStorage.getItem('loggedInUser') || 'Employee';
+    const staffIdStored = localStorage.getItem('staffId') || '';
+    setEmployeeName(user);
+    setEmployeeId(staffIdStored);
+
+    fetchAssignedCases(user, staffIdStored);
+    const interval = setInterval(() => fetchAssignedCases(user, staffIdStored), 8000);
+    return () => clearInterval(interval);
+  }, [fetchAssignedCases]);
+
+  const handleShareWhatsApp = (app: any) => {
+    const cleanMobile = (app.mobile || '').replace(/\D/g, '').slice(-10);
+    if (!cleanMobile || cleanMobile.length !== 10) {
+      toast.error('Customer phone number not available or invalid for WhatsApp.');
+      return;
+    }
+    const uploadUrl = `${window.location.origin}/upload/${app.id}`;
+    const text = `Dear ${app.customer},\n\nGreetings from C.B. Building Approvals.\nYour building approval application (${app.id}) is in progress. Please upload your required documents using your secure personal link below:\n\n${uploadUrl}\n\nRequired documents checklist:\n1. Customer Passport Photo & Signature\n2. Aadhar Card & PAN Card\n3. Land Document / Sale Deed\n4. Patta & FMB Copy\n5. Proposed Building Plan\n\nFor any queries, please reply to this chat.\nThank you!`;
+    
+    window.open(`https://wa.me/91${cleanMobile}?text=${encodeURIComponent(text)}`, '_blank');
+  };
+
+  const handleCopyLink = (appId: string) => {
+    const uploadUrl = `${window.location.origin}/upload/${appId}`;
+    navigator.clipboard.writeText(uploadUrl);
+    setCopiedId(appId);
+    toast.success('Document upload link copied to clipboard!');
+    setTimeout(() => setCopiedId(null), 2500);
+  };
 
   const tabs = ['All', 'In Progress', 'Documents Pending', 'Verification', 'Approved'];
 
@@ -141,7 +188,12 @@ const MyApplications: React.FC = () => {
                     <div style={{ fontSize: '0.875rem', color: 'var(--primary-dark)', fontWeight: 600, marginBottom: '0.25rem' }}>
                       {app.customer}
                     </div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{app.location}</div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                      {app.mobile ? `📱 ${app.mobile}` : app.location}
+                    </div>
+                    {app.mobile && (
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>{app.location}</div>
+                    )}
                   </td>
                   <td style={{ padding: '1rem 1.5rem', fontSize: '0.875rem', color: 'var(--primary-dark)' }}>
                     {app.appType || 'Building'}
@@ -159,9 +211,52 @@ const MyApplications: React.FC = () => {
                     </span>
                   </td>
                   <td style={{ padding: '1rem 1.5rem', textAlign: 'right' }}>
-                    <button className="btn-primary" style={{ padding: '0.4rem 1rem', fontSize: '0.75rem' }} onClick={() => navigate(`/employee/applications/${app.id}`)}>
-                      Process
-                    </button>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.5rem' }}>
+                      <button 
+                        onClick={() => handleShareWhatsApp(app)}
+                        title="Send Upload Link via WhatsApp"
+                        style={{
+                          backgroundColor: '#25D366',
+                          color: '#fff',
+                          border: 'none',
+                          borderRadius: '0.375rem',
+                          padding: '0.4rem 0.6rem',
+                          fontSize: '0.75rem',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.35rem'
+                        }}
+                      >
+                        <MessageCircle size={14} /> WhatsApp
+                      </button>
+
+                      <button 
+                        onClick={() => handleCopyLink(app.id)}
+                        title="Copy Customer Upload Link"
+                        style={{
+                          backgroundColor: 'var(--bg-secondary)',
+                          color: copiedId === app.id ? 'var(--success-green)' : 'var(--text-secondary)',
+                          border: '1px solid var(--border-color)',
+                          borderRadius: '0.375rem',
+                          padding: '0.4rem',
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center'
+                        }}
+                      >
+                        {copiedId === app.id ? <CheckCircle2 size={14} /> : <LinkIcon size={14} />}
+                      </button>
+
+                      <button 
+                        className="btn-primary" 
+                        style={{ padding: '0.4rem 1rem', fontSize: '0.75rem' }} 
+                        onClick={() => navigate(`/employee/applications/${app.id}`)}
+                      >
+                        Process
+                      </button>
+                    </div>
                   </td>
                 </tr>
               )) : (

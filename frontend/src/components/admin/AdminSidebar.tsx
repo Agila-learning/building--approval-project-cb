@@ -4,75 +4,39 @@ import {
   LayoutDashboard, FileText,
   CreditCard, PhoneCall, BarChart3,
   UserCog, Settings, LogOut, CheckSquare, Users, Receipt, ClipboardList,
-  X
+  X, ChevronLeft, ChevronRight
 } from 'lucide-react';
-
-
-const menuGroups = [
-  {
-    category: 'Overview',
-    items: [
-      { title: 'Dashboard', icon: <LayoutDashboard size={20} strokeWidth={1.5} />, path: '/admin' }
-    ]
-  },
-  {
-    category: 'Front Office',
-    items: [
-      { title: 'Customer Leads', icon: <Users size={20} strokeWidth={1.5} />, path: '/admin/leads' },
-      { title: 'Enquiries', icon: <PhoneCall size={20} strokeWidth={1.5} />, path: '/admin/enquiries' },
-    ]
-  },
-  {
-    category: 'Operations',
-    items: [
-      { title: 'Applications', icon: <FileText size={20} strokeWidth={1.5} />, path: '/admin/applications' },
-      { title: 'Attendance', icon: <CheckSquare size={20} strokeWidth={1.5} />, path: '/admin/attendance' },
-      { title: 'Link Tracking', icon: <FileText size={20} strokeWidth={1.5} />, path: '/admin/link-tracking' },
-    ]
-  },
-  {
-    category: 'Finance',
-    items: [
-      { title: 'Quotations', icon: <FileText size={20} strokeWidth={1.5} />, path: '/admin/quotations' },
-      { title: 'Billing', icon: <ClipboardList size={20} strokeWidth={1.5} />, path: '/admin/receipts' },
-      { title: 'Payments', icon: <CreditCard size={20} strokeWidth={1.5} />, path: '/admin/payments' },
-      { title: 'Expenses', icon: <Receipt size={20} strokeWidth={1.5} />, path: '/admin/expenses' },
-      { title: 'Cash Book', icon: <ClipboardList size={20} strokeWidth={1.5} />, path: '/admin/cashbook' },
-      { title: 'Reports', icon: <BarChart3 size={20} strokeWidth={1.5} />, path: '/admin/reports' },
-    ]
-  },
-  {
-    category: 'System',
-    items: [
-      { title: 'Maintenance', icon: <Settings size={20} strokeWidth={1.5} />, path: '/admin/maintenance/logs', 
-        subItems: [
-          { title: 'Revert', path: '/admin/maintenance/revert' },
-          { title: 'View', path: '/admin/maintenance/view' },
-          { title: 'Logs', path: '/admin/maintenance/logs' },
-        ]
-      },
-      { title: 'Staff & Users', icon: <UserCog size={20} strokeWidth={1.5} />, path: '/admin/staff' },
-      { title: 'Settings', icon: <Settings size={20} strokeWidth={1.5} />, path: '/admin/settings' },
-    ]
-  }
-];
 
 interface AdminSidebarProps {
   isOpen?: boolean;
   setIsOpen?: (open: boolean) => void;
+  isCollapsed?: boolean;
+  setIsCollapsed?: (collapsed: boolean) => void;
 }
 
-const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, setIsOpen }) => {
+const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, setIsOpen, isCollapsed: propCollapsed, setIsCollapsed: propSetCollapsed }) => {
   const location = useLocation();
   const [maintenanceOpen, setMaintenanceOpen] = React.useState(location.pathname.includes('/admin/maintenance'));
-  
+  const [internalCollapsed, setInternalCollapsed] = React.useState(() => localStorage.getItem('sidebar_collapsed') === 'true');
+
+  const isCollapsed = propCollapsed !== undefined ? propCollapsed : internalCollapsed;
+
+  const toggleCollapse = () => {
+    const nextVal = !isCollapsed;
+    if (propSetCollapsed) propSetCollapsed(nextVal);
+    setInternalCollapsed(nextVal);
+    localStorage.setItem('sidebar_collapsed', nextVal.toString());
+    window.dispatchEvent(new Event('sidebar_toggle'));
+  };
+
   React.useEffect(() => {
     if (location.pathname.includes('/admin/maintenance')) {
       setMaintenanceOpen(true);
     }
   }, [location.pathname]);
+
   return (
-    <aside className={`admin-sidebar sidebar-container ${isOpen ? 'sidebar-open' : ''}`} style={{ backgroundColor: 'var(--sidebar-bg)' }}>
+    <aside className={`admin-sidebar sidebar-container ${isOpen ? 'sidebar-open' : ''} ${isCollapsed ? 'sidebar-collapsed' : ''}`} style={{ backgroundColor: 'var(--sidebar-bg)' }}>
       {/* Logo Area */}
       <div style={{ padding: '1.25rem 15px', borderBottom: '1px solid rgba(255,255,255,0.05)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
@@ -85,12 +49,13 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, setIsOpen }) => {
             </div>
           </div>
         </div>
-        {setIsOpen && (
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
           <button
-            className="mobile-close-btn"
-            onClick={() => setIsOpen(false)}
-            aria-label="Close navigation menu"
-            title="Close menu"
+            className="desktop-collapse-btn"
+            onClick={toggleCollapse}
+            aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            title={isCollapsed ? "Expand sidebar (250px)" : "Collapse sidebar (70px)"}
             style={{
               background: 'rgba(255,255,255,0.08)',
               border: 'none',
@@ -98,6 +63,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, setIsOpen }) => {
               color: 'var(--bg-surface)',
               cursor: 'pointer',
               padding: '6px',
+              display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               transition: 'background-color 0.2s',
@@ -105,9 +71,33 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, setIsOpen }) => {
             onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.15)'}
             onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.08)'}
           >
-            <X size={20} />
+            {isCollapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
           </button>
-        )}
+
+          {setIsOpen && (
+            <button
+              className="mobile-close-btn"
+              onClick={() => setIsOpen(false)}
+              aria-label="Close navigation menu"
+              title="Close menu"
+              style={{
+                background: 'rgba(255,255,255,0.08)',
+                border: 'none',
+                borderRadius: '6px',
+                color: 'var(--bg-surface)',
+                cursor: 'pointer',
+                padding: '6px',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'background-color 0.2s',
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.15)'}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.08)'}
+            >
+              <X size={20} />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Menu */}

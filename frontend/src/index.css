@@ -327,53 +327,72 @@ input[type="text"], input[type="email"], input[type="tel"], input[type="password
 }
 
 @media (min-width: 1025px) {
-  .sidebar-container:hover {
-    width: 260px;
+  .sidebar-container {
+    width: 250px;
   }
   
-  .sidebar-container:hover + .layout-content {
-    margin-left: 260px;
+  .layout-content {
+    margin-left: 250px;
+  }
+
+  .sidebar-container.sidebar-collapsed {
+    width: 70px;
+  }
+  
+  .layout-content.sidebar-collapsed {
+    margin-left: 70px;
+  }
+
+  .sidebar-container:not(.sidebar-collapsed) .sidebar-text,
+  .sidebar-container:not(.sidebar-collapsed) .sidebar-logo-text,
+  .sidebar-container:not(.sidebar-collapsed) .sidebar-profile-info {
+    opacity: 1;
+    visibility: visible;
+  }
+
+  .sidebar-container:not(.sidebar-collapsed) .sidebar-main-menu-text {
+    opacity: 1;
+    visibility: visible;
+    height: auto;
+    margin-bottom: 0.75rem;
+  }
+
+  .sidebar-container:not(.sidebar-collapsed) .sidebar-group {
+    margin-bottom: 1.5rem;
+  }
+
+  .sidebar-container.sidebar-collapsed:hover {
+    width: 250px;
+    box-shadow: 4px 0 16px rgba(0, 0, 0, 0.2);
+  }
+
+  .sidebar-container.sidebar-collapsed:hover .sidebar-text,
+  .sidebar-container.sidebar-collapsed:hover .sidebar-logo-text,
+  .sidebar-container.sidebar-collapsed:hover .sidebar-profile-info {
+    opacity: 1;
+    visibility: visible;
+  }
+
+  .sidebar-container.sidebar-collapsed:hover .sidebar-main-menu-text {
+    opacity: 1;
+    visibility: visible;
+    height: auto;
+    margin-bottom: 0.75rem;
+  }
+
+  .sidebar-container.sidebar-collapsed:hover .sidebar-group {
+    margin-bottom: 1.5rem;
   }
 }
 
-.sidebar-text, .sidebar-logo-text, .sidebar-profile-info {
-  white-space: nowrap;
-  opacity: 0;
-  transition: opacity 0.3s ease;
-  visibility: hidden;
+.desktop-collapse-btn {
+  display: flex;
 }
 
-.sidebar-main-menu-text {
-  white-space: nowrap;
-  opacity: 0;
-  transition: opacity 0.3s ease;
-  visibility: hidden;
-  height: 0;
-  margin-bottom: 0;
-  overflow: hidden;
-}
-
-.sidebar-group {
-  margin-bottom: 0.5rem;
-  transition: margin-bottom 0.3s ease;
-}
-
-.sidebar-container:hover .sidebar-text,
-.sidebar-container:hover .sidebar-logo-text,
-.sidebar-container:hover .sidebar-profile-info {
-  opacity: 1;
-  visibility: visible;
-}
-
-.sidebar-container:hover .sidebar-main-menu-text {
-  opacity: 1;
-  visibility: visible;
-  height: auto;
-  margin-bottom: 0.75rem;
-}
-
-.sidebar-container:hover .sidebar-group {
-  margin-bottom: 1.5rem;
+@media (max-width: 1024px) {
+  .desktop-collapse-btn {
+    display: none !important;
+  }
 }
 
 /* Mobile Toggle and Close Buttons (hidden on desktop) */

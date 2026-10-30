@@ -21,10 +21,15 @@ const Navbar: React.FC = () => {
   };
 
   return (
-    <header style={{ 
+    <header className="site-header" style={{ 
       position: 'sticky', 
       top: 0, 
-      zIndex: 50, 
+      left: 0,
+      right: 0,
+      width: '100%',
+      margin: 0,
+      padding: 0,
+      zIndex: 1000, 
       backgroundColor: 'var(--bg-surface)',
       borderBottom: '1px solid var(--border-color)',
     }}>

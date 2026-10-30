@@ -140,7 +140,8 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
         feesAmount: '',
         feeNotes: '',
         leadId: lead.id, // Store the lead ID to delete or convert it later
-        reference: ''
+        reference: '',
+        referenceDetails: { source: '', name: '', mobile: '' }
       };
     }
     return {
@@ -158,6 +159,7 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
       permanentAddress: { sameAsResidential: true, houseNo: '', streetName: '', area: '', city: '', taluk: '', pincode: '', state: '', country: 'INDIA', landmark: '' },
       staff: isEmployee ? loggedInUser : '',
       reference: '',
+      referenceDetails: { source: '', name: '', mobile: '' },
       
       // Page 2: Property Details
       propertyDetails: { surveyNo: '', pattaNo: '', dno: '', streetName: '', village: '', panchayat: '', city: '', taluk: '', pincode: '', state: '', landmark: '' },
@@ -622,10 +624,84 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
               )}
             </div>
           )}
-          <div>
+          <div style={{ minWidth: '220px' }}>
             <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: 'var(--primary-dark)', marginBottom: '0.5rem' }}>Reference Details</label>
-            <input type="text" value={formData.reference || ''} onChange={e => setFormData({...formData, reference: e.target.value})} placeholder="Reference details" style={getInputStyle('reference', formData.reference)} />
+            <select
+              value={formData.referenceDetails?.source || formData.reference || ''}
+              onChange={e => {
+                const src = e.target.value;
+                setFormData({
+                  ...formData,
+                  reference: src,
+                  referenceDetails: { source: src, name: '', mobile: '' }
+                });
+              }}
+              style={{
+                width: '100%',
+                padding: '0.5rem',
+                borderRadius: '0.375rem',
+                border: '1px solid var(--border-color)',
+                fontSize: '0.875rem',
+                backgroundColor: 'white'
+              }}
+            >
+              <option value="">Select Reference</option>
+              <option value="Social Media">Social Media</option>
+              <option value="Office Staff">Office Staff</option>
+              <option value="Old Customer">Old Customer</option>
+              <option value="Friend">Friend</option>
+              <option value="Other">Other</option>
+            </select>
           </div>
+          {['Office Staff', 'Old Customer', 'Friend'].includes(formData.referenceDetails?.source || formData.reference || '') && (
+            <>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: 'var(--primary-dark)', marginBottom: '0.5rem' }}>Reference Name</label>
+                <input
+                  type="text"
+                  value={formData.referenceDetails?.name || ''}
+                  onChange={e => setFormData({
+                    ...formData,
+                    referenceDetails: {
+                      ...(formData.referenceDetails || { source: formData.reference || '' }),
+                      name: e.target.value
+                    }
+                  })}
+                  placeholder="Enter reference person name"
+                  style={{
+                    width: '100%',
+                    padding: '0.5rem',
+                    borderRadius: '0.375rem',
+                    border: '1px solid var(--border-color)',
+                    fontSize: '0.875rem'
+                  }}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: 'var(--primary-dark)', marginBottom: '0.5rem' }}>Reference Mobile Number</label>
+                <input
+                  type="text"
+                  maxLength={10}
+                  value={formData.referenceDetails?.mobile || ''}
+                  onChange={e => setFormData({
+                    ...formData,
+                    referenceDetails: {
+                      ...(formData.referenceDetails || { source: formData.reference || '' }),
+                      mobile: e.target.value.replace(/\D/g, '').slice(0, 10)
+                    }
+                  })}
+                  placeholder="10-digit mobile number"
+                  style={{
+                    width: '100%',
+                    padding: '0.5rem',
+                    borderRadius: '0.375rem',
+                    border: '1px solid var(--border-color)',
+                    fontSize: '0.875rem'
+                  }}
+                />
+              </div>
+            </>
+          )}
         </div>
       </div>
 

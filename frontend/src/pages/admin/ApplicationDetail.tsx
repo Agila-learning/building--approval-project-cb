@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, User, Building, FileText, Upload, CheckCircle, X, Save, Send, Download, AlertTriangle, RotateCcw, Eye } from 'lucide-react';
+import { ArrowLeft, ArrowRight, User, Building, FileText, Upload, CheckCircle, X, Save, Send, Download, AlertTriangle, RotateCcw, Eye, Archive, MessageCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
+import JSZip from 'jszip';
 import { uploadFileToCloudinary, getApiUrl } from '../../config/api';
 import { validateUploadFile } from '../../utils/imageValidation';
 import { recentApplications } from '../../data/mockData';
@@ -13,6 +14,7 @@ const ApplicationDetail: React.FC = () => {
   const searchParams = React.useMemo(() => new URLSearchParams(location.search), [location.search]);
   const isEditMode = searchParams.get('edit') === 'true';
   const [staffList, setStaffList] = useState<any[]>([]);
+  const [isForbidden, setIsForbidden] = useState(false);
 
   React.useEffect(() => {
     const fetchStaff = async () => {
@@ -166,9 +168,16 @@ const ApplicationDetail: React.FC = () => {
         }
       }
     }
-    const saved = localStorage.getItem('newApp_uploadedFiles');
-    return saved && !id ? JSON.parse(saved) : {};
+    return {};
   });
+
+  React.useEffect(() => {
+    if (!id || location.pathname.endsWith('/new')) {
+      localStorage.removeItem('newApp_formData');
+      localStorage.removeItem('newApp_uploadedFiles');
+      localStorage.removeItem('newApp_currentStep');
+    }
+  }, [id, location.pathname]);
 
   React.useEffect(() => {
     if (id) {
@@ -204,7 +213,19 @@ const ApplicationDetail: React.FC = () => {
       const loadCaseFromApi = async () => {
         try {
           const apiUrl = getApiUrl();
-          const res = await fetch(`${apiUrl}/cases/${id}`);
+          const userRole = localStorage.getItem('userRole') || (isEmployee ? 'STAFF' : 'ADMIN');
+          const staffIdVal = localStorage.getItem('staffId') || '';
+          const res = await fetch(`${apiUrl}/cases/${id}`, {
+            headers: {
+              'x-user-role': userRole,
+              'x-user-name': loggedInUser,
+              'x-staff-id': staffIdVal
+            }
+          });
+          if (res.status === 403) {
+            setIsForbidden(true);
+            return;
+          }
           if (res.ok) {
             const c = await res.json();
             if (c.status) {
@@ -327,15 +348,6 @@ const ApplicationDetail: React.FC = () => {
           residentialAddress: { houseNo: '', streetName: '', area: apiApp.location || '', city: '', taluk: '', pincode: '', state: '', country: 'INDIA', landmark: '', accomodationType: 'Own', yearsResiding: '' },
           staff: apiApp.staff || '',
         });
-      }
-    }
-    const saved = localStorage.getItem('newApp_formData');
-    if (saved && !id) {
-      try {
-        const parsed = JSON.parse(saved);
-        return sanitizeFormData(parsed);
-      } catch (e) {
-        console.error(e);
       }
     }
     return defaultFormData;
@@ -1069,6 +1081,55 @@ const ApplicationDetail: React.FC = () => {
         .catch(err => console.error("Error downloading file", err));
     };
 
+    const handleDownloadAllAsZip = async () => {
+      const validEntries = Object.entries(uploadedFiles).filter(([_, url]) => url && typeof url === 'string' && (url.startsWith('http') || url.startsWith('data:')));
+      if (validEntries.length === 0) {
+        toast.error("No uploaded documents to download.");
+        return;
+      }
+
+      const toastId = toast.loading("Creating ZIP archive of all documents...");
+      try {
+        const zip = new JSZip();
+        const appFolder = zip.folder(id || 'Application_Documents');
+
+        for (const [key, url] of validEntries) {
+          const isPdf = (url as string).endsWith('.pdf');
+          const ext = isPdf ? '.pdf' : '.jpg';
+          const cleanName = `${key.replace(/[^a-zA-Z0-9_-]/g, '_')}${ext}`;
+
+          try {
+            if ((url as string).startsWith('data:')) {
+              const base64Data = (url as string).split(',')[1];
+              appFolder?.file(cleanName, base64Data, { base64: true });
+            } else {
+              const res = await fetch(url as string);
+              const blob = await res.blob();
+              appFolder?.file(cleanName, blob);
+            }
+          } catch (fileErr) {
+            console.error(`Failed to add ${key} to ZIP:`, fileErr);
+          }
+        }
+
+        const zipBlob = await zip.generateAsync({ type: 'blob' });
+        const downloadUrl = window.URL.createObjectURL(zipBlob);
+        const link = document.createElement('a');
+        link.href = downloadUrl;
+        link.download = `${id || 'Application'}_All_Documents.zip`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(downloadUrl);
+
+        toast.success("All documents downloaded as ZIP successfully!", { id: toastId });
+      } catch (err: any) {
+        console.error("Failed to generate ZIP:", err);
+        toast.error("Failed to generate ZIP. Downloading files individually...", { id: toastId });
+        handleBulkDownload();
+      }
+    };
+
     const handleBulkDownload = () => {
       let delay = 0;
       Object.entries(uploadedFiles).forEach(([key, url]) => {
@@ -1083,24 +1144,43 @@ const ApplicationDetail: React.FC = () => {
 
     return (
       <div className="card">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-          <h3 style={{ fontSize: '1.125rem', fontWeight: 600, color: 'var(--primary-dark)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+          <h3 style={{ fontSize: '1.125rem', fontWeight: 600, color: 'var(--primary-dark)', display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0 }}>
             <FileText size={20} color="var(--primary)" /> Uploaded Documents
           </h3>
-          <div style={{ display: 'flex', gap: '1rem' }}>
+          <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+            {id && (
+              <button 
+                onClick={() => {
+                  const cleanMobile = (formData.mobile || '').replace(/\D/g, '').slice(-10);
+                  if (!cleanMobile) {
+                    toast.error("Customer mobile number not found.");
+                    return;
+                  }
+                  const uploadUrl = `${window.location.origin}/upload/${id}`;
+                  const text = `Dear ${formData.customerName || 'Customer'},\n\nGreetings from C.B. Building Approvals.\nYour building approval application (${id}) is in progress. Please use the secure link below to upload your documents:\n\n${uploadUrl}\n\nRequired documents:\n1. Customer Photo & Signature\n2. Aadhar Card & PAN Card\n3. Land Document / Sale Deed\n4. Patta & FMB Copy\n5. Proposed Building Plan\n\nThank you!\nCB Building Approvals`;
+                  window.open(`https://wa.me/91${cleanMobile}?text=${encodeURIComponent(text)}`, '_blank');
+                }}
+                style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem', backgroundColor: '#25D366', color: 'white', border: 'none', borderRadius: '0.375rem', fontWeight: 600, cursor: 'pointer', fontSize: '0.875rem' }}
+                title="Send Document Upload Link via WhatsApp"
+              >
+                <MessageCircle size={16} /> WhatsApp Link
+              </button>
+            )}
             <button 
               onClick={() => setIsReuploadModalOpen(true)}
               className="btn-primary" 
-              style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem', backgroundColor: '#f59e0b', borderColor: '#f59e0b' }}
+              style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem', backgroundColor: '#f59e0b', borderColor: '#f59e0b', fontSize: '0.875rem' }}
             >
-              <Upload size={18} /> Request Reupload Document
+              <Upload size={16} /> Request Reupload
             </button>
             <button 
-              onClick={handleBulkDownload}
+              onClick={handleDownloadAllAsZip}
               className="btn-primary" 
-              style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem' }}
+              style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem', backgroundColor: '#1044C4', fontSize: '0.875rem' }}
+              title="Download all uploaded documents bundled in a single ZIP file"
             >
-              <Download size={18} /> Bulk Download
+              <Archive size={16} /> Download All as ZIP
             </button>
           </div>
         </div>
@@ -1743,6 +1823,21 @@ const ApplicationDetail: React.FC = () => {
       </div>
     );
   };
+
+  if (isForbidden) {
+    return (
+      <div className="card" style={{ padding: '3rem', textAlign: 'center', maxWidth: '600px', margin: '3rem auto' }}>
+        <AlertTriangle size={48} color="var(--error-red)" style={{ margin: '0 auto 1rem' }} />
+        <h2 style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--primary-dark)', marginBottom: '0.5rem' }}>Access Restricted</h2>
+        <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>
+          You do not have permission to view or manage application <strong>{id}</strong>. Workers can only access applications directly assigned to them by the Admin.
+        </p>
+        <button className="btn-primary" onClick={() => navigate(isEmployee ? '/employee/applications' : '/admin/applications')}>
+          Return to My Applications
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div style={{ paddingBottom: '3rem', margin: '0 auto' }}>

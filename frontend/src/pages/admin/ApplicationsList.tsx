@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Plus, Info, Pencil, ArrowUpDown, Search, FileText, ArrowRight, X, Filter } from 'lucide-react';
+import toast from 'react-hot-toast';
 import StatusBadge from '../../components/admin/StatusBadge';
 import { recentApplications } from '../../data/mockData';
 import { getApplicationStatus } from '../../utils/statusHelper';
@@ -48,6 +49,7 @@ const isCurrentMonthApp = (app: any) => {
 
 const ApplicationsList: React.FC = () => {
   const [applications, setApplications] = React.useState<any[]>(recentApplications);
+  const [staffMembers, setStaffMembers] = React.useState<any[]>([]);
   const [searchTerm, setSearchTerm] = React.useState('');
   const [filterOn, setFilterOn] = React.useState('select');
   const [subFilter, setSubFilter] = React.useState('select');
@@ -170,6 +172,44 @@ const ApplicationsList: React.FC = () => {
       window.removeEventListener('storage', fetchCases);
     };
   }, [fetchCases]);
+
+  React.useEffect(() => {
+    const fetchStaff = async () => {
+      try {
+        const apiUrl = getApiUrl();
+        const res = await fetch(`${apiUrl}/users`);
+        if (res.ok) {
+          const list = await res.json();
+          setStaffMembers(list.filter((u: any) => u.status === 'Active' && u.role === 'STAFF'));
+        }
+      } catch (err) {
+        console.error("Failed to load staff list in ApplicationsList:", err);
+      }
+    };
+    fetchStaff();
+  }, []);
+
+  const handleAssignStaff = async (app: any, staffName: string) => {
+    const targetId = app.mongoId || app.id;
+    setApplications(prev => prev.map(a => (a.id === app.id || a.mongoId === app.mongoId) ? { ...a, staff: staffName } : a));
+    
+    try {
+      const apiUrl = getApiUrl();
+      const res = await fetch(`${apiUrl}/cases/${targetId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ staff: staffName })
+      });
+      if (res.ok) {
+        toast.success(staffName ? `Application assigned to ${staffName}` : 'Staff assignment removed');
+      } else {
+        toast.error('Failed to update staff assignment');
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to update staff assignment');
+    }
+  };
 
   // Counts for quick filter tabs
   const filterCounts = React.useMemo(() => {
@@ -704,8 +744,28 @@ const ApplicationsList: React.FC = () => {
                     <td style={{ padding: '0.75rem 1rem' }}>
                       <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>{app.type} - {app.appType}</div>
                     </td>
-                    <td style={{ padding: '0.75rem 1rem' }}>
-                      <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>{app.staff || 'Unassigned'}</div>
+                    <td style={{ padding: '0.75rem 1rem' }} onClick={(e) => e.stopPropagation()}>
+                      <select
+                        value={app.staff && app.staff !== 'Unassigned' ? app.staff : ''}
+                        onChange={(e) => handleAssignStaff(app, e.target.value)}
+                        style={{
+                          padding: '0.35rem 0.6rem',
+                          fontSize: '0.8rem',
+                          borderRadius: '0.375rem',
+                          border: '1px solid var(--border-color)',
+                          backgroundColor: app.staff && app.staff !== 'Unassigned' ? '#eff6ff' : '#fff',
+                          color: app.staff && app.staff !== 'Unassigned' ? 'var(--primary)' : 'var(--text-secondary)',
+                          fontWeight: app.staff && app.staff !== 'Unassigned' ? 600 : 400,
+                          cursor: 'pointer',
+                          outline: 'none',
+                          maxWidth: '150px'
+                        }}
+                      >
+                        <option value="">Unassigned</option>
+                        {staffMembers.map((s: any) => (
+                          <option key={s.id} value={s.name}>{s.name} ({s.staffId || 'Staff'})</option>
+                        ))}
+                      </select>
                     </td>
                     <td style={{ padding: '0.75rem 1rem', fontSize: '0.875rem', fontWeight: 600, color: 'var(--primary-dark)' }}>
                       {app.days !== undefined ? `${app.days} ${app.days === 1 ? 'day' : 'days'}` : '—'}
