@@ -196,7 +196,7 @@ const EmployeeDashboard: React.FC = () => {
         ))}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 350px', gap: '2rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '2rem' }}>
         
         {/* Left Column */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
@@ -213,11 +213,11 @@ const EmployeeDashboard: React.FC = () => {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               {actionRequiredApps.length > 0 ? actionRequiredApps.map(app => (
                 <div key={app.id} className="card" style={{ padding: '1.25rem', borderLeft: `4px solid ${app.status === 'Documents Pending' ? 'var(--error-red)' : 'var(--warning-gold)'}` }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
                     <div>
                       <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 600, marginBottom: '0.25rem' }}>{app.id}</div>
                       <h4 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--primary-dark)', marginBottom: '0.5rem' }}>{app.customer}</h4>
-                      <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', display: 'flex', gap: '1rem' }}>
+                      <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
                         <span><span style={{ fontWeight: 500, color: 'var(--primary-dark)' }}>Type:</span> {app.appType || 'Building'}</span>
                         <span><span style={{ fontWeight: 500, color: 'var(--primary-dark)' }}>Location:</span> {app.location}</span>
                       </div>
@@ -275,17 +275,17 @@ const EmployeeDashboard: React.FC = () => {
           <div>
             <h3 style={{ fontSize: '1.125rem', fontWeight: 700, color: 'var(--primary-dark)', marginBottom: '1rem' }}>Quick Actions</h3>
             <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
-              <button className="card hover-effect" style={{ padding: '1rem 1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 600, color: 'var(--primary-dark)', border: '1px dashed var(--primary)' }} onClick={() => navigate('/employee/applications/new')}>
+              <button className="card hover-effect" style={{ padding: '1rem 1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 600, color: 'var(--primary-dark)', border: '1px dashed var(--primary)', cursor: 'pointer' }} onClick={() => navigate('/employee/applications/new')}>
                 <Plus size={18} color="var(--primary)" /> New Application
               </button>
-              <button className="card hover-effect" style={{ padding: '1rem 1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 600, color: 'var(--primary-dark)' }}>
-                <FileUp size={18} color="#8b5cf6" /> Upload Document
+              <button className="card hover-effect" style={{ padding: '1rem 1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 600, color: 'var(--primary-dark)', cursor: 'pointer' }} onClick={() => navigate('/employee/applications')}>
+                <FileUp size={18} color="#8b5cf6" /> View Documents
               </button>
-              <button className="card hover-effect" style={{ padding: '1rem 1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 600, color: 'var(--primary-dark)' }}>
-                <CalendarIcon size={18} color="var(--warning-gold)" /> Schedule Inspection
+              <button className="card hover-effect" style={{ padding: '1rem 1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 600, color: 'var(--primary-dark)', cursor: 'pointer' }} onClick={() => navigate('/employee/attendance')}>
+                <CalendarIcon size={18} color="var(--warning-gold)" /> Attendance History
               </button>
-              <button className="card hover-effect" style={{ padding: '1rem 1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 600, color: 'var(--primary-dark)' }}>
-                <PhoneCall size={18} color="var(--success-green)" /> Create Follow-up
+              <button className="card hover-effect" style={{ padding: '1rem 1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 600, color: 'var(--primary-dark)', cursor: 'pointer' }} onClick={() => navigate('/employee/followups')}>
+                <PhoneCall size={18} color="var(--success-green)" /> Enquiries & Leads
               </button>
             </div>
           </div>
@@ -299,6 +299,9 @@ const EmployeeDashboard: React.FC = () => {
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
               <h3 style={{ fontSize: '1.125rem', fontWeight: 700, color: 'var(--primary-dark)' }}>Today's Enquiries</h3>
+              <button style={{ background: 'none', border: 'none', color: 'var(--primary)', fontWeight: 600, fontSize: '0.875rem', cursor: 'pointer' }} onClick={() => navigate('/employee/followups')}>
+                View All →
+              </button>
             </div>
             <div className="card" style={{ padding: '0' }}>
               {followUps.length > 0 ? followUps.map((fu, idx) => (
@@ -345,12 +348,16 @@ const EmployeeDashboard: React.FC = () => {
             <div className="card" style={{ padding: '1.25rem' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '1rem', borderBottom: '1px solid var(--border-color)' }}>
-                  <span style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Apps processed this week</span>
-                  <span style={{ fontWeight: 700, color: 'var(--primary-dark)' }}>12</span>
+                  <span style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Total Assigned Applications</span>
+                  <span style={{ fontWeight: 700, color: 'var(--primary-dark)' }}>{applications.length}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '1rem', borderBottom: '1px solid var(--border-color)' }}>
                   <span style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Active applications</span>
                   <span style={{ fontWeight: 700, color: 'var(--warning-gold)' }}>{activeApps}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '1rem', borderBottom: '1px solid var(--border-color)' }}>
+                  <span style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Approved & Completed</span>
+                  <span style={{ fontWeight: 700, color: 'var(--success-green)' }}>{completedApps}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Pending documents</span>

@@ -23,6 +23,7 @@ import CustomerLeads from './pages/admin/CustomerLeads';
 import AttendanceList from './pages/admin/AttendanceList';
 import LinkTracking from './pages/admin/LinkTracking';
 import EmployeeAttendance from './pages/employee/EmployeeAttendance';
+import EmployeeProfile from './pages/employee/EmployeeProfile';
 import FollowUpsList from './pages/admin/FollowUpsList';
 import Settings from './pages/admin/Settings';
 import EnquiriesList from './pages/admin/EnquiriesList';
@@ -173,10 +174,11 @@ function App() {
             <Route path="applications/new" element={<ApplicationDetail />} />
             <Route path="applications/:id" element={<ApplicationDetail />} />
             
-            {/* Fallbacks for other routes */}
+            {/* Routes */}
             <Route path="attendance" element={<EmployeeAttendance />} />
             <Route path="followups" element={<FollowUpsList />} />
-            <Route path="profile/*" element={<div style={{padding:'2rem'}}><h2>Profile</h2><p>Coming soon...</p></div>} />
+            <Route path="profile" element={<EmployeeProfile />} />
+            <Route path="profile/*" element={<EmployeeProfile />} />
           </Route>
         </Routes>
       </div>

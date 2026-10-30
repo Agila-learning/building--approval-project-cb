@@ -18,23 +18,10 @@ const menuItems = [
 interface EmployeeSidebarProps {
   isOpen?: boolean;
   setIsOpen?: (open: boolean) => void;
-  isCollapsed?: boolean;
-  setIsCollapsed?: (collapsed: boolean) => void;
 }
 
-const EmployeeSidebar: React.FC<EmployeeSidebarProps> = ({ isOpen, setIsOpen, isCollapsed: propCollapsed, setIsCollapsed: propSetCollapsed }) => {
+const EmployeeSidebar: React.FC<EmployeeSidebarProps> = ({ isOpen = true, setIsOpen }) => {
   const [employeeName, setEmployeeName] = useState('Employee');
-  const [internalCollapsed, setInternalCollapsed] = useState(() => localStorage.getItem('sidebar_collapsed') === 'true');
-
-  const isCollapsed = propCollapsed !== undefined ? propCollapsed : internalCollapsed;
-
-  const toggleCollapse = () => {
-    const nextVal = !isCollapsed;
-    if (propSetCollapsed) propSetCollapsed(nextVal);
-    setInternalCollapsed(nextVal);
-    localStorage.setItem('sidebar_collapsed', nextVal.toString());
-    window.dispatchEvent(new Event('sidebar_toggle'));
-  };
 
   useEffect(() => {
     const user = localStorage.getItem('loggedInUser');
@@ -46,65 +33,43 @@ const EmployeeSidebar: React.FC<EmployeeSidebarProps> = ({ isOpen, setIsOpen, is
   };
 
   return (
-    <aside className={`employee-sidebar sidebar-container ${isOpen ? 'sidebar-open' : ''} ${isCollapsed ? 'sidebar-collapsed' : ''}`} style={{ backgroundColor: 'var(--sidebar-bg)' }}>
+    <aside className={`employee-sidebar sidebar-container ${!isOpen ? 'sidebar-closed' : 'sidebar-open'}`} style={{ backgroundColor: 'var(--sidebar-bg)' }}>
       {/* Logo Area */}
       <div style={{ padding: '1.25rem 15px', borderBottom: '1px solid rgba(255,255,255,0.1)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
           <Building color="var(--primary)" size={28} />
           <div className="sidebar-logo-text">
-            <div style={{ fontWeight: 700, fontSize: '1.125rem', letterSpacing: '0.05em' }}>BUILD APPROVAL ERP</div>
+            <div style={{ fontWeight: 700, fontSize: '1.125rem', letterSpacing: '0.05em', color: '#fff' }}>BUILD APPROVAL ERP</div>
             <div style={{ fontSize: '0.65rem', color: '#94a3b8', textTransform: 'uppercase' }}>Employee Portal</div>
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+        {setIsOpen && (
           <button
-            className="desktop-collapse-btn"
-            onClick={toggleCollapse}
-            aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-            title={isCollapsed ? "Expand sidebar (250px)" : "Collapse sidebar (70px)"}
+            onClick={() => setIsOpen(false)}
+            aria-label="Close sidebar for Full Screen"
+            title="Close sidebar for Full Screen"
             style={{
-              background: 'rgba(255,255,255,0.08)',
+              background: 'rgba(255, 255, 255, 0.08)',
               border: 'none',
               borderRadius: '6px',
               color: 'var(--bg-surface)',
               cursor: 'pointer',
-              padding: '6px',
+              padding: '6px 8px',
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'center',
+              gap: '4px',
+              fontSize: '0.75rem',
+              fontWeight: 600,
               transition: 'background-color 0.2s',
             }}
-            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.15)'}
+            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.18)'}
             onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.08)'}
           >
-            {isCollapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
+            <ChevronLeft size={18} />
+            <span style={{ fontSize: '0.75rem' }}>Hide</span>
           </button>
-
-          {setIsOpen && (
-            <button
-              className="mobile-close-btn"
-              onClick={() => setIsOpen(false)}
-              aria-label="Close navigation menu"
-              title="Close menu"
-              style={{
-                background: 'rgba(255, 255, 255, 0.08)',
-                border: 'none',
-                borderRadius: '6px',
-                color: 'var(--bg-surface)',
-                cursor: 'pointer',
-                padding: '6px',
-                alignItems: 'center',
-                justifyContent: 'center',
-                transition: 'background-color 0.2s',
-              }}
-              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.15)'}
-              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.08)'}
-            >
-              <X size={20} />
-            </button>
-          )}
-        </div>
+        )}
       </div>
 
       {/* Menu */}

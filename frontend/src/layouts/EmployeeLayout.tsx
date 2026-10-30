@@ -1,20 +1,27 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Outlet, Navigate } from 'react-router-dom';
 import EmployeeSidebar from '../components/employee/EmployeeSidebar';
 import EmployeeTopbar from '../components/employee/EmployeeTopbar';
 
 const EmployeeLayout: React.FC = () => {
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [isCollapsed, setIsCollapsed] = useState(() => localStorage.getItem('sidebar_collapsed') === 'true');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
+    const saved = localStorage.getItem('employee_sidebar_open');
+    return saved !== null ? saved === 'true' : true;
+  });
   const loggedInUser = localStorage.getItem('loggedInUser');
 
-  useEffect(() => {
-    const handleToggle = () => {
-      setIsCollapsed(localStorage.getItem('sidebar_collapsed') === 'true');
-    };
-    window.addEventListener('sidebar_toggle', handleToggle);
-    return () => window.removeEventListener('sidebar_toggle', handleToggle);
-  }, []);
+  const handleToggle = () => {
+    setIsSidebarOpen(prev => {
+      const next = !prev;
+      localStorage.setItem('employee_sidebar_open', String(next));
+      return next;
+    });
+  };
+
+  const handleSetOpen = (open: boolean) => {
+    setIsSidebarOpen(open);
+    localStorage.setItem('employee_sidebar_open', String(open));
+  };
 
   if (!loggedInUser) {
     return <Navigate to="/login" replace />;
@@ -24,13 +31,17 @@ const EmployeeLayout: React.FC = () => {
     <div className="layout-wrapper">
       <EmployeeSidebar 
         isOpen={isSidebarOpen} 
-        setIsOpen={setIsSidebarOpen}
-        isCollapsed={isCollapsed}
-        setIsCollapsed={setIsCollapsed}
+        setIsOpen={handleSetOpen}
       />
-      <div className={`layout-content ${isCollapsed ? 'sidebar-collapsed' : ''}`} style={{ transition: 'margin-left 0.3s ease' }}>
+      <div 
+        className={`layout-content ${!isSidebarOpen ? 'full-screen' : ''}`} 
+        style={{ transition: 'margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s ease' }}
+      >
         <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: '100vh' }}>
-          <EmployeeTopbar toggleSidebar={() => setIsSidebarOpen(prev => !prev)} />
+          <EmployeeTopbar 
+            toggleSidebar={handleToggle} 
+            isSidebarOpen={isSidebarOpen}
+          />
           <main className="main-content-padding" style={{ flex: 1, padding: '2rem' }}>
             <Outlet />
           </main>
@@ -38,10 +49,12 @@ const EmployeeLayout: React.FC = () => {
       </div>
       
       {/* Mobile Overlay */}
-      <div 
-        className={`sidebar-overlay ${isSidebarOpen ? 'open' : ''}`} 
-        onClick={() => setIsSidebarOpen(false)}
-      ></div>
+      {isSidebarOpen && (
+        <div 
+          className="sidebar-overlay open" 
+          onClick={() => handleSetOpen(false)}
+        />
+      )}
     </div>
   );
 };

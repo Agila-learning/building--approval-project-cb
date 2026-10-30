@@ -7,6 +7,55 @@ import {
   X, ChevronLeft, ChevronRight
 } from 'lucide-react';
 
+const menuGroups = [
+  {
+    category: 'Overview',
+    items: [
+      { title: 'Dashboard', icon: <LayoutDashboard size={20} strokeWidth={1.5} />, path: '/admin' }
+    ]
+  },
+  {
+    category: 'Front Office',
+    items: [
+      { title: 'Customer Leads', icon: <Users size={20} strokeWidth={1.5} />, path: '/admin/leads' },
+      { title: 'Enquiries', icon: <PhoneCall size={20} strokeWidth={1.5} />, path: '/admin/enquiries' },
+    ]
+  },
+  {
+    category: 'Operations',
+    items: [
+      { title: 'Applications', icon: <FileText size={20} strokeWidth={1.5} />, path: '/admin/applications' },
+      { title: 'Attendance', icon: <CheckSquare size={20} strokeWidth={1.5} />, path: '/admin/attendance' },
+      { title: 'Link Tracking', icon: <FileText size={20} strokeWidth={1.5} />, path: '/admin/link-tracking' },
+    ]
+  },
+  {
+    category: 'Finance',
+    items: [
+      { title: 'Quotations', icon: <FileText size={20} strokeWidth={1.5} />, path: '/admin/quotations' },
+      { title: 'Billing', icon: <ClipboardList size={20} strokeWidth={1.5} />, path: '/admin/receipts' },
+      { title: 'Payments', icon: <CreditCard size={20} strokeWidth={1.5} />, path: '/admin/payments' },
+      { title: 'Expenses', icon: <Receipt size={20} strokeWidth={1.5} />, path: '/admin/expenses' },
+      { title: 'Cash Book', icon: <ClipboardList size={20} strokeWidth={1.5} />, path: '/admin/cashbook' },
+      { title: 'Reports', icon: <BarChart3 size={20} strokeWidth={1.5} />, path: '/admin/reports' },
+    ]
+  },
+  {
+    category: 'System',
+    items: [
+      { title: 'Maintenance', icon: <Settings size={20} strokeWidth={1.5} />, path: '/admin/maintenance/logs', 
+        subItems: [
+          { title: 'Revert', path: '/admin/maintenance/revert' },
+          { title: 'View', path: '/admin/maintenance/view' },
+          { title: 'Logs', path: '/admin/maintenance/logs' },
+        ]
+      },
+      { title: 'Staff & Users', icon: <UserCog size={20} strokeWidth={1.5} />, path: '/admin/staff' },
+      { title: 'Settings', icon: <Settings size={20} strokeWidth={1.5} />, path: '/admin/settings' },
+    ]
+  }
+];
+
 interface AdminSidebarProps {
   isOpen?: boolean;
   setIsOpen?: (open: boolean) => void;

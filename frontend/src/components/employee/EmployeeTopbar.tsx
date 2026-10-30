@@ -5,6 +5,7 @@ import { getApiUrl } from '../../config/api';
 
 interface EmployeeTopbarProps {
   toggleSidebar?: () => void;
+  isSidebarOpen?: boolean;
 }
 
 interface NotificationItem {
@@ -17,7 +18,7 @@ interface NotificationItem {
   created_at?: string;
 }
 
-const EmployeeTopbar: React.FC<EmployeeTopbarProps> = ({ toggleSidebar }) => {
+const EmployeeTopbar: React.FC<EmployeeTopbarProps> = ({ toggleSidebar, isSidebarOpen = true }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const [employeeName, setEmployeeName] = useState('Employee');
@@ -102,13 +103,16 @@ const EmployeeTopbar: React.FC<EmployeeTopbarProps> = ({ toggleSidebar }) => {
       <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
         {toggleSidebar && (
           <button 
-            className="mobile-menu-btn"
-            style={{ background: 'none', border: 'none', color: 'var(--text-primary)', padding: '0.4rem', cursor: 'pointer', borderRadius: '6px' }} 
+            type="button"
+            className="sidebar-toggle-btn"
             onClick={toggleSidebar}
             aria-label="Toggle navigation menu"
-            title="Open menu"
+            title={isSidebarOpen ? "Close sidebar for Full Screen" : "Open menu"}
           >
-            <Menu size={22} />
+            <Menu size={18} />
+            <span className="hidden-mobile-xs" style={{ fontSize: '0.75rem' }}>
+              {isSidebarOpen ? "Full Screen" : "Menu"}
+            </span>
           </button>
         )}
         <div>
@@ -292,7 +296,11 @@ const EmployeeTopbar: React.FC<EmployeeTopbarProps> = ({ toggleSidebar }) => {
         </div>
 
         {/* Profile Dropdown */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', paddingLeft: '0.75rem', borderLeft: '1px solid var(--border-color)', cursor: 'pointer' }}>
+        <div 
+          onClick={() => navigate('/employee/profile')}
+          title="View & Edit Profile"
+          style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', paddingLeft: '0.75rem', borderLeft: '1px solid var(--border-color)', cursor: 'pointer' }}
+        >
           <div style={{ width: '36px', height: '36px', borderRadius: '50%', backgroundColor: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 600, color: 'white', fontSize: '0.875rem' }}>
             {getInitials(employeeName)}
           </div>

@@ -395,6 +395,41 @@ input[type="text"], input[type="email"], input[type="tel"], input[type="password
   }
 }
 
+/* Sidebar Full Screen & Hidden Support */
+.sidebar-container.sidebar-closed {
+  transform: translateX(-100%) !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), visibility 0.3s !important;
+}
+
+.layout-content.full-screen {
+  margin-left: 0 !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s !important;
+}
+
+/* Sidebar Toggle Button (visible on both desktop and mobile for full screen) */
+.sidebar-toggle-btn {
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  background: rgba(11, 99, 206, 0.08);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  color: var(--primary-dark);
+  padding: 0.45rem 0.65rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 0.8rem;
+  font-weight: 600;
+  gap: 0.35rem;
+}
+.sidebar-toggle-btn:hover {
+  background: rgba(11, 99, 206, 0.16);
+}
+
 /* Mobile Toggle and Close Buttons (hidden on desktop) */
 .mobile-menu-btn,
 .mobile-close-btn {
