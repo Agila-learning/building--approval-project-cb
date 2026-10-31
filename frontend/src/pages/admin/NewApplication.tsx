@@ -54,6 +54,17 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
   const [docUploadType, setDocUploadType] = useState('CUSTOMER PHOTOGRAPH');
   const [modalTab, setModalTab] = useState<'upload' | 'view'>('upload');
   const [formErrors, setFormErrors] = useState<string[]>([]);
+  const [missingDocErrors, setMissingDocErrors] = useState<string[]>([]);
+
+  const MANDATORY_DOCUMENTS = React.useMemo(() => [
+    { key: 'CUSTOMER PHOTOGRAPH', label: 'Customer Photograph', step: 1 },
+    { key: 'CUSTOMER SIGNATURE', label: 'Customer Signature', step: 1 },
+    { key: 'AADHAR CARD', label: 'Aadhaar Card', step: 1 },
+    { key: 'PAN CARD', label: 'PAN Card', step: 1 },
+    { key: 'SALE DEED', altKey: 'LAND DOCUMENT', label: 'Sale Deed / Land Document', step: 2 },
+    { key: 'PATTA', label: 'Patta', step: 2 },
+    { key: 'BUILDING PLAN', label: 'Building Plan', step: 2 }
+  ], []);
   const [uploadedFiles, setUploadedFiles] = useState<{
     'CUSTOMER PHOTOGRAPH'?: string;
     'CUSTOMER SIGNATURE'?: string;
@@ -109,6 +120,7 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
       try {
         const imageUrl = await uploadFileToCloudinary(file);
         setUploadedFiles(prev => ({ ...prev, [docUploadType]: imageUrl }));
+        setMissingDocErrors(prev => prev.filter(k => k !== docUploadType && !(docUploadType === 'LAND DOCUMENT' && k === 'SALE DEED') && !(docUploadType === 'SALE DEED' && k === 'LAND DOCUMENT')));
         toast.success(`${file.name} attached for ${docUploadType}`, { id: loadingToast });
       } catch (error: any) {
         console.error("Cloudinary upload error:", error);
@@ -258,11 +270,14 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
           taluk: propertyTaluk,
           survey_number: formData.propertyDetails?.surveyNo || 'TBD'
         },
-        fullData: formData,
+        fullData: {
+          ...formData,
+          staff: isCustomer ? 'Unassigned' : (formData.staff || 'Unassigned')
+        },
         uploadedFiles: uploadedFiles,
         approval_type: typeMap[formData.serviceType] || 'BUILDING_PLAN_APPROVAL',
-        status: isPartial ? 'Draft' : 'Submitted',
-        assigned_staff: { name: formData.staff },
+        status: isPartial ? 'Draft' : 'Application Submitted',
+        assigned_staff: (!isCustomer && formData.staff && formData.staff !== 'Unassigned') ? { name: formData.staff.split(' — ')[0] } : { name: 'Unassigned' },
         created_at: new Date().toISOString(),
         reason: reason || ''
       };
@@ -284,11 +299,14 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
           village: propertyVillage,
           taluk: propertyTaluk,
           location: propertyVillage,
-          status: isPartial ? 'Draft' : 'Submitted',
+          status: isPartial ? 'Draft' : 'Application Submitted',
           created_at: new Date().toISOString(),
           date: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
           submittedDate: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
-          fullData: formData,
+          fullData: {
+            ...formData,
+            staff: isCustomer ? 'Unassigned' : (formData.staff || 'Unassigned')
+          },
           uploadedFiles: uploadedFiles
         };
         localStorage.setItem('recentApplications', JSON.stringify([newRecent, ...recent.filter((r: any) => r.id !== finalAppNumber && r.application_number !== finalAppNumber)]));
@@ -315,9 +333,12 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
           }
         },
         approval_type: typeMap[formData.serviceType] || 'BUILDING_PLAN_APPROVAL',
-        status: isPartial ? 'Draft' : 'Submitted',
-        assigned_staff: formData.staff ? { name: formData.staff.split(' — ')[0] } : undefined,
-        fullData: formData,
+        status: isPartial ? 'Draft' : 'Application Submitted',
+        assigned_staff: (!isCustomer && formData.staff && formData.staff !== 'Unassigned') ? { name: formData.staff.split(' — ')[0] } : undefined,
+        fullData: {
+          ...formData,
+          staff: isCustomer ? 'Unassigned' : (formData.staff || 'Unassigned')
+        },
         uploadedFiles: uploadedFiles,
         reason: reason || ''
       };
@@ -440,7 +461,11 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
         errors.push('res_streetName');
       }
       if (!formData.residentialAddress.city) errors.push('res_city');
-      if (!formData.residentialAddress.pincode) errors.push('res_pincode');
+      const resPin = (formData.residentialAddress.pincode || '').replace(/\D/g, '');
+      if (!resPin || !/^\d{6}$/.test(resPin)) {
+        errors.push('res_pincode');
+        toast.error('PIN code must be exactly 6 digits.');
+      }
       if (!formData.residentialAddress.state) errors.push('res_state');
       
       // Permanent Address: only if different from residential
@@ -448,7 +473,11 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
         const perm = formData.permanentAddress;
         if (!perm.streetName && !perm.area) errors.push('perm_streetName');
         if (!perm.city) errors.push('perm_city');
-        if (!perm.pincode) errors.push('perm_pincode');
+        const permPin = (perm.pincode || '').replace(/\D/g, '');
+        if (!permPin || !/^\d{6}$/.test(permPin)) {
+          errors.push('perm_pincode');
+          toast.error('Permanent PIN code must be exactly 6 digits.');
+        }
         if (!perm.state) errors.push('perm_state');
       }
     }
@@ -457,6 +486,13 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
     if (currentStep === 2) {
       if (!formData.propertyDetails?.surveyNo) errors.push('prop_surveyNo');
       if (!formData.propertyDetails?.pattaNo) errors.push('prop_pattaNo');
+      if (formData.propertyDetails?.pincode) {
+        const propPin = formData.propertyDetails.pincode.replace(/\D/g, '');
+        if (!/^\d{6}$/.test(propPin)) {
+          errors.push('prop_pincode');
+          toast.error('Property PIN code must be exactly 6 digits.');
+        }
+      }
     }
 
     // Validation for Step 3
@@ -486,6 +522,7 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
         perm_state: 'Permanent State',
         prop_surveyNo: 'Survey Number',
         prop_pattaNo: 'Patta Number',
+        prop_pincode: 'Property PIN Code',
         feesAmount: 'Fees Amount',
       };
       const missingList = errors.map(e => fieldLabels[e] || e).join(', ');
@@ -505,6 +542,14 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
     if (!formData.propertyDetails?.surveyNo) errors.push('prop_surveyNo');
     if (!formData.propertyDetails?.pattaNo) errors.push('prop_pattaNo');
 
+    if (formData.propertyDetails?.pincode) {
+      const propPin = formData.propertyDetails.pincode.replace(/\D/g, '');
+      if (!/^\d{6}$/.test(propPin)) {
+        errors.push('prop_pincode');
+        toast.error('Property PIN code must be exactly 6 digits.');
+      }
+    }
+
     if (!isCustomer && currentStep === 3) {
       if (!formData.feesAmount) errors.push('feesAmount');
     }
@@ -514,6 +559,7 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
       const fieldLabels: Record<string, string> = {
         prop_surveyNo: 'Survey Number',
         prop_pattaNo: 'Patta Number',
+        prop_pincode: 'Property PIN Code',
         feesAmount: 'Fees Amount',
       };
       const missingList = errors.map(e => fieldLabels[e] || e).join(', ');
@@ -521,10 +567,20 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
       return;
     }
 
-    if (!isCustomer && !checkAllDocumentsUploaded()) {
-      toast.error("Please upload all required documents to submit!");
+    // MANDATORY DOCUMENT UPLOAD VALIDATION
+    const missingDocs = MANDATORY_DOCUMENTS.filter(doc => {
+      const file = uploadedFiles[doc.key as keyof typeof uploadedFiles] || (doc.altKey && uploadedFiles[doc.altKey as keyof typeof uploadedFiles]);
+      return !file;
+    });
+
+    if (missingDocs.length > 0) {
+      const missingKeys = missingDocs.map(d => d.key);
+      setMissingDocErrors(missingKeys);
+      toast.error("Please upload all required documents before submitting your application.");
       return;
     }
+
+    setMissingDocErrors([]);
 
     const appNumber = await saveApplicationData(false);
     if (appNumber) {
@@ -747,7 +803,28 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
               />
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: 'var(--primary-dark)', marginBottom: '0.5rem' }}>Aadhar Number * (12 digits)</label>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                <label style={{ fontSize: '0.875rem', fontWeight: 500, color: 'var(--primary-dark)', margin: 0 }}>Aadhar Number * (12 digits)</label>
+                <button
+                  type="button"
+                  onClick={() => { setDocUploadType('AADHAR CARD'); setIsUploadModalOpen(true); }}
+                  style={{
+                    fontSize: '0.75rem',
+                    padding: '0.2rem 0.5rem',
+                    borderRadius: '0.25rem',
+                    border: missingDocErrors.includes('AADHAR CARD') ? '1px solid #ef4444' : '1px solid var(--border-color)',
+                    backgroundColor: uploadedFiles['AADHAR CARD'] ? '#ecfdf5' : missingDocErrors.includes('AADHAR CARD') ? '#fee2e2' : 'var(--bg-secondary)',
+                    color: uploadedFiles['AADHAR CARD'] ? '#059669' : missingDocErrors.includes('AADHAR CARD') ? '#dc2626' : 'var(--primary)',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.3rem',
+                    fontWeight: 600
+                  }}
+                >
+                  <Upload size={12} /> {uploadedFiles['AADHAR CARD'] ? 'Aadhaar Attached ✓' : 'Upload Aadhaar Doc *'}
+                </button>
+              </div>
               <input 
                 type="text" 
                 maxLength={12}
@@ -756,9 +833,33 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
                 placeholder="12-digit UID" 
                 style={getInputStyle('aadhar', formData.aadhar)} 
               />
+              {missingDocErrors.includes('AADHAR CARD') && !uploadedFiles['AADHAR CARD'] && (
+                <div style={{ color: '#ef4444', fontSize: '0.75rem', marginTop: '0.25rem' }}>Aadhaar document upload is required.</div>
+              )}
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: 'var(--primary-dark)', marginBottom: '0.5rem' }}>PAN Number * (e.g. ABCDE1234F)</label>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                <label style={{ fontSize: '0.875rem', fontWeight: 500, color: 'var(--primary-dark)', margin: 0 }}>PAN Number * (e.g. ABCDE1234F)</label>
+                <button
+                  type="button"
+                  onClick={() => { setDocUploadType('PAN CARD'); setIsUploadModalOpen(true); }}
+                  style={{
+                    fontSize: '0.75rem',
+                    padding: '0.2rem 0.5rem',
+                    borderRadius: '0.25rem',
+                    border: missingDocErrors.includes('PAN CARD') ? '1px solid #ef4444' : '1px solid var(--border-color)',
+                    backgroundColor: uploadedFiles['PAN CARD'] ? '#ecfdf5' : missingDocErrors.includes('PAN CARD') ? '#fee2e2' : 'var(--bg-secondary)',
+                    color: uploadedFiles['PAN CARD'] ? '#059669' : missingDocErrors.includes('PAN CARD') ? '#dc2626' : 'var(--primary)',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.3rem',
+                    fontWeight: 600
+                  }}
+                >
+                  <Upload size={12} /> {uploadedFiles['PAN CARD'] ? 'PAN Attached ✓' : 'Upload PAN Doc *'}
+                </button>
+              </div>
               <input 
                 type="text" 
                 maxLength={10}
@@ -767,6 +868,9 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
                 placeholder="ABCDE1234F" 
                 style={getInputStyle('pan', formData.pan)} 
               />
+              {missingDocErrors.includes('PAN CARD') && !uploadedFiles['PAN CARD'] && (
+                <div style={{ color: '#ef4444', fontSize: '0.75rem', marginTop: '0.25rem' }}>PAN document upload is required.</div>
+              )}
             </div>
             <div>
               <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: 'var(--primary-dark)', marginBottom: '0.5rem' }}>Email ID *</label>
@@ -784,16 +888,26 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
         {/* Photo & Signature Upload Area */}
         <div style={{ flex: '0 0 160px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
           <div style={{ width: '100%', position: 'relative', marginTop: '2rem' }}>
-            <div style={{ width: '100%', aspectRatio: '3/4', border: '1px solid var(--border-color)', borderRadius: '0.5rem', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f8fafc', overflow: 'hidden' }}>
+            <div style={{ 
+              width: '100%', 
+              aspectRatio: '3/4', 
+              border: missingDocErrors.includes('CUSTOMER PHOTOGRAPH') && !uploadedFiles['CUSTOMER PHOTOGRAPH'] ? '2px solid #ef4444' : '1px solid var(--border-color)', 
+              borderRadius: '0.5rem', 
+              display: 'flex', 
+              flexDirection: 'column', 
+              alignItems: 'center', 
+              justifyContent: 'center', 
+              backgroundColor: missingDocErrors.includes('CUSTOMER PHOTOGRAPH') && !uploadedFiles['CUSTOMER PHOTOGRAPH'] ? '#fef2f2' : '#f8fafc', 
+              overflow: 'hidden' 
+            }}>
               {uploadedFiles['CUSTOMER PHOTOGRAPH'] ? (
                 <img src={uploadedFiles['CUSTOMER PHOTOGRAPH']} alt="Customer" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               ) : (
-                <User size={60} color="#cbd5e1" />
+                <User size={60} color={missingDocErrors.includes('CUSTOMER PHOTOGRAPH') ? '#f87171' : '#cbd5e1'} />
               )}
             </div>
             {/* Top Right Upload Icons */}
             <div style={{ position: 'absolute', top: '0.5rem', right: '0.5rem', display: 'flex', gap: '0.25rem' }}>
-
               <button 
                 onClick={(e) => { e.preventDefault(); setDocUploadType('CUSTOMER PHOTOGRAPH'); setIsUploadModalOpen(true); }}
                 title="Upload Customer Photo" 
@@ -802,14 +916,30 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
               </button>
             </div>
           </div>
-          <div style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--primary-dark)' }}>Customer Photo *</div>
+          <div style={{ fontSize: '0.875rem', fontWeight: 600, color: missingDocErrors.includes('CUSTOMER PHOTOGRAPH') && !uploadedFiles['CUSTOMER PHOTOGRAPH'] ? '#ef4444' : 'var(--primary-dark)', textAlign: 'center' }}>
+            Customer Photo *
+            {missingDocErrors.includes('CUSTOMER PHOTOGRAPH') && !uploadedFiles['CUSTOMER PHOTOGRAPH'] && (
+              <div style={{ fontSize: '0.7rem', color: '#ef4444', fontWeight: 500 }}>Upload Required</div>
+            )}
+          </div>
 
           <div style={{ width: '100%', position: 'relative', marginTop: '0.5rem' }}>
-            <div style={{ width: '100%', aspectRatio: '2/1', border: '1px dashed var(--border-color)', borderRadius: '0.5rem', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f8fafc', overflow: 'hidden' }}>
+            <div style={{ 
+              width: '100%', 
+              aspectRatio: '2/1', 
+              border: missingDocErrors.includes('CUSTOMER SIGNATURE') && !uploadedFiles['CUSTOMER SIGNATURE'] ? '2px dashed #ef4444' : '1px dashed var(--border-color)', 
+              borderRadius: '0.5rem', 
+              display: 'flex', 
+              flexDirection: 'column', 
+              alignItems: 'center', 
+              justifyContent: 'center', 
+              backgroundColor: missingDocErrors.includes('CUSTOMER SIGNATURE') && !uploadedFiles['CUSTOMER SIGNATURE'] ? '#fef2f2' : '#f8fafc', 
+              overflow: 'hidden' 
+            }}>
               {uploadedFiles['CUSTOMER SIGNATURE'] ? (
                 <img src={uploadedFiles['CUSTOMER SIGNATURE']} alt="Signature" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
               ) : (
-                <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Signature</span>
+                <span style={{ fontSize: '0.75rem', color: missingDocErrors.includes('CUSTOMER SIGNATURE') ? '#ef4444' : 'var(--text-secondary)' }}>Signature</span>
               )}
             </div>
             {/* Top Right Upload Icon */}
@@ -820,7 +950,12 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
               <Upload size={14} />
             </button>
           </div>
-          <div style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--primary-dark)' }}>Customer Signature *</div>
+          <div style={{ fontSize: '0.875rem', fontWeight: 600, color: missingDocErrors.includes('CUSTOMER SIGNATURE') && !uploadedFiles['CUSTOMER SIGNATURE'] ? '#ef4444' : 'var(--primary-dark)', textAlign: 'center' }}>
+            Customer Signature *
+            {missingDocErrors.includes('CUSTOMER SIGNATURE') && !uploadedFiles['CUSTOMER SIGNATURE'] && (
+              <div style={{ fontSize: '0.7rem', color: '#ef4444', fontWeight: 500 }}>Upload Required</div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -856,8 +991,15 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
                 <input type="text" placeholder="Taluk / District" value={formData.residentialAddress.taluk} onChange={e => setFormData({...formData, residentialAddress: {...formData.residentialAddress, taluk: e.target.value}})} style={getInputStyle('res_taluk', formData.residentialAddress.taluk)} />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>PinCode *</label>
-                <input type="text" placeholder="PinCode" value={formData.residentialAddress.pincode} onChange={e => setFormData({...formData, residentialAddress: {...formData.residentialAddress, pincode: e.target.value}})} style={getInputStyle('res_pincode', formData.residentialAddress.pincode)} />
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>PinCode * (6 digits only)</label>
+                <input 
+                  type="text" 
+                  maxLength={6}
+                  placeholder="6-digit PIN" 
+                  value={formData.residentialAddress.pincode} 
+                  onChange={e => setFormData({...formData, residentialAddress: {...formData.residentialAddress, pincode: e.target.value.replace(/\D/g, '').slice(0, 6)}})} 
+                  style={getInputStyle('res_pincode', formData.residentialAddress.pincode)} 
+                />
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>State *</label>
@@ -902,8 +1044,15 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
                 <input type="text" placeholder="Taluk / District" value={formData.permanentAddress.sameAsResidential ? formData.residentialAddress.taluk : formData.permanentAddress.taluk} onChange={e => setFormData({...formData, permanentAddress: {...formData.permanentAddress, taluk: e.target.value}})} style={getInputStyle('perm_taluk', formData.permanentAddress.sameAsResidential ? formData.residentialAddress.taluk : formData.permanentAddress.taluk)} />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>PinCode *</label>
-                <input type="text" placeholder="PinCode" value={formData.permanentAddress.sameAsResidential ? formData.residentialAddress.pincode : formData.permanentAddress.pincode} onChange={e => setFormData({...formData, permanentAddress: {...formData.permanentAddress, pincode: e.target.value}})} style={getInputStyle('perm_pincode', formData.permanentAddress.sameAsResidential ? formData.residentialAddress.pincode : formData.permanentAddress.pincode)} />
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>PinCode * (6 digits only)</label>
+                <input 
+                  type="text" 
+                  maxLength={6}
+                  placeholder="6-digit PIN" 
+                  value={formData.permanentAddress.sameAsResidential ? formData.residentialAddress.pincode : formData.permanentAddress.pincode} 
+                  onChange={e => setFormData({...formData, permanentAddress: {...formData.permanentAddress, pincode: e.target.value.replace(/\D/g, '').slice(0, 6)}})} 
+                  style={getInputStyle('perm_pincode', formData.permanentAddress.sameAsResidential ? formData.residentialAddress.pincode : formData.permanentAddress.pincode)} 
+                />
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>State *</label>
@@ -963,8 +1112,15 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
           <input type="text" placeholder="Taluk/District" value={formData.propertyDetails?.taluk || ''} onChange={e => setFormData({...formData, propertyDetails: {...formData.propertyDetails, taluk: e.target.value}})} style={getInputStyle('prop_taluk', formData.propertyDetails?.taluk)} />
         </div>
         <div>
-          <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>PinCode (Optional)</label>
-          <input type="text" placeholder="PinCode" value={formData.propertyDetails?.pincode || ''} onChange={e => setFormData({...formData, propertyDetails: {...formData.propertyDetails, pincode: e.target.value}})} style={getInputStyle('prop_pincode', formData.propertyDetails?.pincode)} />
+          <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>PinCode (Optional, 6 digits)</label>
+          <input 
+            type="text" 
+            maxLength={6}
+            placeholder="6-digit PIN" 
+            value={formData.propertyDetails?.pincode || ''} 
+            onChange={e => setFormData({...formData, propertyDetails: {...formData.propertyDetails, pincode: e.target.value.replace(/\D/g, '').slice(0, 6)}})} 
+            style={getInputStyle('prop_pincode', formData.propertyDetails?.pincode)} 
+          />
         </div>
         <div>
           <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>State (Optional)</label>
@@ -973,6 +1129,106 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
         <div>
           <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Landmark (Optional)</label>
           <input type="text" placeholder="Landmark" value={formData.propertyDetails?.landmark || ''} onChange={e => setFormData({...formData, propertyDetails: {...formData.propertyDetails, landmark: e.target.value}})} style={getInputStyle('prop_landmark', formData.propertyDetails?.landmark)} />
+        </div>
+      </div>
+
+      {/* Mandatory Property Documents Section */}
+      <div style={{ marginTop: '2rem', borderTop: '1px solid var(--border-color)', paddingTop: '1.5rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+          <h4 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--primary-dark)', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <FileText size={18} color="var(--primary)" /> Required Property Documents *
+          </h4>
+          <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>All 3 documents mandatory</span>
+        </div>
+        <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginBottom: '1.25rem' }}>
+          Upload clear scanned copies or images. Missing documents will block application submission.
+        </p>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1rem' }}>
+          {[
+            { key: 'SALE DEED', altKey: 'LAND DOCUMENT', title: 'Sale Deed / Land Document', desc: 'Registered document of property ownership' },
+            { key: 'PATTA', altKey: '', title: 'Patta Copy', desc: 'Official revenue document / Patta copy' },
+            { key: 'BUILDING PLAN', altKey: '', title: 'Proposed Building Plan', desc: 'Approved or proposed architectural plan' },
+          ].map(doc => {
+            const isUploaded = Boolean(uploadedFiles[doc.key as keyof typeof uploadedFiles] || (doc.altKey && uploadedFiles[doc.altKey as keyof typeof uploadedFiles]));
+            const isMissing = missingDocErrors.includes(doc.key) && !isUploaded;
+
+            return (
+              <div 
+                key={doc.key}
+                style={{
+                  padding: '1.25rem',
+                  borderRadius: '0.5rem',
+                  border: isMissing ? '2px solid #ef4444' : isUploaded ? '1.5px solid #10b981' : '1px solid var(--border-color)',
+                  backgroundColor: isMissing ? '#fef2f2' : isUploaded ? '#f0fdf4' : 'var(--bg-secondary)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'space-between',
+                  gap: '0.75rem'
+                }}
+              >
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.5rem' }}>
+                    <h5 style={{ margin: 0, fontSize: '0.875rem', fontWeight: 700, color: 'var(--primary-dark)' }}>{doc.title} *</h5>
+                    <span style={{
+                      fontSize: '0.6875rem',
+                      fontWeight: 700,
+                      padding: '0.2rem 0.5rem',
+                      borderRadius: '1rem',
+                      backgroundColor: isUploaded ? '#dcfce7' : isMissing ? '#fee2e2' : '#f1f5f9',
+                      color: isUploaded ? '#166534' : isMissing ? '#991b1b' : '#64748b'
+                    }}>
+                      {isUploaded ? 'UPLOADED ✓' : isMissing ? 'MISSING *' : 'REQUIRED'}
+                    </span>
+                  </div>
+                  <p style={{ margin: '0.35rem 0 0 0', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{doc.desc}</p>
+                </div>
+
+                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginTop: '0.5rem' }}>
+                  <button
+                    type="button"
+                    onClick={() => { setDocUploadType(doc.key); setIsUploadModalOpen(true); }}
+                    style={{
+                      flex: 1,
+                      padding: '0.5rem 0.75rem',
+                      borderRadius: '0.375rem',
+                      backgroundColor: isUploaded ? 'white' : 'var(--primary)',
+                      color: isUploaded ? 'var(--primary)' : 'white',
+                      border: isUploaded ? '1px solid var(--border-color)' : 'none',
+                      fontSize: '0.8125rem',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '0.35rem'
+                    }}
+                  >
+                    <Upload size={14} /> {isUploaded ? 'Replace Document' : 'Upload File *'}
+                  </button>
+
+                  {isUploaded && (
+                    <button
+                      type="button"
+                      onClick={() => { setDocUploadType(doc.key); setModalTab('view'); setIsUploadModalOpen(true); }}
+                      style={{
+                        padding: '0.5rem 0.75rem',
+                        borderRadius: '0.375rem',
+                        backgroundColor: 'white',
+                        border: '1px solid var(--border-color)',
+                        color: 'var(--primary)',
+                        fontSize: '0.8125rem',
+                        fontWeight: 600,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      View
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>

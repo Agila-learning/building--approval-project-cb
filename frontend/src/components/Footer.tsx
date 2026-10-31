@@ -25,7 +25,7 @@ const Footer: React.FC = () => {
           </div>
 
           {/* Links Grid */}
-          <div style={{ flex: '2 1 600px', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1.5rem' }}>
+          <div className="footer-links-grid" style={{ flex: '2 1 600px' }}>
             
             {/* Services */}
             <div>
@@ -60,18 +60,18 @@ const Footer: React.FC = () => {
             {/* Contact Us */}
             <div id="contact">
               <h4 style={{ fontSize: '0.8125rem', fontWeight: 700, marginBottom: '0.875rem', fontFamily: 'var(--font-heading)', color: 'var(--bg-surface)' }}>Contact Us</h4>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', color: 'rgba(255,255,255,0.5)', fontSize: '0.8125rem' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', color: 'rgba(255,255,255,0.7)', fontSize: '0.8125rem' }}>
                 <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-start' }}>
                   <span>📍</span>
-                  <span>Near KVB Bank, Manjunatha Hardwares, 1st Floor, Shoolagiri - 635 117</span>
+                  <span style={{ wordBreak: 'break-word' }}>Near KVB Bank, Manjunatha Hardwares, 1st Floor, Shoolagiri - 635 117</span>
                 </div>
                 <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
                   <span>✉️</span>
-                  <a href="mailto:cb.construction2019@gmail.com" style={{ color: 'rgba(255,255,255,0.5)', textDecoration: 'none' }}>cb.construction2019@gmail.com</a>
+                  <a href="mailto:cb.construction2019@gmail.com" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', wordBreak: 'break-all' }}>cb.construction2019@gmail.com</a>
                 </div>
                 <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
                   <span>📞</span>
-                  <a href="tel:+918940206541" style={{ color: 'rgba(255,255,255,0.5)', textDecoration: 'none' }}>+91 8940206541</a>
+                  <a href="tel:+918940206541" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none' }}>+91 8940206541</a>
                 </div>
               </div>
             </div>
@@ -80,24 +80,78 @@ const Footer: React.FC = () => {
           
         </div>
 
-        <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
-          <div></div> {/* empty to push right side */}
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.75rem' }}>
-            <div style={{ display: 'flex', gap: '1.25rem', color: 'rgba(255,255,255,0.5)' }}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"></path></svg>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line></svg>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"></path><rect x="2" y="9" width="4" height="12"></rect><circle cx="4" cy="4" r="2"></circle></svg>
+        <div className="footer-bottom-row">
+          <div className="footer-bottom-content">
+            <div style={{ display: 'flex', gap: '1.25rem', color: 'rgba(255,255,255,0.6)' }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"></path></svg>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line></svg>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"></path><rect x="2" y="9" width="4" height="12"></rect><circle cx="4" cy="4" r="2"></circle></svg>
             </div>
-            <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem', display: 'flex', gap: '1.25rem' }}>
+            <div className="footer-legal-row">
               <span>&copy; 2026 CB Building Approvals. All rights reserved.</span>
-              <span>Privacy Policy | Terms & Conditions</span>
+              <span>•</span>
+              <span>Privacy Policy</span>
+              <span>•</span>
+              <span>Terms & Conditions</span>
             </div>
           </div>
         </div>
       </div>
       <style>{`
+        .footer-links-grid {
+          display: grid;
+          grid-template-columns: repeat(4, 1fr);
+          gap: 1.5rem;
+        }
+        @media (max-width: 900px) {
+          .footer-links-grid {
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1.75rem;
+          }
+        }
+        @media (max-width: 480px) {
+          .footer-links-grid {
+            grid-template-columns: 1fr;
+            gap: 1.5rem;
+          }
+        }
+        .footer-bottom-row {
+          border-top: 1px solid rgba(255,255,255,0.1);
+          padding-top: 1.5rem;
+          display: flex;
+          justifyContent: space-between;
+          align-items: center;
+          flex-wrap: wrap;
+          gap: 1rem;
+        }
+        .footer-bottom-content {
+          display: flex;
+          flex-direction: column;
+          align-items: flex-end;
+          gap: 0.75rem;
+          width: 100%;
+        }
+        .footer-legal-row {
+          color: rgba(255,255,255,0.6);
+          font-size: 0.75rem;
+          display: flex;
+          gap: 0.75rem;
+          flex-wrap: wrap;
+          align-items: center;
+        }
+        @media (max-width: 640px) {
+          .footer-bottom-content {
+            align-items: center !important;
+            text-align: center !important;
+          }
+          .footer-legal-row {
+            justify-content: center !important;
+            text-align: center !important;
+            gap: 0.5rem !important;
+          }
+        }
         .footer-links a {
-          color: rgba(255,255,255,0.5) !important;
+          color: rgba(255,255,255,0.65) !important;
           font-size: 0.8125rem;
           text-decoration: none;
           transition: color 0.2s;

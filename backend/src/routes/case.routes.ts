@@ -9,6 +9,9 @@ router.put('/:id', caseController.updateCase);
 router.patch('/:id', caseController.updateCase);
 router.delete('/:id', caseController.deleteCase);
 router.get('/', caseController.listCases);
-router.patch('/:id/status', caseController.updateStatus);
+router.post('/:id/stages/update', caseController.updateStage);
+router.put('/:id/stages/update', caseController.updateStage);
+router.put('/:id/stage', caseController.updateStage);
+router.post('/:id/stage', caseController.updateStage);
 
 export default router;

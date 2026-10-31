@@ -25,6 +25,7 @@ const menuGroups = [
     category: 'Operations',
     items: [
       { title: 'Applications', icon: <FileText size={20} strokeWidth={1.5} />, path: '/admin/applications' },
+      { title: 'Documents', icon: <ClipboardList size={20} strokeWidth={1.5} />, path: '/admin/documents' },
       { title: 'Attendance', icon: <CheckSquare size={20} strokeWidth={1.5} />, path: '/admin/attendance' },
       { title: 'Link Tracking', icon: <FileText size={20} strokeWidth={1.5} />, path: '/admin/link-tracking' },
     ]

@@ -4,11 +4,109 @@ import { BrevoNotificationService } from '../services/BrevoNotificationService';
 
 const notificationService = new BrevoNotificationService();
 
+export function buildDefaultStages(caseData?: any) {
+  const currentStatus = (caseData?.status || 'Application Submitted').toUpperCase();
+  const now = new Date().toISOString();
+  const createdDate = caseData?.created_at ? new Date(caseData.created_at).toISOString() : now;
+
+  const isCompletedStage = (key: string) => {
+    if (['APPLICATION COMPLETED', 'APPROVED', 'CLOSED'].includes(currentStatus)) return true;
+    if (key === 'stage_submitted') return true;
+    if (key === 'stage_doc_verification') {
+      return ['PAYMENT PROCESS', 'SITE VISIT', 'FINAL REVIEW', 'APPLICATION COMPLETED', 'APPROVED', 'CLOSED', 'DOCUMENTS_VERIFIED', 'SUBMITTED_FOR_APPROVAL'].includes(currentStatus);
+    }
+    if (key === 'stage_payment') {
+      return ['SITE VISIT', 'FINAL REVIEW', 'APPLICATION COMPLETED', 'APPROVED', 'CLOSED'].includes(currentStatus);
+    }
+    if (key === 'stage_site_visit') {
+      return ['FINAL REVIEW', 'APPLICATION COMPLETED', 'APPROVED', 'CLOSED'].includes(currentStatus);
+    }
+    if (key === 'stage_final_review') {
+      return ['APPLICATION COMPLETED', 'APPROVED', 'CLOSED'].includes(currentStatus);
+    }
+    return false;
+  };
+
+  const isInProgressStage = (key: string) => {
+    if (['APPLICATION COMPLETED', 'APPROVED', 'CLOSED'].includes(currentStatus)) return false;
+    if (key === 'stage_submitted') return false;
+    if (key === 'stage_doc_verification') {
+      return ['APPLICATION SUBMITTED', 'DOCUMENTS_VERIFICATION', 'DOCUMENTS_PENDING', 'DOCUMENT_COLLECTION', 'INTAKE', 'SUBMITTED', 'NEW', 'DRAFT'].includes(currentStatus);
+    }
+    if (key === 'stage_payment') return currentStatus === 'PAYMENT PROCESS';
+    if (key === 'stage_site_visit') return ['SITE VISIT', 'INSPECTION_SCHEDULED', 'INSPECTION_DONE'].includes(currentStatus);
+    if (key === 'stage_final_review') return ['FINAL REVIEW', 'SCRUTINY'].includes(currentStatus);
+    return false;
+  };
+
+  const assignedWorker = caseData?.assigned_staff?.name || (caseData?.fullData as any)?.staff || 'Unassigned';
+
+  return [
+    {
+      name: 'Application Submitted',
+      key: 'stage_submitted',
+      status: 'Completed',
+      startedDate: createdDate,
+      completedDate: createdDate,
+      remarks: 'Application registered and initial details submitted.',
+      responsiblePerson: 'Customer'
+    },
+    {
+      name: 'Document Verification',
+      key: 'stage_doc_verification',
+      status: isCompletedStage('stage_doc_verification') ? 'Completed' : (isInProgressStage('stage_doc_verification') ? 'In Progress' : 'Pending'),
+      startedDate: createdDate,
+      completedDate: isCompletedStage('stage_doc_verification') ? createdDate : null,
+      remarks: 'Identity, ownership, and plan documents scrutiny.',
+      responsiblePerson: assignedWorker !== 'Unassigned' ? assignedWorker : 'Admin'
+    },
+    {
+      name: 'Payment Process',
+      key: 'stage_payment',
+      status: isCompletedStage('stage_payment') ? 'Completed' : (isInProgressStage('stage_payment') ? 'In Progress' : 'Pending'),
+      startedDate: (isInProgressStage('stage_payment') || isCompletedStage('stage_payment')) ? createdDate : null,
+      completedDate: isCompletedStage('stage_payment') ? createdDate : null,
+      remarks: 'Statutory fees calculation and payment receipt verification.',
+      responsiblePerson: 'Admin'
+    },
+    {
+      name: 'Site Visit',
+      key: 'stage_site_visit',
+      status: isCompletedStage('stage_site_visit') ? 'Completed' : (isInProgressStage('stage_site_visit') ? 'In Progress' : 'Pending'),
+      startedDate: (isInProgressStage('stage_site_visit') || isCompletedStage('stage_site_visit')) ? createdDate : null,
+      completedDate: isCompletedStage('stage_site_visit') ? createdDate : null,
+      remarks: 'Physical field inspection and boundary verification.',
+      responsiblePerson: assignedWorker !== 'Unassigned' ? assignedWorker : 'Field Officer'
+    },
+    {
+      name: 'Final Review',
+      key: 'stage_final_review',
+      status: isCompletedStage('stage_final_review') ? 'Completed' : (isInProgressStage('stage_final_review') ? 'In Progress' : 'Pending'),
+      startedDate: (isInProgressStage('stage_final_review') || isCompletedStage('stage_final_review')) ? createdDate : null,
+      completedDate: isCompletedStage('stage_final_review') ? createdDate : null,
+      remarks: 'Executive review, compliance check, and sanction order preparation.',
+      responsiblePerson: 'Admin'
+    },
+    {
+      name: 'Application Completed',
+      key: 'stage_completed',
+      status: isCompletedStage('stage_completed') ? 'Completed' : 'Pending',
+      startedDate: isCompletedStage('stage_completed') ? createdDate : null,
+      completedDate: isCompletedStage('stage_completed') ? createdDate : null,
+      remarks: 'Official building plan approval order sanctioned and issued.',
+      responsiblePerson: 'Admin'
+    }
+  ];
+}
+
 export class CaseController {
   async createCase(req: Request, res: Response) {
     console.log("createCase hit with body:", req.body);
     try {
       const data = req.body;
+      const userRole = (req.headers['x-user-role'] || req.query.role || (req as any).user?.role || '') as string;
+      const isAdmin = userRole.toUpperCase() === 'ADMIN' || (req as any).user?.role === 'ADMIN';
+      const isDraft = data.status === 'Draft' || data.isPartial === true;
 
       // 1. Mobile Number Validation: Must be 10 digits starting with 6, 7, 8, or 9
       const rawMobile = data.fullData?.mobile || data.property?.owner_phone || data.mobile;
@@ -39,6 +137,56 @@ export class CaseController {
         const cleanPan = String(rawPan).trim().toUpperCase();
         if (!/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(cleanPan)) {
           return res.status(400).json({ error: 'PAN number must be a valid 10-character alphanumeric format (e.g. ABCDE1234F).' });
+        }
+      }
+
+      // 5. PIN Code Validation: Exactly 6 digits only, numbers only!
+      const resPincode = data.fullData?.residentialAddress?.pincode;
+      const permPincode = data.fullData?.permanentAddress?.pincode;
+      const propPincode = data.fullData?.propertyDetails?.pincode;
+
+      if (!isDraft) {
+        if (!resPincode || !/^\d{6}$/.test(String(resPincode).trim())) {
+          return res.status(400).json({ error: 'PIN code must be exactly 6 digits (numbers only).' });
+        }
+        if (data.fullData?.permanentAddress?.sameAsResidential === false && permPincode) {
+          if (!/^\d{6}$/.test(String(permPincode).trim())) {
+            return res.status(400).json({ error: 'Permanent address PIN code must be exactly 6 digits (numbers only).' });
+          }
+        }
+      }
+      if (propPincode && !/^\d{6}$/.test(String(propPincode).trim())) {
+        return res.status(400).json({ error: 'Property PIN code must be exactly 6 digits (numbers only).' });
+      }
+
+      // 6. Mandatory Document Upload Validation:
+      // Customers must upload all required documents before submitting their application.
+      // If any required document is missing, prevent submission.
+      if (!isDraft) {
+        const uploaded = data.uploadedFiles || {};
+        const requiredDocSpecs = [
+          { key: 'CUSTOMER PHOTOGRAPH', alts: ['photo', 'customer_photo'], label: 'Applicant Photograph' },
+          { key: 'CUSTOMER SIGNATURE', alts: ['signature', 'customer_signature'], label: 'Applicant Signature' },
+          { key: 'AADHAR CARD', alts: ['aadhar', 'aadhar_card'], label: 'Aadhar Card' },
+          { key: 'PAN CARD', alts: ['pan', 'pan_card'], label: 'PAN Card' },
+          { key: 'SALE DEED', alts: ['sale_deed', 'LAND DOCUMENT', 'land_document'], label: 'Sale Deed / Land Document' },
+          { key: 'PATTA', alts: ['patta', 'patta_copy'], label: 'Patta Document' },
+          { key: 'BUILDING PLAN', alts: ['building_plan', 'proposed_plan'], label: 'Building Plan' },
+        ];
+
+        const missingDocs: string[] = [];
+        for (const spec of requiredDocSpecs) {
+          const hasFile = Boolean(uploaded[spec.key]) || spec.alts.some(alt => Boolean(uploaded[alt]));
+          if (!hasFile) {
+            missingDocs.push(spec.label);
+          }
+        }
+
+        if (missingDocs.length > 0) {
+          return res.status(400).json({
+            error: 'Please upload all required documents before submitting your application.',
+            missingDocuments: missingDocs
+          });
         }
       }
       
@@ -105,13 +253,20 @@ export class CaseController {
         }
       }
 
-      // Check if staff name needs resolving to assigned_staff_id
-      let assigned_staff_id = data.assigned_staff_id;
-      if (!assigned_staff_id && data.assigned_staff?.name) {
-        const staff = await prisma.user.findFirst({
-          where: { name: { contains: data.assigned_staff.name, mode: 'insensitive' } }
-        });
-        if (staff) assigned_staff_id = staff.id;
+      // 7. Manual Worker Assignment:
+      // Applications must NOT be automatically assigned to any worker.
+      // Newly submitted customer applications MUST be unassigned until Admin manually assigns them.
+      const isCustomerSubmission = data.isCustomer || !isAdmin;
+      let assigned_staff_id: string | null = null;
+      if (!isCustomerSubmission) {
+        if (data.assigned_staff_id) {
+          assigned_staff_id = data.assigned_staff_id;
+        } else if (data.assigned_staff?.name && data.assigned_staff.name !== 'Unassigned') {
+          const staff = await prisma.user.findFirst({
+            where: { name: { contains: data.assigned_staff.name, mode: 'insensitive' } }
+          });
+          if (staff) assigned_staff_id = staff.id;
+        }
       }
 
       const validApprovalTypes = ['LAYOUT_APPROVAL', 'BUILDING_PLAN_APPROVAL', 'COMPLETION_CERTIFICATE', 'PATTA_TRANSFER'];
@@ -122,13 +277,21 @@ export class CaseController {
         approval_type = 'BUILDING_PLAN_APPROVAL';
       }
 
-      const validStatuses = ['DOCUMENTS_PENDING', 'DOCUMENTS_VERIFICATION', 'INTAKE', 'DOCUMENT_COLLECTION', 'APPLICATION_PREP', 'SUBMITTED', 'SCRUTINY', 'ACTION_NEEDED', 'INSPECTION_SCHEDULED', 'INSPECTION_DONE', 'APPROVED', 'CLOSED'];
-      let caseStatus = data.status;
-      if (!caseStatus || !validStatuses.includes(caseStatus) || caseStatus === 'INTAKE') {
-        caseStatus = (data.uploadedFiles && Object.keys(data.uploadedFiles).some(k => !['username', 'password', 'receiptNumber'].includes(k) && Boolean(data.uploadedFiles[k])))
-          ? 'DOCUMENTS_VERIFICATION'
-          : 'DOCUMENTS_PENDING';
+      // Status: New applications appear as "Application Submitted"
+      let caseStatus = isDraft ? 'Draft' : 'Application Submitted';
+      if (isAdmin && data.status) {
+        caseStatus = data.status;
       }
+
+      // Initialize stages
+      const initialStages = buildDefaultStages({ status: caseStatus, created_at: new Date() });
+      const fullData = {
+        ...(data.fullData || {}),
+        staff: assigned_staff_id ? (data.fullData?.staff || 'Staff') : 'Unassigned',
+        stages: (data.fullData && Array.isArray(data.fullData.stages) && data.fullData.stages.length > 0)
+          ? data.fullData.stages
+          : initialStages
+      };
 
       const newCase = await prisma.case.create({ 
         data: {
@@ -137,7 +300,7 @@ export class CaseController {
           status: caseStatus,
           property_id: property_id || null,
           assigned_staff_id: assigned_staff_id || null,
-          fullData: data.fullData || null,
+          fullData: fullData,
           uploadedFiles: data.uploadedFiles || null,
           linkTracking: data.linkTracking || null,
           reason: data.reason || null
@@ -155,7 +318,7 @@ export class CaseController {
       const customerName = newCase.property?.owner_name || data.fullData?.customerName || 'Valued Applicant';
       const customerEmail = cleanEmail || newCase.property?.owner_email;
 
-      // 5. Create real database notification
+      // 8. Create real database notification
       try {
         await prisma.notification.create({
           data: {
@@ -170,16 +333,16 @@ export class CaseController {
         console.error("Failed to create DB notification:", notifErr);
       }
 
-      // 6. Send Email Confirmation via Brevo with Reference Number & Mobile Number
+      // 9. Send Email Confirmation via Brevo with Reference Number & Mobile Number
       if (customerEmail) {
-        const origin = req.headers.origin || 'http://localhost:5175';
+        const origin = req.headers.origin || 'http://localhost:5173';
         notificationService.notifyApplicationSubmitted({
           customerEmail,
           customerName,
           applicationNumber: newCase.application_number as string,
           mobileNumber: cleanMobile,
           propertyAddress: newCase.property?.address || data.fullData?.propertyDetails?.streetName,
-          trackUrl: `${origin}/track?app=${newCase.application_number}&mobile=${cleanMobile}`
+          trackUrl: `${origin}/track-application?id=${newCase.application_number}&mobile=${cleanMobile}`
         }).catch(err => {
           console.error("Failed to send application confirmation email via Brevo:", err);
         });
@@ -232,7 +395,17 @@ export class CaseController {
         }
       }
 
-      res.json(caseData);
+      // Ensure stages exist for stage-wise tracking
+      const stages = (caseData.fullData as any)?.stages || buildDefaultStages(caseData);
+      const enrichedCaseData = {
+        ...caseData,
+        fullData: {
+          ...((caseData.fullData as any) || {}),
+          stages
+        }
+      };
+
+      res.json(enrichedCaseData);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }
@@ -287,7 +460,17 @@ export class CaseController {
         include: { property: true, assigned_staff: true, documents: true },
         orderBy: { created_at: 'desc' }
       });
-      res.json(cases);
+
+      // Enrich stages
+      const enrichedCases = cases.map(c => ({
+        ...c,
+        fullData: {
+          ...((c.fullData as any) || {}),
+          stages: (c.fullData as any)?.stages || buildDefaultStages(c)
+        }
+      }));
+
+      res.json(enrichedCases);
     } catch (error: any) {
       console.error("Error listing cases:", error);
       res.status(400).json({ error: error.message });
@@ -298,6 +481,9 @@ export class CaseController {
     try {
       const id = req.params.id as string;
       const data = req.body;
+      const userRole = (req.headers['x-user-role'] || req.query.role || (req as any).user?.role || '') as string;
+      const isAdmin = userRole.toUpperCase() === 'ADMIN' || (req as any).user?.role === 'ADMIN';
+
       const isObjectId = /^[0-9a-fA-F]{24}$/.test(id);
 
       const existing = await prisma.case.findFirst({
@@ -309,6 +495,73 @@ export class CaseController {
 
       if (!existing) {
         return res.status(404).json({ error: 'Case not found' });
+      }
+
+      // 1. Security & Permissions Check:
+      // Check if caller is editing customer personal details
+      const isEditingCustomerDetails = Boolean(
+        data.customerName !== undefined ||
+        data.customerDetails !== undefined ||
+        data.property !== undefined ||
+        (data.fullData && (
+          data.fullData.customerName !== undefined ||
+          data.fullData.mobile !== undefined ||
+          data.fullData.email !== undefined ||
+          data.fullData.residentialAddress !== undefined ||
+          data.fullData.permanentAddress !== undefined ||
+          data.fullData.fatherName !== undefined ||
+          data.fullData.dob !== undefined ||
+          data.fullData.aadhar !== undefined ||
+          data.fullData.pan !== undefined
+        ))
+      );
+
+      if (isEditingCustomerDetails && !isAdmin) {
+        return res.status(403).json({ error: 'Forbidden: Only Admin has permission to edit customer application details.' });
+      }
+
+      // Check if caller is changing worker assignment
+      const isAssigningWorker = Boolean(
+        data.assigned_staff_id !== undefined ||
+        data.staff !== undefined ||
+        data.assignedStaff !== undefined
+      );
+
+      if (isAssigningWorker && !isAdmin) {
+        return res.status(403).json({ error: 'Forbidden: Only Admin can assign or change worker assignments.' });
+      }
+
+      // 2. Validate PIN code if address/property is being updated
+      const resPincode = data.fullData?.residentialAddress?.pincode;
+      const permPincode = data.fullData?.permanentAddress?.pincode;
+      const propPincode = data.fullData?.propertyDetails?.pincode || data.property?.pincode;
+
+      if (resPincode && !/^\d{6}$/.test(String(resPincode).trim())) {
+        return res.status(400).json({ error: 'Residential PIN code must be exactly 6 digits (numbers only).' });
+      }
+      if (permPincode && !/^\d{6}$/.test(String(permPincode).trim())) {
+        return res.status(400).json({ error: 'Permanent address PIN code must be exactly 6 digits (numbers only).' });
+      }
+      if (propPincode && !/^\d{6}$/.test(String(propPincode).trim())) {
+        return res.status(400).json({ error: 'Property PIN code must be exactly 6 digits (numbers only).' });
+      }
+
+      // 3. Validate Mobile Number if being updated
+      const rawMobile = data.fullData?.mobile || data.property?.owner_phone;
+      if (rawMobile) {
+        const cleanMobile = String(rawMobile).trim().replace(/\D/g, '').slice(-10);
+        if (!/^[6-9]\d{9}$/.test(cleanMobile)) {
+          return res.status(400).json({ error: 'Mobile number must be exactly 10 digits starting with 6, 7, 8, or 9.' });
+        }
+      }
+
+      // 4. Validate Email if being updated
+      const rawEmail = data.fullData?.email || data.property?.owner_email;
+      if (rawEmail) {
+        const cleanEmail = String(rawEmail).trim().toLowerCase();
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+          return res.status(400).json({ error: 'Please enter a valid email address.' });
+        }
       }
 
       // Update property if provided
@@ -388,17 +641,19 @@ export class CaseController {
         }
       }
 
-      if (data.fullData !== undefined) {
-        updatePayload.fullData = {
-          ...data.fullData,
-          ...(targetStaffName !== undefined ? { staff: targetStaffName } : {})
-        };
-      } else if (targetStaffName !== undefined) {
-        updatePayload.fullData = {
-          ...(existing.fullData as any || {}),
-          staff: targetStaffName
-        };
-      }
+      // Preserve existing stages and document verification status when updating fullData
+      const existingFullData = (existing.fullData as any) || {};
+      const newFullData = data.fullData || {};
+
+      updatePayload.fullData = {
+        ...existingFullData,
+        ...newFullData,
+        stages: newFullData.stages || existingFullData.stages || buildDefaultStages(existing),
+        documentVerification: newFullData.documentVerification || existingFullData.documentVerification || {},
+        requestedReuploads: newFullData.requestedReuploads || existingFullData.requestedReuploads || [],
+        completionEmailSent: newFullData.completionEmailSent !== undefined ? newFullData.completionEmailSent : existingFullData.completionEmailSent,
+        ...(targetStaffName !== undefined ? { staff: targetStaffName } : {})
+      };
 
       const updated = await prisma.case.update({
         where: { id: existing.id },
@@ -420,7 +675,7 @@ export class CaseController {
           });
 
           if (newlyAssignedStaffUser.email) {
-            const origin = req.headers.origin || 'http://localhost:5175';
+            const origin = req.headers.origin || 'http://localhost:5173';
             notificationService.notifyCaseAssignedToStaff({
               staffEmail: newlyAssignedStaffUser.email,
               staffName: newlyAssignedStaffUser.name,
@@ -428,7 +683,7 @@ export class CaseController {
               customerName: updated.property?.owner_name || (updated.fullData as any)?.customerName || 'Valued Applicant',
               mobileNumber: updated.property?.owner_phone || (updated.fullData as any)?.mobile || '',
               propertyAddress: updated.property?.address || (updated.fullData as any)?.propertyDetails?.streetName || '',
-              portalUrl: `${origin}/employee/applications/${appIdentifier}`
+              portalUrl: `${origin}/employee/applications`
             }).catch(err => {
               console.error("Failed to send staff assignment email:", err);
             });
@@ -466,6 +721,171 @@ export class CaseController {
       res.json(updated);
     } catch (error: any) {
       console.error("Error updating case:", error);
+      res.status(400).json({ error: error.message });
+    }
+  }
+
+  async updateStage(req: Request, res: Response) {
+    try {
+      const id = req.params.id as string;
+      const { stageKey, stageIndex: rawIndex, status, remarks, completedDate, responsiblePerson } = req.body;
+      const userRole = (req.headers['x-user-role'] || req.query.role || (req as any).user?.role || '') as string;
+      const isAdmin = userRole.toUpperCase() === 'ADMIN' || (req as any).user?.role === 'ADMIN';
+
+      if (!isAdmin) {
+        return res.status(403).json({ error: 'Forbidden: Only Admin has permission to update application stages.' });
+      }
+
+      const isObjectId = /^[0-9a-fA-F]{24}$/.test(id);
+      const found = await prisma.case.findFirst({
+        where: isObjectId
+          ? { OR: [{ id }, { application_number: id }] }
+          : { application_number: id },
+        include: { property: true, assigned_staff: true, documents: true }
+      });
+
+      if (!found) return res.status(404).json({ error: 'Case not found' });
+
+      // Load or initialize stages
+      let stages: any[] = (found.fullData as any)?.stages || [];
+      if (!Array.isArray(stages) || stages.length === 0) {
+        stages = buildDefaultStages(found);
+      }
+
+      let stageIndex = -1;
+      if (typeof rawIndex === 'number' && rawIndex >= 0 && rawIndex < stages.length) {
+        stageIndex = rawIndex;
+      } else if (stageKey) {
+        stageIndex = stages.findIndex((s: any) => s.key === stageKey || s.name === stageKey);
+      }
+
+      if (stageIndex === -1) {
+        return res.status(400).json({ error: `Stage ${rawIndex !== undefined ? rawIndex : stageKey} not recognized.` });
+      }
+
+      // Check validation rules:
+      // Rule 1: Cannot complete "Document Verification" before all required documents are verified
+      if (stages[stageIndex].key === 'stage_doc_verification' && status === 'Completed') {
+        const docVerification = (found.fullData as any)?.documentVerification || {};
+        const requiredDocKeys = ['CUSTOMER PHOTOGRAPH', 'CUSTOMER SIGNATURE', 'AADHAR CARD', 'PAN CARD', 'SALE DEED', 'PATTA', 'BUILDING PLAN'];
+        
+        const unverified = requiredDocKeys.filter(k => {
+          const v = docVerification[k];
+          return !v || v.status !== 'Verified';
+        });
+
+        if (unverified.length > 0) {
+          return res.status(400).json({ 
+            error: 'Document Verification stage cannot be completed until all required documents are verified.',
+            unverifiedDocuments: unverified
+          });
+        }
+      }
+
+      // Rule 2: Cannot mark "Application Completed" before prior stages (0 to 4) are completed
+      if (stages[stageIndex].key === 'stage_completed' && (status === 'Completed' || status === 'In Progress')) {
+        const incompletePrior = stages.slice(0, 5).filter(s => s.status !== 'Completed');
+        if (incompletePrior.length > 0) {
+          return res.status(400).json({ 
+            error: 'Application cannot be marked Completed before all prior stages are completed.',
+            incompleteStages: incompletePrior.map(s => s.name)
+          });
+        }
+      }
+
+      // Update current stage
+      stages[stageIndex].status = status; // 'Completed' | 'In Progress' | 'Pending'
+      if (remarks !== undefined) stages[stageIndex].remarks = remarks;
+      if (responsiblePerson !== undefined) stages[stageIndex].responsiblePerson = responsiblePerson;
+      if (status === 'Completed') {
+        stages[stageIndex].completedDate = completedDate || new Date().toISOString();
+        if (stageIndex + 1 < stages.length && stages[stageIndex + 1].status === 'Pending') {
+          stages[stageIndex + 1].status = 'In Progress';
+          stages[stageIndex + 1].startedDate = new Date().toISOString();
+        }
+      } else if (status === 'In Progress' && !stages[stageIndex].startedDate) {
+        stages[stageIndex].startedDate = new Date().toISOString();
+      }
+
+      // Determine updated overall Current Status
+      let overallStatus = stages[stageIndex].name;
+      const activeStage = stages.find(s => s.status === 'In Progress') || (stages.every(s => s.status === 'Completed') ? stages[stages.length - 1] : stages[0]);
+      overallStatus = activeStage.name;
+
+      const previousStatus = found.status;
+      const fullData = {
+        ...((found.fullData as any) || {}),
+        stages
+      };
+
+      let completionEmailSent = (found.fullData as any)?.completionEmailSent || false;
+
+      // If moving to Application Completed and not already sent, trigger completion email!
+      if (overallStatus === 'Application Completed' && !completionEmailSent) {
+        const customerEmail = found.property?.owner_email || (found.fullData as any)?.email;
+        const customerName = found.property?.owner_name || (found.fullData as any)?.customerName || 'Valued Applicant';
+        const proposalNo = found.application_number || found.id;
+        const product = found.approval_type || (found.fullData as any)?.serviceType || 'Building Approval';
+        const origin = req.headers.origin || 'http://localhost:5173';
+        const trackUrl = `${origin}/track-application?id=${proposalNo}&mobile=${found.property?.owner_phone || (found.fullData as any)?.mobile || ''}`;
+
+        if (customerEmail) {
+          notificationService.notifyApplicationCompleted({
+            customerEmail,
+            customerName,
+            applicationNumber: proposalNo,
+            product,
+            trackUrl
+          }).then(() => {
+            console.log(`Application completion email sent successfully to ${customerEmail}`);
+          }).catch(err => {
+            console.error('Failed to send application completion email:', err);
+          });
+        }
+        fullData.completionEmailSent = true;
+      }
+
+      const updated = await prisma.case.update({
+        where: { id: found.id },
+        data: {
+          status: overallStatus,
+          fullData
+        },
+        include: { property: true, assigned_staff: true, documents: true }
+      });
+
+      // Record in status history
+      const adminName = (req.headers['x-user-name'] as string) || 'Admin';
+      try {
+        await prisma.statusHistory.create({
+          data: {
+            case_id: found.id,
+            from_status: previousStatus || 'Application Submitted',
+            to_status: overallStatus,
+            note: remarks ? `Stage "${stages[stageIndex].name}" updated by ${adminName}: ${remarks}` : `Stage "${stages[stageIndex].name}" updated to ${status} by ${adminName}`
+          }
+        });
+      } catch (hErr) {
+        console.warn('Status history recording skipped:', hErr);
+      }
+
+      // Record in notification
+      try {
+        await prisma.notification.create({
+          data: {
+            title: `Stage Updated: ${updated.application_number}`,
+            message: `Stage "${stages[stageIndex].name}" updated to "${status}" by Admin.`,
+            type: 'case_stage_update',
+            case_id: updated.application_number
+          }
+        });
+      } catch (nErr) {
+        console.warn('Notification creation skipped:', nErr);
+      }
+
+      res.json(updated);
+    } catch (error: any) {
+      console.error('Error updating stage:', error);
       res.status(400).json({ error: error.message });
     }
   }

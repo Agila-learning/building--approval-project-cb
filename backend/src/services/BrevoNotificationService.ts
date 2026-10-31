@@ -421,5 +421,41 @@ export class BrevoNotificationService implements NotificationService {
 
     await this.sendEmail(staffEmail, staffName, subject, htmlContent);
   }
+
+  async notifyApplicationCompleted(params: {
+    customerEmail: string;
+    customerName: string;
+    applicationNumber: string;
+    product: string;
+    trackUrl: string;
+  }): Promise<void> {
+    const { customerEmail, customerName, applicationNumber, product, trackUrl } = params;
+    const subject = `Congratulations! Application Completed: ${applicationNumber} - CB Building Approvals`;
+    const htmlContent = generateEmailTemplate({
+      eyebrow: 'Approval Complete',
+      headline: 'Your Building Approval is Successfully Completed!',
+      customerName: customerName || 'Valued Applicant',
+      bodyParagraphs: [
+        `We are thrilled to inform you that your building approval application (${applicationNumber}) for ${product || 'Building Approval'} has successfully completed all stages of technical scrutiny, document verification, site inspection, and final authority review.`,
+        'Your approval process is officially complete. You can view your finalized files and records using the tracking link below.',
+        'If you need any further assistance, support, or documentation, our team is always here to assist you at +91 8940206541 or cb.construction2019@gmail.com.'
+      ],
+      referenceCard: [
+        { label: 'Proposal / Application No.', value: applicationNumber },
+        { label: 'Customer Name', value: customerName },
+        { label: 'Product / Service', value: product || 'Building Approval' },
+        { label: 'Final Status', value: 'Application Completed' },
+        { label: 'Support Contact', value: '+91 8940206541 | cb.construction2019@gmail.com' },
+        { label: 'Office Address', value: 'Near KVB Bank, Manjunatha Hardwares, 1st Floor, Shoolagiri - 635 117' }
+      ],
+      cta: {
+        text: 'View Completed Application',
+        url: trackUrl || 'http://localhost:5173/track-application'
+      }
+    });
+
+    await this.sendEmail(customerEmail, customerName, subject, htmlContent);
+  }
 }
+
 

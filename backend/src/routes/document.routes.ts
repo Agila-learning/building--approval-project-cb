@@ -4,8 +4,10 @@ import { upload } from '../middleware/upload';
 
 const router = Router();
 
+router.get('/', documentController.listDocuments);
 router.post('/upload', upload.single('file'), documentController.uploadDocument);
-router.post('/', documentController.getSignedUrl); // the path in index will be nested or we can keep it as is.
+router.post('/verify-status', documentController.updateDocumentStatus);
+router.post('/', documentController.getSignedUrl);
 router.patch('/:id/verify', documentController.verifyDocument);
 
 export default router;

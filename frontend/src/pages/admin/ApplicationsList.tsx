@@ -191,23 +191,35 @@ const ApplicationsList: React.FC = () => {
 
   const handleAssignStaff = async (app: any, staffName: string) => {
     const targetId = app.mongoId || app.id;
-    setApplications(prev => prev.map(a => (a.id === app.id || a.mongoId === app.mongoId) ? { ...a, staff: staffName } : a));
+    const selectedStaff = staffMembers.find((s: any) => s.name === staffName);
+    const assignedStaffId = selectedStaff ? selectedStaff.id : null;
+
+    setApplications(prev => prev.map(a => (a.id === app.id || a.mongoId === app.mongoId) ? { ...a, staff: staffName || 'Unassigned' } : a));
     
     try {
       const apiUrl = getApiUrl();
       const res = await fetch(`${apiUrl}/cases/${targetId}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ staff: staffName })
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-user-role': 'ADMIN'
+        },
+        body: JSON.stringify({ 
+          staff: staffName || 'Unassigned',
+          assigned_staff_id: assignedStaffId
+        })
       });
       if (res.ok) {
-        toast.success(staffName ? `Application assigned to ${staffName}` : 'Staff assignment removed');
+        toast.success(staffName ? `Application assigned to ${staffName}` : 'Staff assignment removed (Unassigned)');
+        fetchCases();
       } else {
         toast.error('Failed to update staff assignment');
+        fetchCases();
       }
     } catch (err) {
       console.error(err);
       toast.error('Failed to update staff assignment');
+      fetchCases();
     }
   };
 
@@ -661,7 +673,7 @@ const ApplicationsList: React.FC = () => {
                 filteredApplications.map((app, index) => (
                   <tr 
                     key={index} 
-                    onClick={() => navigate(`/admin/applications/${app.id}`)}
+                    onClick={() => navigate(`/admin/applications/${app.id}/view`)}
                     style={{ borderBottom: '1px solid var(--border-color)', transition: 'background-color 0.2s', cursor: 'pointer' }}
                     onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(237, 231, 218, 0.4)'}
                     onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
@@ -703,9 +715,9 @@ const ApplicationsList: React.FC = () => {
                         {!isMaintenanceView && !isMaintenanceLogs && (
                           <td style={{ padding: '0.75rem 1rem' }} onClick={(e) => e.stopPropagation()}>
                             <button 
-                              onClick={() => navigate(`/admin/applications/${app.id}?edit=true`)}
+                              onClick={() => navigate(`/admin/applications/${app.id}/edit`)}
                               style={{ padding: '0.4rem', borderRadius: '0.25rem', backgroundColor: 'transparent', border: 'none', color: 'var(--primary)', cursor: 'pointer' }}
-                              title="Edit Application"
+                              title="Edit Customer Details (Admin Only)"
                             >
                               <Pencil size={16} />
                             </button>
@@ -713,9 +725,9 @@ const ApplicationsList: React.FC = () => {
                         )}
                         <td style={{ padding: '0.75rem 1rem' }} onClick={(e) => e.stopPropagation()}>
                           <button 
-                            onClick={() => navigate(`/admin/applications/${app.id}`)}
+                            onClick={() => navigate(`/admin/applications/${app.id}/view`)}
                             style={{ padding: '0.4rem', borderRadius: '0.25rem', backgroundColor: 'transparent', border: 'none', color: 'var(--primary)', cursor: 'pointer' }}
-                            title="View Details"
+                            title="View Stage-Wise Progress"
                           >
                             <Info size={16} />
                           </button>
@@ -724,7 +736,7 @@ const ApplicationsList: React.FC = () => {
                     )}
                     <td style={{ padding: '0.75rem 1rem', fontSize: '0.875rem' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        <Link to={`/admin/applications/${app.id}`} style={{ fontWeight: 600, color: 'var(--primary)', textDecoration: 'none' }} onClick={(e) => e.stopPropagation()}>
+                        <Link to={`/admin/applications/${app.id}/view`} style={{ fontWeight: 600, color: 'var(--primary)', textDecoration: 'none' }} onClick={(e) => e.stopPropagation()}>
                           {app.id}
                         </Link>
                       </div>

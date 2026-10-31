@@ -1,98 +1,67 @@
 import React, { useState, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
-import { Search, CheckCircle2, FileText, Calendar, Building2, MapPin, XCircle, Clock, ExternalLink, Loader2 } from 'lucide-react';
+import { useLocation, Link } from 'react-router-dom';
+import { 
+  Search, CheckCircle2, FileText, Calendar, Building2, MapPin, 
+  XCircle, Clock, ExternalLink, Loader2, AlertTriangle, UserCheck,
+  CreditCard, Eye, ShieldCheck, Phone, Mail, HelpCircle, ArrowRight
+} from 'lucide-react';
 import { getApiUrl } from '../config/api';
 
-interface StageConfig {
+export interface StageItem {
+  name: string;
   key: string;
-  label: string;
-  description: string;
+  status: 'Completed' | 'In Progress' | 'Pending';
+  startedDate?: string | null;
+  completedDate?: string | null;
+  remarks?: string;
+  responsiblePerson?: string;
+  description?: string;
 }
 
-const STAGES: StageConfig[] = [
-  { key: 'submitted',    label: 'Application Submitted',   description: 'Application registered and initial details submitted.' },
-  { key: 'documents',    label: 'Document Collection',     description: 'Applicant documents received and queued for review.' },
-  { key: 'verification', label: 'Document Verification',   description: 'Identity, ownership, and plan documents verified.' },
-  { key: 'preparation',  label: 'Application Prepared',    description: 'Application dossier compiled for municipal filing.' },
-  { key: 'govt',         label: 'Government Submission',   description: 'Application forwarded to municipal planning portal.' },
-  { key: 'inspection',   label: 'Site Inspection',         description: 'Field officer inspection and geo-verification.' },
-  { key: 'govtverify',   label: 'Government Scrutiny',     description: 'Final planning authority technical scrutiny.' },
-  { key: 'approval',     label: 'Final Approval',          description: 'Official building plan approval order sanctioned.' },
+const OFFICIAL_STAGES: { key: string; name: string; description: string }[] = [
+  { key: 'stage_submitted', name: 'Application Submitted', description: 'Application registered and initial details submitted.' },
+  { key: 'stage_doc_verification', name: 'Document Verification', description: 'Identity, ownership, and building plan documents scrutiny.' },
+  { key: 'stage_payment', name: 'Payment Process', description: 'Municipal and scrutiny fee processing and clearance.' },
+  { key: 'stage_site_visit', name: 'Site Visit', description: 'Field officer inspection and geo-verification of the property site.' },
+  { key: 'stage_final_review', name: 'Final Review', description: 'Final planning authority technical scrutiny and report compilation.' },
+  { key: 'stage_completed', name: 'Application Completed', description: 'Official building plan approval order sanctioned and dispatched.' },
 ];
 
 const STATUS_TO_STAGE_INDEX: Record<string, number> = {
-  'Draft':                  0,
-  'New':                    0,
-  'INTAKE':                 1,
-  'Submitted':              1,
-  'SUBMITTED':              1,
-  'DOCUMENTS_PENDING':      1,
-  'Documents Pending':      1,
-  'Action Required':        1,
-  'ACTION_NEEDED':          1,
-  'DOCUMENTS_VERIFICATION': 2,
-  'Verification':           2,
-  'Document Verification':  2,
-  'DOCUMENTS_VERIFIED':     3,
-  'Documents Verified':     3,
-  'Under Review':           3,
-  'APPLICATION_PREP':       3,
-  'Application Prepared':   3,
-  'SUBMITTED_FOR_APPROVAL': 4,
-  'Govt Submission':        4,
-  'Government Submission':  4,
-  'GOVT_SUBMISSION':        4,
-  'Site Inspection':        5,
-  'INSPECTION_SCHEDULED':   5,
-  'Inspection Scheduled':   5,
-  'INSPECTION_DONE':        6,
-  'Gov Verification':       6,
-  'SCRUTINY':               6,
-  'Government Scrutiny':    6,
-  'Scrutiny':               6,
-  'Approved':               7,
-  'APPROVED':               7,
-  'Final Approval':         7,
-  'Sanctioned':             7,
-  'CLOSED':                 7,
-  'Rejected':               -1,
-  'REJECTED':               -1,
-};
-
-const STATUS_COLORS: Record<string, string> = {
-  'Draft':                  '#94a3b8',
-  'New':                    '#94a3b8',
-  'Submitted':              'var(--info-green)',
-  'SUBMITTED':              'var(--info-green)',
-  'DOCUMENTS_PENDING':      'var(--warning-gold)',
-  'Documents Pending':      'var(--warning-gold)',
-  'Action Required':        'var(--warning-gold)',
-  'ACTION_NEEDED':          'var(--warning-gold)',
-  'INTAKE':                 'var(--warning-gold)',
-  'DOCUMENTS_VERIFICATION': 'var(--primary)',
-  'Verification':           'var(--primary)',
-  'Document Verification':  'var(--primary)',
-  'DOCUMENTS_VERIFIED':     'var(--info-green)',
-  'Documents Verified':     'var(--info-green)',
-  'Under Review':           'var(--primary)',
-  'APPLICATION_PREP':       'var(--primary)',
-  'Application Prepared':   'var(--primary)',
-  'SUBMITTED_FOR_APPROVAL': 'var(--info-green)',
-  'Govt Submission':        'var(--info-green)',
-  'Government Submission':  'var(--info-green)',
-  'GOVT_SUBMISSION':        'var(--info-green)',
-  'Gov Verification':       'var(--primary-dark)',
-  'SCRUTINY':               'var(--primary-dark)',
-  'Government Scrutiny':    'var(--primary-dark)',
-  'Site Inspection':        'var(--warning-gold)',
-  'INSPECTION_SCHEDULED':   'var(--warning-gold)',
-  'INSPECTION_DONE':        'var(--warning-gold)',
-  'Approved':               'var(--success-green)',
-  'APPROVED':               'var(--success-green)',
-  'Final Approval':         'var(--success-green)',
-  'Sanctioned':             'var(--success-green)',
-  'Rejected':               'var(--error-red)',
-  'REJECTED':               'var(--error-red)',
+  'DRAFT': 0,
+  'NEW': 0,
+  'APPLICATION SUBMITTED': 0,
+  'SUBMITTED': 0,
+  'INTAKE': 0,
+  'DOCUMENT VERIFICATION': 1,
+  'DOCUMENTS_VERIFICATION': 1,
+  'DOCUMENTS_PENDING': 1,
+  'DOCUMENTS PENDING': 1,
+  'DOCUMENTS_VERIFIED': 1,
+  'DOCUMENTS VERIFIED': 1,
+  'ACTION REQUIRED': 1,
+  'ACTION_NEEDED': 1,
+  'UNDER REVIEW': 1,
+  'PAYMENT PROCESS': 2,
+  'PAYMENT_PENDING': 2,
+  'PAYMENT_COMPLETED': 2,
+  'SITE VISIT': 3,
+  'SITE_VISIT': 3,
+  'INSPECTION_SCHEDULED': 3,
+  'INSPECTION_DONE': 3,
+  'FINAL REVIEW': 4,
+  'FINAL_REVIEW': 4,
+  'SCRUTINY': 4,
+  'APPLICATION PREPARED': 4,
+  'APPLICATION_PREP': 4,
+  'GOVT_SUBMISSION': 4,
+  'APPLICATION COMPLETED': 5,
+  'APPROVED': 5,
+  'FINAL APPROVAL': 5,
+  'SANCTIONED': 5,
+  'CLOSED': 5,
+  'REJECTED': -1,
+  'REJECT': -1
 };
 
 const STANDARD_DOCS = [
@@ -100,9 +69,8 @@ const STANDARD_DOCS = [
   { key: 'CUSTOMER SIGNATURE', label: 'Applicant Signature' },
   { key: 'AADHAR CARD', label: 'Aadhaar Card' },
   { key: 'PAN CARD', label: 'PAN Card' },
-  { key: 'SALE DEED', label: 'Sale Deed / Land Document' },
+  { key: 'SALE DEED', altKey: 'LAND DOCUMENT', label: 'Sale Deed / Land Document' },
   { key: 'PATTA', label: 'Patta / Chitta' },
-  { key: 'FMB', label: 'FMB Sketch' },
   { key: 'BUILDING PLAN', label: 'Building Plan / Layout' },
 ];
 
@@ -113,7 +81,6 @@ export const getLocationDisplay = (caseData: any): string => {
   const pd = caseData.fullData?.propertyDetails || {};
   const rd = caseData.fullData?.residentialAddress || {};
 
-  // Check direct address
   if (prop.address && typeof prop.address === 'string') {
     const cleanAddr = prop.address.trim();
     if (cleanAddr && !cleanAddr.toLowerCase().includes('unknown') && cleanAddr !== 'Coimbatore, Tamil Nadu') {
@@ -121,7 +88,6 @@ export const getLocationDisplay = (caseData: any): string => {
     }
   }
 
-  // Check propertyDetails
   const propParts = [
     pd.village || pd.panchayat || prop.village,
     pd.taluk || prop.taluk,
@@ -130,11 +96,8 @@ export const getLocationDisplay = (caseData: any): string => {
     pd.pincode ? `PIN: ${pd.pincode}` : ''
   ].filter(p => Boolean(p) && p !== 'Unknown' && p !== 'TBD');
 
-  if (propParts.length > 0) {
-    return propParts.join(', ');
-  }
+  if (propParts.length > 0) return propParts.join(', ');
 
-  // Check residentialAddress
   const resParts = [
     rd.houseNo ? `D.No ${rd.houseNo}` : (rd.dno ? `D.No ${rd.dno}` : ''),
     rd.streetName || rd.street,
@@ -145,9 +108,7 @@ export const getLocationDisplay = (caseData: any): string => {
     rd.pincode ? `PIN: ${rd.pincode}` : ''
   ].filter(p => Boolean(p) && p !== 'Unknown' && p !== 'TBD');
 
-  if (resParts.length > 0) {
-    return resParts.join(', ');
-  }
+  if (resParts.length > 0) return resParts.join(', ');
 
   if (prop.village && prop.village !== 'Unknown' && prop.village !== 'TBD') {
     return `${prop.village}${prop.taluk && prop.taluk !== 'TBD' ? ', ' + prop.taluk : ''}`;
@@ -175,7 +136,6 @@ export const getSubmissionDateDisplay = (caseData: any): string => {
   if (!rawDate) return 'N/A';
 
   if (typeof rawDate === 'string') {
-    // If dd/mm/yyyy or dd-mm-yyyy format
     const match = rawDate.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
     if (match) {
       const d = parseInt(match[1], 10);
@@ -201,6 +161,21 @@ export const getSubmissionDateDisplay = (caseData: any): string => {
   return 'N/A';
 };
 
+const formatDateNice = (dStr?: string | null) => {
+  if (!dStr) return null;
+  try {
+    const d = new Date(dStr);
+    if (isNaN(d.getTime())) return dStr;
+    return d.toLocaleDateString('en-GB', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric'
+    });
+  } catch (e) {
+    return dStr;
+  }
+};
+
 const TrackApplication: React.FC = () => {
   const location = useLocation();
   const [appNumber, setAppNumber] = useState('');
@@ -210,6 +185,7 @@ const TrackApplication: React.FC = () => {
   const [appData, setAppData] = useState<any>(null);
   const [currentStatus, setCurrentStatus] = useState('');
   const [liveDocs, setLiveDocs] = useState<any[]>([]);
+  const [stagesList, setStagesList] = useState<StageItem[]>([]);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -239,7 +215,6 @@ const TrackApplication: React.FC = () => {
       return;
     }
 
-    // STRICT MOBILE VALIDATION: exactly 10 digits starting with 6, 7, 8, or 9
     if (!cleanMobile) {
       setError('Please enter your registered 10-digit mobile number.');
       return;
@@ -295,6 +270,7 @@ const TrackApplication: React.FC = () => {
         foundCase.property?.owner_phone ||
         foundCase.mobile ||
         foundCase.fullData?.mobile ||
+        foundCase.fullData?.phone ||
         ''
       ).toString().replace(/\D/g, '').slice(-10);
 
@@ -305,31 +281,32 @@ const TrackApplication: React.FC = () => {
         return;
       }
 
-      // 4. Calculate live, real documents from MongoDB case
+      // 4. Calculate live documents from MongoDB case
       const uploadedFiles = foundCase.uploadedFiles || {};
       const caseDocuments: any[] = Array.isArray(foundCase.documents) ? foundCase.documents : [];
       const requestedReuploads: string[] = Array.isArray(foundCase.requestedReuploads) ? foundCase.requestedReuploads : [];
-      const isCaseApproved = foundCase.status === 'APPROVED' || foundCase.status === 'Approved';
-      const isCaseVerified = isCaseApproved || foundCase.status === 'DOCUMENTS_VERIFIED';
+      const isCaseApproved = foundCase.status === 'APPROVED' || foundCase.status === 'Approved' || foundCase.status === 'Application Completed';
+      const isCaseVerified = isCaseApproved || foundCase.status === 'DOCUMENTS_VERIFIED' || foundCase.status === 'Documents Verified';
 
       const compiledDocs = STANDARD_DOCS.map(doc => {
-        // Find in uploadedFiles
-        let fileUrl = uploadedFiles[doc.key] || uploadedFiles[doc.label];
-        // Also check database Document records
+        let fileUrl = uploadedFiles[doc.key] || uploadedFiles[doc.label] || (doc.altKey ? uploadedFiles[doc.altKey] : null);
         const dbDoc = caseDocuments.find((d: any) => 
           (d.document_type || '').toUpperCase() === doc.key.toUpperCase() ||
-          (d.document_type || '').toUpperCase() === doc.label.toUpperCase()
+          (d.document_type || '').toUpperCase() === doc.label.toUpperCase() ||
+          (doc.altKey && (d.document_type || '').toUpperCase() === doc.altKey.toUpperCase())
         );
         if (dbDoc && dbDoc.file_key) fileUrl = dbDoc.file_key;
 
-        // Check if reupload was specifically requested
         const needsReupload = requestedReuploads.includes(doc.key) || (dbDoc && dbDoc.status === 'REJECTED');
+        const isVerified = isCaseVerified || (dbDoc && (dbDoc.verified || dbDoc.status === 'Verified' || dbDoc.status === 'VERIFIED'));
 
         let status = 'Pending Upload';
+        let reason = dbDoc?.review_notes || '';
+
         if (fileUrl) {
           if (needsReupload) {
             status = 'Needs Reupload';
-          } else if (isCaseVerified || (dbDoc && dbDoc.verified)) {
+          } else if (isVerified) {
             status = 'Verified';
           } else {
             status = 'Uploaded & Under Review';
@@ -340,13 +317,60 @@ const TrackApplication: React.FC = () => {
           id: doc.key,
           name: doc.label,
           status,
+          reason,
           fileUrl: typeof fileUrl === 'string' && fileUrl.startsWith('http') ? fileUrl : null
         };
       });
 
+      // 5. Build Stage-Wise Progress from database or defaults
+      const rawStages = foundCase.fullData?.stages || foundCase.stages;
+      const statusUpper = (foundCase.status || 'Application Submitted').toUpperCase();
+      const currentActiveIndex = STATUS_TO_STAGE_INDEX[statusUpper] !== undefined ? STATUS_TO_STAGE_INDEX[statusUpper] : 0;
+
+      let finalStages: StageItem[] = [];
+
+      if (Array.isArray(rawStages) && rawStages.length === 6) {
+        finalStages = rawStages.map((st: any, idx: number) => {
+          const config = OFFICIAL_STAGES[idx] || { key: `stage_${idx}`, name: st.name, description: '' };
+          return {
+            name: st.name || config.name,
+            key: st.key || config.key,
+            status: st.status || (idx < currentActiveIndex ? 'Completed' : idx === currentActiveIndex ? 'In Progress' : 'Pending'),
+            startedDate: st.startedDate || (idx <= currentActiveIndex ? (foundCase.created_at || new Date().toISOString()) : null),
+            completedDate: st.completedDate || (idx < currentActiveIndex ? (foundCase.created_at || new Date().toISOString()) : null),
+            remarks: st.remarks || (idx === 0 ? 'Application registered and initial details submitted.' : ''),
+            responsiblePerson: st.responsiblePerson || (idx === 0 ? 'Customer' : (foundCase.assigned_staff?.name || (foundCase.fullData as any)?.staff || 'CB Construction Team')),
+            description: config.description
+          };
+        });
+      } else {
+        finalStages = OFFICIAL_STAGES.map((cfg, idx) => {
+          let stageStatus: 'Completed' | 'In Progress' | 'Pending' = 'Pending';
+          if (statusUpper === 'APPLICATION COMPLETED' || statusUpper === 'APPROVED') {
+            stageStatus = 'Completed';
+          } else if (idx < currentActiveIndex) {
+            stageStatus = 'Completed';
+          } else if (idx === currentActiveIndex) {
+            stageStatus = 'In Progress';
+          }
+
+          return {
+            name: cfg.name,
+            key: cfg.key,
+            status: stageStatus,
+            startedDate: idx <= currentActiveIndex ? (foundCase.created_at || new Date().toISOString()) : null,
+            completedDate: idx < currentActiveIndex ? (foundCase.created_at || new Date().toISOString()) : null,
+            remarks: idx === 0 ? 'Application registered and initial details submitted.' : '',
+            responsiblePerson: idx === 0 ? 'Customer' : (foundCase.assigned_staff?.name || (foundCase.fullData as any)?.staff || 'CB Construction Team'),
+            description: cfg.description
+          };
+        });
+      }
+
       setLiveDocs(compiledDocs);
+      setStagesList(finalStages);
       setAppData(foundCase);
-      setCurrentStatus(foundCase.status || 'DOCUMENTS_PENDING');
+      setCurrentStatus(foundCase.status || 'Application Submitted');
       setIsTracking(true);
       setError('');
     } catch (err: any) {
@@ -356,55 +380,65 @@ const TrackApplication: React.FC = () => {
     }
   };
 
-  const stageIndex = (currentStatus === 'Rejected' || currentStatus === 'REJECTED') 
-    ? -1 
-    : (STATUS_TO_STAGE_INDEX[currentStatus] ?? 1);
-  const isRejected = currentStatus === 'Rejected' || currentStatus === 'REJECTED';
-  const statusColor = STATUS_COLORS[currentStatus] || '#94a3b8';
+  const isRejected = (currentStatus || '').toUpperCase() === 'REJECTED';
+  const hasReuploadRequired = liveDocs.some(d => d.status === 'Needs Reupload');
+  const reuploadDocs = liveDocs.filter(d => d.status === 'Needs Reupload');
+
+  const assignedWorkerName = 
+    appData?.assigned_staff?.name || 
+    (appData?.fullData?.staff && appData.fullData.staff !== 'Unassigned' ? appData.fullData.staff : null) || 
+    (appData?.staff && appData.staff !== 'Unassigned' ? appData.staff : null);
 
   const getDocStatusBadge = (status: string) => {
     switch (status) {
       case 'Verified':
         return { color: '#047857', bg: '#d1fae5', text: 'Verified' };
       case 'Needs Reupload':
-        return { color: '#b91c1c', bg: '#fee2e2', text: 'Needs Reupload' };
+        return { color: '#b91c1c', bg: '#fee2e2', text: 'Re-upload Required' };
       case 'Uploaded & Under Review':
         return { color: '#0369a1', bg: '#e0f2fe', text: 'Under Review' };
       default:
-        return { color: '#b45309', bg: '#fef3c7', text: 'Pending' };
+        return { color: '#b45309', bg: '#fef3c7', text: 'Pending Upload' };
     }
   };
 
   return (
-    <div style={{ paddingBottom: '4rem' }}>
+    <div style={{ paddingBottom: '4rem', minHeight: '80vh', backgroundColor: 'var(--bg-main, #f8fafc)' }}>
       {/* Header */}
-      <div style={{ backgroundColor: 'var(--bg-secondary)', padding: '4rem 0 2rem 0' }}>
-        <div className="container" style={{ textAlign: 'center', maxWidth: '600px' }}>
-          <h1 className="heading-2" style={{ marginBottom: '1rem' }}>Track Application Status</h1>
-          <p className="text-lead" style={{ fontSize: '1rem' }}>
-            Check real-time municipal approval progress and verified document status for your property.
+      <div style={{ backgroundColor: 'var(--primary, #1e3a8a)', color: '#ffffff', padding: '3.5rem 1rem 3rem 1rem', textAlign: 'center' }}>
+        <div style={{ maxWidth: '750px', margin: '0 auto' }}>
+          <h1 style={{ fontSize: '2.25rem', fontWeight: 800, marginBottom: '0.75rem', letterSpacing: '-0.02em', color: '#ffffff' }}>
+            Track Application Status
+          </h1>
+          <p style={{ fontSize: '1.05rem', color: 'rgba(255, 255, 255, 0.85)', lineHeight: 1.5, margin: 0 }}>
+            Real-time municipal building approval progress, stage-wise tracking, and document verification status.
           </p>
         </div>
       </div>
 
-      <div className="container" style={{ marginTop: '-2rem', position: 'relative', zIndex: 10 }}>
+      <div className="container" style={{ marginTop: '-2rem', position: 'relative', zIndex: 10, maxWidth: '1150px', margin: '-2rem auto 0 auto', padding: '0 1rem' }}>
         
-        {/* Search Form */}
-        <div className="card" style={{ maxWidth: '800px', margin: '0 auto', marginBottom: '3rem' }}>
-          <form onSubmit={handleTrack} style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', alignItems: 'flex-end' }}>
-            <div className="form-group" style={{ flex: '1 1 250px', marginBottom: 0 }}>
-              <label className="form-label">Application Reference Number *</label>
+        {/* Search Form Card */}
+        <div className="card" style={{ maxWidth: '850px', margin: '0 auto 2.5rem auto', padding: '1.75rem', borderRadius: '1rem', boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)', backgroundColor: 'var(--bg-surface, #ffffff)', border: '1px solid var(--border-color, #e2e8f0)' }}>
+          <form onSubmit={handleTrack} style={{ display: 'flex', flexWrap: 'wrap', gap: '1.25rem', alignItems: 'flex-end' }}>
+            <div style={{ flex: '1 1 260px' }}>
+              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary, #1e293b)', marginBottom: '0.5rem' }}>
+                Application Reference Number *
+              </label>
               <input 
                 type="text" 
                 className="form-input" 
-                placeholder="e.g. 7001 or APP-7001" 
+                placeholder="e.g. 1001 or APP-1001" 
                 value={appNumber}
                 onChange={(e) => setAppNumber(e.target.value)}
                 required
+                style={{ width: '100%', padding: '0.75rem 1rem', borderRadius: '0.5rem', border: '1.5px solid var(--border-color, #cbd5e1)', fontSize: '0.95rem' }}
               />
             </div>
-            <div className="form-group" style={{ flex: '1 1 250px', marginBottom: 0 }}>
-              <label className="form-label">Registered Mobile Number (10 Digits) *</label>
+            <div style={{ flex: '1 1 260px' }}>
+              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary, #1e293b)', marginBottom: '0.5rem' }}>
+                Registered Mobile Number (10 Digits) *
+              </label>
               <input 
                 type="tel" 
                 maxLength={10}
@@ -413,8 +447,9 @@ const TrackApplication: React.FC = () => {
                 value={mobileNumber}
                 onChange={(e) => setMobileNumber(e.target.value.replace(/\D/g, '').slice(0, 10))}
                 required
+                style={{ width: '100%', padding: '0.75rem 1rem', borderRadius: '0.5rem', border: '1.5px solid var(--border-color, #cbd5e1)', fontSize: '0.95rem' }}
               />
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary, #64748b)', marginTop: '0.35rem' }}>
                 Must be 10 digits starting with 6, 7, 8, or 9
               </div>
             </div>
@@ -422,103 +457,204 @@ const TrackApplication: React.FC = () => {
               type="submit" 
               disabled={isLoading}
               className="btn-primary" 
-              style={{ padding: '0.875rem 2rem', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '0.5rem', opacity: isLoading ? 0.7 : 1 }}
+              style={{ 
+                padding: '0.8rem 2.25rem', 
+                whiteSpace: 'nowrap', 
+                display: 'inline-flex', 
+                alignItems: 'center', 
+                justifyContent: 'center',
+                gap: '0.5rem', 
+                borderRadius: '0.5rem',
+                backgroundColor: 'var(--primary, #1e3a8a)',
+                color: '#ffffff',
+                fontWeight: 600,
+                fontSize: '1rem',
+                cursor: isLoading ? 'not-allowed' : 'pointer',
+                opacity: isLoading ? 0.75 : 1,
+                border: 'none',
+                minHeight: '48px'
+              }}
             >
               {isLoading ? <Loader2 size={18} className="animate-spin" /> : <Search size={18} />} 
-              {isLoading ? 'Checking...' : 'Track'}
+              {isLoading ? 'Checking...' : 'Track Application'}
             </button>
           </form>
         </div>
 
         {error && (
-          <div style={{ textAlign: 'center', color: 'var(--error-red)', marginBottom: '1rem', padding: '1rem', backgroundColor: '#fee2e2', borderRadius: '0.5rem', maxWidth: '800px', margin: '0 auto 2rem', border: '1px solid #fca5a5', fontWeight: 500 }}>
-            {error}
+          <div style={{ textAlign: 'center', color: '#b91c1c', marginBottom: '2rem', padding: '1rem 1.5rem', backgroundColor: '#fee2e2', borderRadius: '0.75rem', maxWidth: '850px', margin: '0 auto 2rem auto', border: '1px solid #fca5a5', fontWeight: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
+            <AlertTriangle size={20} color="#b91c1c" />
+            <span>{error}</span>
           </div>
         )}
 
-        {/* Results */}
+        {/* Tracking Results */}
         {isTracking && appData && (
-          <div className="card" style={{ maxWidth: '1000px', margin: '0 auto', padding: '0', overflow: 'hidden' }}>
+          <div className="card" style={{ maxWidth: '1100px', margin: '0 auto', padding: '0', overflow: 'hidden', borderRadius: '1rem', boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.08)', backgroundColor: 'var(--bg-surface, #ffffff)', border: '1px solid var(--border-color, #e2e8f0)' }}>
             
             {/* Header Banner */}
-            <div style={{ backgroundColor: isRejected ? 'var(--error-red)' : 'var(--primary)', color: 'white', padding: '2rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem', alignItems: 'center' }}>
-                <div>
-                  <div style={{ fontSize: '0.875rem', opacity: 0.85, marginBottom: '0.25rem', letterSpacing: '0.05em' }}>APPLICATION REFERENCE</div>
-                  <h2 style={{ fontSize: '2rem', fontWeight: 700, margin: 0 }}>
-                    {appData.application_number ? (appData.application_number.startsWith('APP-') ? appData.application_number : `APP-${appData.application_number}`) : appData.id}
-                  </h2>
+            <div style={{ 
+              backgroundColor: isRejected ? '#dc2626' : 'var(--primary, #1e3a8a)', 
+              color: 'white', 
+              padding: '1.75rem 2rem',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: '1rem'
+            }}>
+              <div>
+                <div style={{ fontSize: '0.8rem', opacity: 0.85, textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600, marginBottom: '0.25rem' }}>
+                  PROPOSAL REFERENCE
                 </div>
-                <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: '0.875rem', opacity: 0.85, marginBottom: '0.25rem', letterSpacing: '0.05em' }}>LIVE STATUS</div>
-                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', backgroundColor: 'white', color: 'var(--primary-dark)', padding: '0.5rem 1.25rem', borderRadius: '2rem', fontWeight: 700, boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
-                    <div style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: statusColor }}></div>
-                    {currentStatus.replace(/_/g, ' ')}
-                  </div>
+                <h2 style={{ fontSize: '1.85rem', fontWeight: 800, margin: 0, letterSpacing: '-0.01em', color: '#ffffff' }}>
+                  {appData.application_number ? (appData.application_number.startsWith('APP-') ? appData.application_number : `APP-${appData.application_number}`) : appData.id}
+                </h2>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: '0.8rem', opacity: 0.85, textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600, marginBottom: '0.35rem' }}>
+                  CURRENT STATUS
+                </div>
+                <div style={{ 
+                  display: 'inline-flex', 
+                  alignItems: 'center', 
+                  gap: '0.5rem', 
+                  backgroundColor: 'white', 
+                  color: isRejected ? '#dc2626' : 'var(--primary, #1e3a8a)', 
+                  padding: '0.45rem 1.25rem', 
+                  borderRadius: '2rem', 
+                  fontWeight: 700, 
+                  fontSize: '0.95rem',
+                  boxShadow: '0 2px 5px rgba(0,0,0,0.1)' 
+                }}>
+                  <div style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: isRejected ? '#dc2626' : '#10b981' }}></div>
+                  {currentStatus.replace(/_/g, ' ')}
                 </div>
               </div>
             </div>
 
+            {/* Re-upload Alert Box if needed */}
+            {hasReuploadRequired && (
+              <div style={{ backgroundColor: '#fffbeb', borderBottom: '1px solid #fde68a', padding: '1.25rem 2rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem' }}>
+                  <AlertTriangle size={22} color="#b45309" style={{ flexShrink: 0, marginTop: '2px' }} />
+                  <div>
+                    <div style={{ fontWeight: 700, color: '#92400e', fontSize: '0.95rem', marginBottom: '0.2rem' }}>
+                      Action Required: Document Re-upload Requested
+                    </div>
+                    <div style={{ fontSize: '0.85rem', color: '#78350f', lineHeight: 1.4 }}>
+                      The reviewer has requested updated documents: {reuploadDocs.map(d => d.name).join(', ')}. Please re-upload to proceed with verification.
+                    </div>
+                  </div>
+                </div>
+                <Link 
+                  to={`/upload/${appData.application_number || appData.id}`}
+                  style={{ 
+                    backgroundColor: '#d97706', 
+                    color: '#ffffff', 
+                    padding: '0.55rem 1.25rem', 
+                    borderRadius: '0.5rem', 
+                    fontWeight: 600, 
+                    fontSize: '0.875rem', 
+                    textDecoration: 'none',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.4rem',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+                  }}
+                >
+                  Re-upload Now <ArrowRight size={16} />
+                </Link>
+              </div>
+            )}
+
             <div style={{ padding: '2rem' }}>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '2.5rem' }}>
                 
-                {/* Details + Real Documents */}
-                <div style={{ flex: '1 1 340px' }}>
-                  <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--primary-dark)', marginBottom: '1.25rem', borderBottom: '2px solid var(--border-color)', paddingBottom: '0.5rem' }}>Application Details</h3>
+                {/* LEFT COLUMN: Customer Info + Documents */}
+                <div>
+                  <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--text-primary, #1e293b)', marginBottom: '1.25rem', borderBottom: '2px solid var(--border-color, #e2e8f0)', paddingBottom: '0.6rem' }}>
+                    Application Information
+                  </h3>
                   
-                  <div style={{ display: 'grid', gap: '1rem' }}>
-                    <div style={{ padding: '0.75rem', backgroundColor: 'var(--bg-secondary)', borderRadius: '0.5rem' }}>
-                      <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 600, marginBottom: '0.25rem' }}>APPLICANT NAME</div>
-                      <div style={{ fontWeight: 600, color: 'var(--primary-dark)', fontSize: '1rem' }}>
+                  <div style={{ display: 'grid', gap: '0.875rem' }}>
+                    <div style={{ padding: '0.875rem 1rem', backgroundColor: 'var(--bg-secondary, #f8fafc)', borderRadius: '0.625rem', border: '1px solid var(--border-color, #f1f5f9)' }}>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary, #64748b)', fontWeight: 600, textTransform: 'uppercase', marginBottom: '0.25rem', letterSpacing: '0.05em' }}>
+                        APPLICANT NAME
+                      </div>
+                      <div style={{ fontWeight: 700, color: 'var(--text-primary, #1e293b)', fontSize: '1.05rem' }}>
                         {appData.property?.owner_name || appData.fullData?.customerName || appData.applicantName || 'Applicant'}
                       </div>
                     </div>
 
-                    <div style={{ padding: '0.75rem', backgroundColor: 'var(--bg-secondary)', borderRadius: '0.5rem' }}>
-                      <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 600, marginBottom: '0.25rem' }}>APPROVAL TYPE</div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 500, color: 'var(--primary-dark)' }}>
-                        <Building2 size={16} color="var(--primary)" /> 
-                        {(appData.approval_type || appData.serviceType || 'BUILDING_PLAN_APPROVAL').replace(/_/g, ' ')}
+                    <div style={{ padding: '0.875rem 1rem', backgroundColor: 'var(--bg-secondary, #f8fafc)', borderRadius: '0.625rem', border: '1px solid var(--border-color, #f1f5f9)' }}>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary, #64748b)', fontWeight: 600, textTransform: 'uppercase', marginBottom: '0.25rem', letterSpacing: '0.05em' }}>
+                        PRODUCT / APPROVAL TYPE
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 600, color: 'var(--text-primary, #1e293b)' }}>
+                        <Building2 size={16} color="var(--primary, #1e3a8a)" /> 
+                        {(appData.approval_type || appData.serviceType || 'Building Plan Approval').replace(/_/g, ' ')}
                       </div>
                     </div>
 
-                    <div style={{ padding: '0.75rem', backgroundColor: 'var(--bg-secondary)', borderRadius: '0.5rem' }}>
-                      <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 600, marginBottom: '0.25rem' }}>PROPERTY LOCATION</div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 500, color: 'var(--primary-dark)' }}>
-                        <MapPin size={16} color="var(--primary)" /> 
-                        {getLocationDisplay(appData)}
+                    <div style={{ padding: '0.875rem 1rem', backgroundColor: 'var(--bg-secondary, #f8fafc)', borderRadius: '0.625rem', border: '1px solid var(--border-color, #f1f5f9)' }}>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary, #64748b)', fontWeight: 600, textTransform: 'uppercase', marginBottom: '0.25rem', letterSpacing: '0.05em' }}>
+                        PROPERTY LOCATION
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 600, color: 'var(--text-primary, #1e293b)', fontSize: '0.92rem' }}>
+                        <MapPin size={16} color="var(--primary, #1e3a8a)" style={{ flexShrink: 0 }} /> 
+                        <span>{getLocationDisplay(appData)}</span>
                       </div>
                     </div>
 
-                    <div style={{ padding: '0.75rem', backgroundColor: 'var(--bg-secondary)', borderRadius: '0.5rem' }}>
-                      <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 600, marginBottom: '0.25rem' }}>SUBMISSION DATE</div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 500, color: 'var(--primary-dark)' }}>
-                        <Calendar size={16} color="var(--primary)" /> 
+                    <div style={{ padding: '0.875rem 1rem', backgroundColor: 'var(--bg-secondary, #f8fafc)', borderRadius: '0.625rem', border: '1px solid var(--border-color, #f1f5f9)' }}>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary, #64748b)', fontWeight: 600, textTransform: 'uppercase', marginBottom: '0.25rem', letterSpacing: '0.05em' }}>
+                        SUBMISSION DATE
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 600, color: 'var(--text-primary, #1e293b)' }}>
+                        <Calendar size={16} color="var(--primary, #1e3a8a)" /> 
                         {getSubmissionDateDisplay(appData)}
+                      </div>
+                    </div>
+
+                    <div style={{ padding: '0.875rem 1rem', backgroundColor: 'var(--bg-secondary, #f8fafc)', borderRadius: '0.625rem', border: '1px solid var(--border-color, #f1f5f9)' }}>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary, #64748b)', fontWeight: 600, textTransform: 'uppercase', marginBottom: '0.25rem', letterSpacing: '0.05em' }}>
+                        ASSIGNED OFFICER / WORKER
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 600 }}>
+                        <UserCheck size={16} color="var(--primary, #1e3a8a)" />
+                        {assignedWorkerName ? (
+                          <span style={{ color: '#047857' }}>{assignedWorkerName}</span>
+                        ) : (
+                          <span style={{ color: '#b45309', backgroundColor: '#fef3c7', padding: '0.15rem 0.6rem', borderRadius: '1rem', fontSize: '0.8rem' }}>
+                            Under Review / Assignment Pending
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
 
-                  {/* Real Live Documents */}
-                  <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--primary-dark)', marginBottom: '1rem', marginTop: '2.5rem', borderBottom: '2px solid var(--border-color)', paddingBottom: '0.5rem' }}>
+                  {/* Document Verification Checklist */}
+                  <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--text-primary, #1e293b)', marginBottom: '1rem', marginTop: '2.25rem', borderBottom: '2px solid var(--border-color, #e2e8f0)', paddingBottom: '0.6rem' }}>
                     Document Verification Status
                   </h3>
+                  
                   <div style={{ display: 'grid', gap: '0.625rem' }}>
                     {liveDocs.map((doc, i) => {
                       const badge = getDocStatusBadge(doc.status);
                       return (
-                        <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem 1rem', backgroundColor: 'var(--bg-secondary)', borderRadius: '0.5rem', border: '1px solid var(--border-color)' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', fontSize: '0.875rem', fontWeight: 500, color: 'var(--primary-dark)' }}>
-                            <FileText size={16} color="var(--primary)" />
+                        <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem 1rem', backgroundColor: 'var(--bg-secondary, #f8fafc)', borderRadius: '0.5rem', border: '1px solid var(--border-color, #e2e8f0)' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary, #1e293b)' }}>
+                            <FileText size={16} color="var(--primary, #1e3a8a)" />
                             <span>{doc.name}</span>
                           </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
                             <span style={{ 
                               fontSize: '0.75rem', 
                               fontWeight: 700, 
                               color: badge.color, 
                               backgroundColor: badge.bg, 
-                              padding: '0.2rem 0.6rem', 
+                              padding: '0.2rem 0.65rem', 
                               borderRadius: '1rem' 
                             }}>
                               {badge.text}
@@ -528,10 +664,10 @@ const TrackApplication: React.FC = () => {
                                 href={doc.fileUrl} 
                                 target="_blank" 
                                 rel="noopener noreferrer" 
-                                title="View uploaded file"
-                                style={{ display: 'flex', alignItems: 'center', color: 'var(--primary)', padding: '0.2rem' }}
+                                title="View uploaded document"
+                                style={{ display: 'flex', alignItems: 'center', color: 'var(--primary, #1e3a8a)', padding: '0.2rem' }}
                               >
-                                <ExternalLink size={14} />
+                                <ExternalLink size={15} />
                               </a>
                             )}
                           </div>
@@ -539,54 +675,128 @@ const TrackApplication: React.FC = () => {
                       );
                     })}
                   </div>
+
+                  {/* Support Info Box */}
+                  <div style={{ marginTop: '2rem', padding: '1.25rem', borderRadius: '0.75rem', backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0' }}>
+                    <div style={{ fontSize: '0.9rem', fontWeight: 700, color: '#166534', marginBottom: '0.4rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <HelpCircle size={17} /> Need Assistance?
+                    </div>
+                    <div style={{ fontSize: '0.825rem', color: '#15803d', lineHeight: 1.4, marginBottom: '0.75rem' }}>
+                      For queries regarding municipal approval or document submissions, contact our support desk:
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', fontSize: '0.825rem', color: '#166534' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <Phone size={14} /> <strong>+91 8940206541</strong>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <Mail size={14} /> <span>cb.construction2019@gmail.com</span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
-                {/* Progress Timeline */}
-                <div style={{ flex: '1 1 340px' }}>
-                  <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--primary-dark)', marginBottom: '1.25rem', borderBottom: '2px solid var(--border-color)', paddingBottom: '0.5rem' }}>Approval Milestones</h3>
+                {/* RIGHT COLUMN: The 6 Stage-Wise Progress Timeline */}
+                <div>
+                  <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--text-primary, #1e293b)', marginBottom: '1.25rem', borderBottom: '2px solid var(--border-color, #e2e8f0)', paddingBottom: '0.6rem' }}>
+                    Stage-Wise Progress
+                  </h3>
                   
                   {isRejected ? (
                     <div style={{ padding: '2rem', backgroundColor: '#fee2e2', borderRadius: '0.75rem', textAlign: 'center', border: '1px solid #fca5a5' }}>
-                      <XCircle size={48} color="var(--error-red)" style={{ marginBottom: '1rem' }} />
-                      <div style={{ fontSize: '1.125rem', fontWeight: 700, color: 'var(--error-red)', marginBottom: '0.5rem' }}>Application Rejected</div>
-                      <div style={{ fontSize: '0.875rem', color: '#6b7280' }}>
-                        Your application was not approved during technical scrutiny. Please contact our liaison officer for rectification guidance.
+                      <XCircle size={48} color="#dc2626" style={{ marginBottom: '1rem', margin: '0 auto' }} />
+                      <div style={{ fontSize: '1.15rem', fontWeight: 700, color: '#b91c1c', marginBottom: '0.5rem' }}>Application Rejected</div>
+                      <div style={{ fontSize: '0.875rem', color: '#6b7280', lineHeight: 1.5 }}>
+                        Your application was not approved during technical scrutiny. Please contact our liaison officer for rectification guidance and re-submission support.
                       </div>
                     </div>
                   ) : (
-                    <div style={{ position: 'relative', paddingLeft: '1.75rem' }}>
-                      {/* Vertical Progress Line */}
-                      <div style={{ position: 'absolute', top: '12px', bottom: '20px', left: '8px', width: '2px', backgroundColor: 'var(--border-color)' }}></div>
+                    <div style={{ position: 'relative', paddingLeft: '2rem' }}>
+                      {/* Vertical Connecting Line */}
+                      <div style={{ position: 'absolute', top: '14px', bottom: '24px', left: '10px', width: '2px', backgroundColor: '#e2e8f0' }}></div>
                       
-                      {STAGES.map((stage, index) => {
-                        const isDone    = index < stageIndex;
-                        const isCurrent = index === stageIndex;
-                        const isPending = index > stageIndex;
+                      {stagesList.map((stage, index) => {
+                        const isDone = stage.status === 'Completed';
+                        const isCurrent = stage.status === 'In Progress';
+                        const isPending = stage.status === 'Pending';
 
                         return (
-                          <div key={stage.key} style={{ position: 'relative', paddingBottom: '1.5rem', opacity: isPending ? 0.45 : 1, transition: 'opacity 0.3s' }}>
-                            <div style={{ position: 'absolute', left: '-1.75rem', backgroundColor: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2px 0' }}>
+                          <div 
+                            key={stage.key || index} 
+                            style={{ 
+                              position: 'relative', 
+                              paddingBottom: index === stagesList.length - 1 ? '0.5rem' : '1.75rem', 
+                              opacity: isPending ? 0.55 : 1, 
+                              transition: 'opacity 0.3s' 
+                            }}
+                          >
+                            {/* Marker Icon on Timeline */}
+                            <div style={{ position: 'absolute', left: '-2rem', backgroundColor: 'var(--bg-surface, #ffffff)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2px 0' }}>
                               {isDone ? (
-                                <CheckCircle2 color="var(--success-green)" size={20} style={{ backgroundColor: 'white' }} />
+                                <CheckCircle2 color="#10b981" size={22} style={{ backgroundColor: 'white' }} />
                               ) : isCurrent ? (
-                                <div style={{ width: '18px', height: '18px', borderRadius: '50%', border: '4px solid var(--primary)', backgroundColor: 'white', boxSizing: 'border-box' }}></div>
+                                <div style={{ width: '22px', height: '22px', borderRadius: '50%', border: '4px solid var(--primary, #1e3a8a)', backgroundColor: '#ffffff', boxSizing: 'border-box' }}></div>
                               ) : (
-                                <div style={{ width: '14px', height: '14px', borderRadius: '50%', border: '2px solid var(--text-secondary)', backgroundColor: 'white', boxSizing: 'border-box', marginLeft: '2px' }}></div>
+                                <div style={{ width: '16px', height: '16px', borderRadius: '50%', border: '2px solid #94a3b8', backgroundColor: '#ffffff', boxSizing: 'border-box', marginLeft: '3px' }}></div>
                               )}
                             </div>
-                            <div style={{ fontWeight: 600, color: isCurrent ? 'var(--primary)' : isDone ? 'var(--primary-dark)' : 'var(--text-secondary)', marginBottom: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                              {stage.label}
-                              {isCurrent && <span style={{ fontSize: '0.65rem', backgroundColor: 'rgba(30, 58, 138, 0.08)', color: 'var(--primary)', padding: '0.15rem 0.6rem', borderRadius: '1rem', fontWeight: 700 }}>CURRENT STEP</span>}
+
+                            {/* Stage Header */}
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.25rem' }}>
+                              <div style={{ 
+                                fontWeight: 700, 
+                                fontSize: '1rem',
+                                color: isCurrent ? 'var(--primary, #1e3a8a)' : isDone ? 'var(--text-primary, #1e293b)' : '#64748b' 
+                              }}>
+                                {index + 1}. {stage.name}
+                              </div>
+                              
+                              <div>
+                                {isDone && (
+                                  <span style={{ fontSize: '0.725rem', backgroundColor: '#d1fae5', color: '#047857', padding: '0.15rem 0.6rem', borderRadius: '1rem', fontWeight: 700 }}>
+                                    Completed
+                                  </span>
+                                )}
+                                {isCurrent && (
+                                  <span style={{ fontSize: '0.725rem', backgroundColor: '#e0f2fe', color: '#0369a1', padding: '0.15rem 0.6rem', borderRadius: '1rem', fontWeight: 700 }}>
+                                    Current Stage
+                                  </span>
+                                )}
+                                {isPending && (
+                                  <span style={{ fontSize: '0.725rem', backgroundColor: '#f1f5f9', color: '#64748b', padding: '0.15rem 0.6rem', borderRadius: '1rem', fontWeight: 600 }}>
+                                    Pending
+                                  </span>
+                                )}
+                              </div>
                             </div>
-                            <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: 1.4 }}>{stage.description}</div>
-                            {isDone && (
-                              <div style={{ fontSize: '0.75rem', color: 'var(--success-green)', marginTop: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.25rem', fontWeight: 600 }}>
-                                <CheckCircle2 size={12} /> Completed
+
+                            {/* Stage Description */}
+                            <div style={{ fontSize: '0.85rem', color: '#64748b', lineHeight: 1.4, marginBottom: '0.4rem' }}>
+                              {stage.description || OFFICIAL_STAGES[index]?.description}
+                            </div>
+
+                            {/* Completed / Started Date */}
+                            {(stage.completedDate || stage.startedDate) && (
+                              <div style={{ fontSize: '0.75rem', color: isDone ? '#047857' : '#0369a1', display: 'flex', alignItems: 'center', gap: '0.35rem', fontWeight: 600, marginBottom: '0.35rem' }}>
+                                <Calendar size={13} />
+                                {isDone && stage.completedDate ? (
+                                  <span>Completed on {formatDateNice(stage.completedDate)}</span>
+                                ) : (
+                                  <span>Initiated on {formatDateNice(stage.startedDate)}</span>
+                                )}
                               </div>
                             )}
-                            {isCurrent && (
-                              <div style={{ fontSize: '0.75rem', color: 'var(--primary)', marginTop: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.25rem', fontWeight: 600 }}>
-                                <Clock size={12} /> In Progress
+
+                            {/* Remarks from Admin/Worker */}
+                            {stage.remarks && (
+                              <div style={{ fontSize: '0.8rem', backgroundColor: 'var(--bg-secondary, #f8fafc)', borderLeft: '3px solid var(--primary, #1e3a8a)', padding: '0.45rem 0.75rem', borderRadius: '0 0.375rem 0.375rem 0', color: 'var(--text-primary, #334155)', margin: '0.4rem 0', lineHeight: 1.4 }}>
+                                <strong>Remarks:</strong> {stage.remarks}
+                              </div>
+                            )}
+
+                            {/* Responsible Person */}
+                            {stage.responsiblePerson && (
+                              <div style={{ fontSize: '0.725rem', color: '#64748b' }}>
+                                Responsible: <span style={{ fontWeight: 600, color: 'var(--text-primary, #334155)' }}>{stage.responsiblePerson}</span>
                               </div>
                             )}
                           </div>
@@ -594,7 +804,13 @@ const TrackApplication: React.FC = () => {
                       })}
                     </div>
                   )}
+
+                  {/* Stage Policy Footer */}
+                  <div style={{ marginTop: '2rem', padding: '1rem', borderRadius: '0.5rem', backgroundColor: 'var(--bg-secondary, #f8fafc)', border: '1px solid var(--border-color, #e2e8f0)', fontSize: '0.75rem', color: '#64748b', lineHeight: 1.5 }}>
+                    <strong>Approval Policy:</strong> Document Verification requires all mandatory identity and ownership documents to be validated. Building sanction orders are cleared only after final scrutiny.
+                  </div>
                 </div>
+
               </div>
             </div>
           </div>

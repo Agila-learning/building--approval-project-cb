@@ -4,12 +4,13 @@ import {
   LayoutDashboard, FileText, 
   PhoneCall, 
   User, LogOut, Building, CalendarClock,
-  X, ChevronLeft, ChevronRight
+  X, ChevronLeft, ChevronRight, ClipboardList
 } from 'lucide-react';
 
 const menuItems = [
   { title: 'Dashboard', icon: <LayoutDashboard size={20} />, path: '/employee' },
   { title: 'My Applications', icon: <FileText size={20} />, path: '/employee/applications' },
+  { title: 'Documents', icon: <ClipboardList size={20} />, path: '/employee/documents' },
   { title: 'Attendance', icon: <CalendarClock size={20} />, path: '/employee/attendance' },
   { title: 'Enquiries', icon: <PhoneCall size={20} />, path: '/employee/followups' },
   { title: 'Profile', icon: <User size={20} />, path: '/employee/profile' },

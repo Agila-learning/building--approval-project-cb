@@ -35,6 +35,9 @@ import Receipts from './pages/admin/Receipts';
 import Quotations from './pages/admin/Quotations';
 import ApplicationPDF from './pages/admin/ApplicationPDF';
 import CashBook from './pages/admin/CashBook';
+import ApplicationEdit from './pages/admin/ApplicationEdit';
+import ApplicationView from './pages/admin/ApplicationView';
+import DocumentsManagement from './pages/admin/DocumentsManagement';
 
 function App() {
   useEffect(() => {
@@ -131,7 +134,9 @@ function App() {
             {/* Applications Module */}
             <Route path="applications" element={<ApplicationsList />} />
             <Route path="applications/new" element={<ApplicationDetail />} />
-            <Route path="applications/:id" element={<ApplicationDetail />} />
+            <Route path="applications/:id/edit" element={<ApplicationEdit />} />
+            <Route path="applications/:id/view" element={<ApplicationView />} />
+            <Route path="applications/:id" element={<ApplicationView />} />
             
             {/* Customers Module */}
             <Route path="customers" element={<CustomersList />} />
@@ -146,7 +151,8 @@ function App() {
             
             {/* Fallbacks for other routes */}
             <Route path="properties/*" element={<div style={{padding:'2rem'}}><h2>Properties Module</h2><p>Coming soon...</p></div>} />
-            <Route path="documents/*" element={<div style={{padding:'2rem'}}><h2>Documents Module</h2><p>Coming soon...</p></div>} />
+            <Route path="documents" element={<DocumentsManagement />} />
+            <Route path="documents/*" element={<DocumentsManagement />} />
             <Route path="workflow/*" element={<div style={{padding:'2rem'}}><h2>Workflow Module</h2><p>Coming soon...</p></div>} />
             <Route path="payments" element={<PaymentsList />} />
             <Route path="payments/:id" element={<PaymentDetail />} />
@@ -172,7 +178,9 @@ function App() {
             {/* Application Module */}
             <Route path="applications" element={<MyApplications />} />
             <Route path="applications/new" element={<ApplicationDetail />} />
-            <Route path="applications/:id" element={<ApplicationDetail />} />
+            <Route path="applications/:id" element={<ApplicationView />} />
+            <Route path="documents" element={<DocumentsManagement />} />
+            <Route path="documents/*" element={<DocumentsManagement />} />
             
             {/* Routes */}
             <Route path="attendance" element={<EmployeeAttendance />} />
