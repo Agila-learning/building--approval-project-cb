@@ -278,10 +278,12 @@ export class CaseController {
             try {
               const uName = (req.headers['x-user-name'] as string) || staffLookup;
               const uStaffId = (req.headers['x-staff-id'] as string) || `EMP-${Math.floor(100 + Math.random() * 900)}`;
+              const autoPhone = `999${Math.floor(1000000 + Math.random() * 9000000)}`;
               foundStaff = await prisma.user.create({
                 data: {
                   name: uName,
                   staffId: uStaffId,
+                  phone: autoPhone,
                   email: `${uName.toLowerCase().replace(/[^a-z0-9]/g, '')}@buildingapproval.in`,
                   role: 'STAFF',
                   password_hash: 'default'
