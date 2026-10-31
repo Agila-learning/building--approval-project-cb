@@ -480,6 +480,19 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
         }
         if (!perm.state) errors.push('perm_state');
       }
+
+      // Strictly validate Step 1 Mandatory Documents before moving to Step 2
+      const step1MissingDocs: string[] = [];
+      if (!uploadedFiles['CUSTOMER PHOTOGRAPH']) step1MissingDocs.push('CUSTOMER PHOTOGRAPH');
+      if (!uploadedFiles['CUSTOMER SIGNATURE']) step1MissingDocs.push('CUSTOMER SIGNATURE');
+      if (!uploadedFiles['AADHAR CARD'] && !formData.aadhar) step1MissingDocs.push('AADHAR CARD');
+      if (!uploadedFiles['PAN CARD'] && !formData.pan) step1MissingDocs.push('PAN CARD');
+
+      if (step1MissingDocs.length > 0) {
+        setMissingDocErrors(prev => Array.from(new Set([...prev, ...step1MissingDocs])));
+        toast.error("Please upload Customer Photo, Signature, Aadhaar & PAN on Step 1 before proceeding.");
+        return;
+      }
     }
     
     // Validation for Step 2
@@ -1075,13 +1088,31 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
         <h3 style={{ fontSize: '1.125rem', fontWeight: 600, color: 'var(--primary-dark)', display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0 }}>
           <Building size={20} color="var(--primary)" /> Property Details
         </h3>
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
+      </div>
 
-          <button 
-            onClick={(e) => { e.preventDefault(); setDocUploadType('LAND DOCUMENT'); setIsUploadModalOpen(true); }}
-            title="Upload Property Documents" 
-            style={{ background: 'white', border: '1px solid var(--border-color)', borderRadius: '0.25rem', padding: '0.4rem', color: 'var(--primary)', cursor: 'pointer', display: 'flex', boxShadow: '0 1px 2px rgba(0,0,0,0.1)' }}>
-            <Upload size={18} />
+      {/* Clear Property Ownership Document Upload Slot */}
+      <div style={{ padding: '1.25rem', border: '1px dashed var(--border-color)', borderRadius: '0.5rem', backgroundColor: '#f8fafc', marginBottom: '1.75rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
+        <div>
+          <div style={{ fontWeight: 600, color: 'var(--primary-dark)', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <FileText size={18} color="var(--primary)" /> Property Ownership Document (Sale Deed / Title Deed / Patta Copy)
+          </div>
+          <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
+            Upload registered Sale Deed, Title Deed, or Patta copy proving ownership of the property (PDF or Image).
+          </div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          {(uploadedFiles['SALE DEED'] || uploadedFiles['LAND DOCUMENT']) ? (
+            <span style={{ fontSize: '0.85rem', color: '#16a34a', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+              <CheckCircle size={16} /> Document Uploaded
+            </span>
+          ) : null}
+          <button
+            type="button"
+            onClick={(e) => { e.preventDefault(); setDocUploadType('SALE DEED'); setIsUploadModalOpen(true); }}
+            className="btn-primary"
+            style={{ padding: '0.45rem 1rem', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+          >
+            <Upload size={15} /> {(uploadedFiles['SALE DEED'] || uploadedFiles['LAND DOCUMENT']) ? 'Change Document' : 'Upload Document'}
           </button>
         </div>
       </div>

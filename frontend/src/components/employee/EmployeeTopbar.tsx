@@ -115,6 +115,34 @@ const EmployeeTopbar: React.FC<EmployeeTopbarProps> = ({ toggleSidebar, isSideba
             </span>
           </button>
         )}
+        <button
+          type="button"
+          className="desktop-sidebar-toggle-btn"
+          onClick={() => {
+            const isColl = localStorage.getItem('employee_sidebar_collapsed') === 'true';
+            localStorage.setItem('employee_sidebar_collapsed', (!isColl).toString());
+            window.dispatchEvent(new Event('employee_sidebar_toggle'));
+          }}
+          aria-label="Toggle sidebar width"
+          title="Toggle sidebar (Minimise / Maximise)"
+          style={{
+            background: 'none',
+            border: '1px solid var(--border-color)',
+            borderRadius: '6px',
+            color: 'var(--text-primary)',
+            padding: '0.35rem 0.5rem',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '0.35rem',
+            fontSize: '0.75rem',
+            fontWeight: 600,
+            transition: 'all 0.2s',
+          }}
+        >
+          <Menu size={16} />
+        </button>
         <div>
           <h1 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--primary-dark)', marginBottom: '0.1rem' }}>{currentPage}</h1>
           <div className="hidden-mobile-xs" style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
@@ -251,15 +279,17 @@ const EmployeeTopbar: React.FC<EmployeeTopbarProps> = ({ toggleSidebar, isSideba
                           setNotifications(prev => prev.map(n => n.id === notif.id ? { ...n, read: true } : n));
                         }
                         if (notif.case_id) {
-                          navigate(`/employee/tasks`);
-                          setShowNotifications(false);
+                          navigate(`/employee/applications/${notif.case_id}`);
+                        } else {
+                          navigate(`/employee/applications`);
                         }
+                        setShowNotifications(false);
                       }}
                       style={{
                         padding: '0.85rem 1rem',
                         borderBottom: '1px solid var(--border-color)',
                         backgroundColor: notif.read ? '#fff' : '#f8fafc',
-                        cursor: notif.case_id ? 'pointer' : 'default',
+                        cursor: 'pointer',
                         transition: 'background-color 0.2s',
                         display: 'flex',
                         gap: '0.75rem'

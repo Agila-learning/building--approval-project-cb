@@ -12,10 +12,14 @@ const Login: React.FC = () => {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Admin login (hardcoded for now as it seems there is no admin in DB)
+    // Admin login
     if (email === 'admin@test.com' || email === 'admin') {
       if (password === 'admin123') {
         localStorage.setItem('loggedInUser', 'Admin');
+        localStorage.setItem('userRole', 'ADMIN');
+        localStorage.setItem('token', 'admin-token-cb-approvals');
+        localStorage.removeItem('staffId');
+        toast.success('Welcome back, Admin!');
         navigate('/admin');
         return;
       } else {

@@ -88,9 +88,18 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, setIsOpen, isCollap
   return (
     <aside className={`admin-sidebar sidebar-container ${isOpen ? 'sidebar-open' : ''} ${isCollapsed ? 'sidebar-collapsed' : ''}`} style={{ backgroundColor: 'var(--sidebar-bg)' }}>
       {/* Logo Area */}
-      <div style={{ padding: '1.25rem 15px', borderBottom: '1px solid rgba(255,255,255,0.05)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          <div style={{ backgroundColor: '#fff', borderRadius: '4px', padding: '2px', display: 'flex' }}>
+      <div style={{ 
+        padding: isCollapsed ? '1rem 0' : '1.25rem 15px', 
+        borderBottom: '1px solid rgba(255,255,255,0.08)', 
+        flexShrink: 0, 
+        display: 'flex', 
+        flexDirection: isCollapsed ? 'column' : 'row',
+        alignItems: 'center', 
+        justifyContent: isCollapsed ? 'center' : 'space-between',
+        gap: isCollapsed ? '0.75rem' : '0.5rem'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', justifyContent: isCollapsed ? 'center' : 'flex-start' }}>
+          <div style={{ backgroundColor: '#fff', borderRadius: '4px', padding: '2px', display: 'flex', flexShrink: 0 }}>
             <img src="/assets/logo.jpeg" alt="C.B. Building Approvals Logo" style={{ width: '36px', height: '36px', objectFit: 'contain' }} />
           </div>
           <div className="sidebar-logo-text">
@@ -107,8 +116,8 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, setIsOpen, isCollap
             aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
             title={isCollapsed ? "Expand sidebar (250px)" : "Collapse sidebar (70px)"}
             style={{
-              background: 'rgba(255,255,255,0.08)',
-              border: 'none',
+              background: 'rgba(255,255,255,0.12)',
+              border: '1px solid rgba(255,255,255,0.15)',
               borderRadius: '6px',
               color: 'var(--bg-surface)',
               cursor: 'pointer',
@@ -116,10 +125,10 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, setIsOpen, isCollap
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              transition: 'background-color 0.2s',
+              transition: 'all 0.2s',
             }}
-            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.15)'}
-            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.08)'}
+            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.22)'}
+            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.12)'}
           >
             {isCollapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
           </button>

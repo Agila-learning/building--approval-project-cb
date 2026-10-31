@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { 
   FileText, CheckCircle2, Clock, AlertTriangle, Search, Eye, 
-  Download, Filter, RefreshCw, X, Check, ShieldCheck, User
+  Download, Filter, RefreshCw, X, Check, ShieldCheck, User, MessageCircle
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getApiUrl } from '../../config/api';
@@ -12,13 +12,17 @@ interface DocumentRecord {
   caseId: string;
   proposalNumber: string;
   customerName: string;
+  customerPhone?: string;
   docKey: string;
+  documentKey?: string;
   name: string;
   fileUrl: string;
   uploadedAt: string;
   status: 'Pending Review' | 'Verified' | 'Re-upload Required';
+  verificationStatus?: string;
   verifiedBy?: string;
   reuploadReason?: string;
+  rejectionReason?: string;
 }
 
 const DocumentsManagement: React.FC = () => {
@@ -100,9 +104,23 @@ const DocumentsManagement: React.FC = () => {
     });
   }, [documents, filterStatus, searchTerm]);
 
+  const sendWhatsAppReupload = (doc: DocumentRecord) => {
+    const rawPhone = doc.customerPhone || '';
+    const cleanPhone = rawPhone.replace(/\D/g, '').slice(-10);
+    const origin = window.location.origin;
+    const uploadUrl = `${origin}/upload/${doc.caseId}`;
+    const text = `Dear ${doc.customerName}, CB Building Approvals requires you to re-upload "${doc.name}" for Application Proposal #${doc.proposalNumber}.\n\nReason: ${doc.reuploadReason || 'Please upload a clearer copy.'}\n\nPlease click the link below to upload your document securely:\n${uploadUrl}\n\nThank you,\nCB Building Approvals`;
+    
+    const waUrl = cleanPhone 
+      ? `https://wa.me/91${cleanPhone}?text=${encodeURIComponent(text)}`
+      : `https://wa.me/?text=${encodeURIComponent(text)}`;
+    window.open(waUrl, '_blank');
+  };
+
   const handleVerify = async (doc: DocumentRecord) => {
     try {
       const apiUrl = getApiUrl();
+      const targetKey = doc.docKey || doc.documentKey || doc.id.split('_').slice(1).join('_');
       const res = await fetch(`${apiUrl}/documents/verify-status`, {
         method: 'POST',
         headers: {
@@ -112,7 +130,8 @@ const DocumentsManagement: React.FC = () => {
         },
         body: JSON.stringify({
           caseId: doc.caseId,
-          docKey: doc.docKey,
+          docKey: targetKey,
+          documentKey: targetKey,
           status: 'Verified',
           verifiedBy: loggedInUser
         })
@@ -120,9 +139,10 @@ const DocumentsManagement: React.FC = () => {
 
       if (res.ok) {
         toast.success(`${doc.name} marked as Verified!`);
-        setDocuments(prev => prev.map(d => (d.caseId === doc.caseId && d.docKey === doc.docKey) ? { ...d, status: 'Verified', verifiedBy: loggedInUser } : d));
+        setDocuments(prev => prev.map(d => (d.caseId === doc.caseId && (d.docKey === doc.docKey || d.id === doc.id)) ? { ...d, status: 'Verified', verificationStatus: 'Verified', verifiedBy: loggedInUser } : d));
       } else {
-        toast.error('Failed to update verification status.');
+        const errJson = await res.json().catch(() => ({}));
+        toast.error(errJson.error || 'Failed to update verification status.');
       }
     } catch (e) {
       toast.error('Error connecting to server.');
@@ -146,6 +166,7 @@ const DocumentsManagement: React.FC = () => {
     setIsSubmittingReupload(true);
     try {
       const apiUrl = getApiUrl();
+      const targetKey = reuploadTarget.docKey || reuploadTarget.documentKey || reuploadTarget.id.split('_').slice(1).join('_');
       const res = await fetch(`${apiUrl}/documents/verify-status`, {
         method: 'POST',
         headers: {
@@ -155,19 +176,32 @@ const DocumentsManagement: React.FC = () => {
         },
         body: JSON.stringify({
           caseId: reuploadTarget.caseId,
-          docKey: reuploadTarget.docKey,
+          docKey: targetKey,
+          documentKey: targetKey,
           status: 'Re-upload Required',
           verifiedBy: loggedInUser,
-          reuploadReason: reuploadReason.trim()
+          reuploadReason: reuploadReason.trim(),
+          rejectionReason: reuploadReason.trim()
         })
       });
 
       if (res.ok) {
         toast.success(`Marked ${reuploadTarget.name} for re-upload.`);
-        setDocuments(prev => prev.map(d => (d.caseId === reuploadTarget.caseId && d.docKey === reuploadTarget.docKey) ? { ...d, status: 'Re-upload Required', verifiedBy: loggedInUser, reuploadReason: reuploadReason.trim() } : d));
+        const updatedTarget = {
+          ...reuploadTarget,
+          status: 'Re-upload Required' as const,
+          verificationStatus: 'Re-upload Required',
+          verifiedBy: loggedInUser,
+          reuploadReason: reuploadReason.trim()
+        };
+        setDocuments(prev => prev.map(d => (d.caseId === reuploadTarget.caseId && (d.docKey === reuploadTarget.docKey || d.id === reuploadTarget.id)) ? updatedTarget : d));
+        
+        // Open WhatsApp prompt
+        sendWhatsAppReupload(updatedTarget);
         setReuploadTarget(null);
       } else {
-        toast.error('Failed to flag for re-upload.');
+        const errJson = await res.json().catch(() => ({}));
+        toast.error(errJson.error || 'Failed to flag for re-upload.');
       }
     } catch (e) {
       toast.error('Network error.');
@@ -569,7 +603,7 @@ const DocumentsManagement: React.FC = () => {
                             </button>
                           )}
 
-                          {!isReupload && (
+                          {!isReupload ? (
                             <button
                               onClick={() => handleOpenReuploadModal(doc)}
                               style={{
@@ -588,6 +622,26 @@ const DocumentsManagement: React.FC = () => {
                               title="Request Re-upload"
                             >
                               <AlertTriangle size={13} /> Re-upload
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => sendWhatsAppReupload(doc)}
+                              style={{
+                                padding: '0.35rem 0.65rem',
+                                borderRadius: '0.25rem',
+                                backgroundColor: '#16a34a',
+                                border: 'none',
+                                color: 'white',
+                                fontSize: '0.75rem',
+                                fontWeight: 600,
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '0.25rem'
+                              }}
+                              title="Send WhatsApp Re-upload Link to Customer"
+                            >
+                              <MessageCircle size={13} /> WhatsApp
                             </button>
                           )}
                         </div>

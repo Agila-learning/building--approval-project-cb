@@ -456,6 +456,58 @@ export class BrevoNotificationService implements NotificationService {
 
     await this.sendEmail(customerEmail, customerName, subject, htmlContent);
   }
+
+  async notifyPaymentSuccess(params: {
+    customerEmail: string;
+    customerName: string;
+    proposalNumber: string;
+    amountPaid: number | string;
+    transactionId: string;
+    paymentDate: string;
+    paymentStatus?: string;
+    paymentMethod?: string;
+    receiptUrl?: string;
+  }): Promise<void> {
+    const {
+      customerEmail,
+      customerName,
+      proposalNumber,
+      amountPaid,
+      transactionId,
+      paymentDate,
+      paymentStatus = 'Paid',
+      paymentMethod = 'Online / UPI',
+      receiptUrl
+    } = params;
+
+    const formattedAmount = typeof amountPaid === 'number' ? `₹${amountPaid.toLocaleString('en-IN')}` : `₹${amountPaid}`;
+    const subject = `Payment Received & Verified: Proposal #${proposalNumber} - CB Building Approvals`;
+    const htmlContent = generateEmailTemplate({
+      eyebrow: 'Payment Confirmation',
+      headline: 'Payment Successfully Received & Verified!',
+      customerName: customerName || 'Valued Customer',
+      bodyParagraphs: [
+        `Thank you for your payment! We have successfully received and verified your payment for Building Approval Proposal #${proposalNumber}.`,
+        'Your transaction record has been confirmed and saved in our records. Your application is progressing to the next stage.',
+        'You can download and view your official payment receipt anytime using the button below.'
+      ],
+      referenceCard: [
+        { label: 'Proposal Number', value: `#${proposalNumber}` },
+        { label: 'Customer Name', value: customerName },
+        { label: 'Amount Paid', value: formattedAmount },
+        { label: 'Payment Method', value: paymentMethod },
+        { label: 'Transaction ID / UTR', value: transactionId },
+        { label: 'Payment Date', value: paymentDate },
+        { label: 'Payment Status', value: paymentStatus }
+      ],
+      cta: {
+        text: 'View Official Payment Receipt',
+        url: receiptUrl || `http://localhost:5173/print/receipt/${proposalNumber}`
+      }
+    });
+
+    await this.sendEmail(customerEmail, customerName, subject, htmlContent);
+  }
 }
 
 

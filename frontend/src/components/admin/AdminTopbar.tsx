@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Search, Bell, ChevronDown, Home, ClipboardList, CheckCircle, Menu } from 'lucide-react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
 import { getApiUrl } from '../../config/api';
 
 interface Notification {
@@ -9,6 +9,22 @@ interface Notification {
   message: string;
   time: string;
   read: boolean;
+  case_id?: string;
+  created_at?: string;
+}
+
+function getRelativeTime(timestamp?: string | number): string {
+  if (!timestamp) return 'Just now';
+  const time = typeof timestamp === 'number' ? timestamp : new Date(timestamp).getTime();
+  if (isNaN(time)) return 'Just now';
+  const diffSec = Math.floor((Date.now() - time) / 1000);
+  if (diffSec < 60) return 'Just now';
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const diffHours = Math.floor(diffMin / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+  const diffDays = Math.floor(diffHours / 24);
+  return `${diffDays}d ago`;
 }
 
 interface AdminTopbarProps {
@@ -16,6 +32,7 @@ interface AdminTopbarProps {
 }
 
 const AdminTopbar: React.FC<AdminTopbarProps> = ({ toggleSidebar }) => {
+  const navigate = useNavigate();
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const notifRef = useRef<HTMLDivElement>(null);
@@ -30,8 +47,10 @@ const AdminTopbar: React.FC<AdminTopbarProps> = ({ toggleSidebar }) => {
             id: n.id,
             title: n.title,
             message: n.message,
-            time: n.created_at ? new Date(n.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Recently',
+            time: getRelativeTime(n.created_at),
             read: n.read || false,
+            case_id: n.case_id,
+            created_at: n.created_at
           })));
           return;
         }
@@ -95,7 +114,7 @@ const AdminTopbar: React.FC<AdminTopbarProps> = ({ toggleSidebar }) => {
         zIndex: 100
       }}>
         
-        {/* Left side: Hamburger button for mobile */}
+        {/* Left side: Hamburger button for mobile & desktop toggle */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
           {toggleSidebar && (
             <button 
@@ -120,6 +139,34 @@ const AdminTopbar: React.FC<AdminTopbarProps> = ({ toggleSidebar }) => {
               <Menu size={22} />
             </button>
           )}
+
+          <button
+            className="desktop-sidebar-toggle-btn"
+            onClick={() => {
+              const isColl = localStorage.getItem('sidebar_collapsed') === 'true';
+              localStorage.setItem('sidebar_collapsed', (!isColl).toString());
+              window.dispatchEvent(new Event('sidebar_toggle'));
+            }}
+            aria-label="Toggle sidebar width"
+            title="Toggle sidebar (Minimise / Maximise)"
+            style={{
+              background: 'none',
+              border: '1px solid var(--border-color)',
+              borderRadius: '6px',
+              color: 'var(--text-primary)',
+              padding: '0.35rem 0.5rem',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.35rem',
+              fontSize: '0.75rem',
+              fontWeight: 600,
+              transition: 'all 0.2s',
+            }}
+          >
+            <Menu size={16} />
+          </button>
         </div>
 
         {/* Right side: Actions */}
@@ -201,28 +248,72 @@ const AdminTopbar: React.FC<AdminTopbarProps> = ({ toggleSidebar }) => {
               
               {/* Notification Dropdown */}
               {showNotifications && (
-                <div style={{ position: 'absolute', top: '100%', right: '-10px', marginTop: '15px', width: '320px', backgroundColor: '#fff', borderRadius: '0.5rem', boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)', border: '1px solid var(--border-color)', overflow: 'hidden', zIndex: 1000 }}>
-                  <div style={{ padding: '1rem', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f8fafc' }}>
-                    <h3 style={{ margin: 0, fontSize: '0.875rem', fontWeight: 600, color: 'var(--primary-dark)' }}>Notifications</h3>
+                <div style={{ 
+                  position: 'absolute', 
+                  top: '100%', 
+                  right: 0, 
+                  marginTop: '12px', 
+                  width: 'min(360px, calc(100vw - 24px))', 
+                  backgroundColor: '#fff', 
+                  borderRadius: '0.75rem', 
+                  boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1)', 
+                  border: '1px solid var(--border-color)', 
+                  overflow: 'hidden', 
+                  zIndex: 1100 
+                }}>
+                  <div style={{ padding: '0.85rem 1rem', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f8fafc' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <h3 style={{ margin: 0, fontSize: '0.875rem', fontWeight: 700, color: 'var(--primary-dark)' }}>Notifications</h3>
+                      {unreadCount > 0 && (
+                        <span style={{ fontSize: '0.7rem', backgroundColor: '#ea580c', color: 'white', padding: '0.1rem 0.45rem', borderRadius: '1rem', fontWeight: 700 }}>
+                          {unreadCount} new
+                        </span>
+                      )}
+                    </div>
                     {unreadCount > 0 && (
                       <button onClick={markAllAsRead} style={{ background: 'none', border: 'none', color: 'var(--primary)', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
                         <CheckCircle size={12} /> Mark all read
                       </button>
                     )}
                   </div>
-                  <div style={{ maxHeight: '350px', overflowY: 'auto' }}>
+                  <div style={{ maxHeight: '380px', overflowY: 'auto' }}>
                     {notifications.length > 0 ? (
                       notifications.map(notif => (
-                        <div key={notif.id} style={{ padding: '1rem', borderBottom: '1px solid var(--border-color)', backgroundColor: notif.read ? '#fff' : '#f0f9ff', transition: 'background-color 0.2s' }}>
+                        <div 
+                          key={notif.id} 
+                          onClick={async () => {
+                            if (!notif.read) {
+                              try {
+                                await fetch(`${getApiUrl()}/notifications/${notif.id}/read`, { method: 'PATCH' });
+                              } catch (e) {}
+                              setNotifications(prev => prev.map(n => n.id === notif.id ? { ...n, read: true } : n));
+                            }
+                            setShowNotifications(false);
+                            if (notif.case_id) {
+                              navigate(`/admin/applications/${notif.case_id}/view`);
+                            } else {
+                              navigate('/admin/applications');
+                            }
+                          }}
+                          style={{ 
+                            padding: '0.85rem 1rem', 
+                            borderBottom: '1px solid var(--border-color)', 
+                            backgroundColor: notif.read ? '#fff' : '#f0f9ff', 
+                            cursor: 'pointer',
+                            transition: 'background-color 0.15s ease' 
+                          }}
+                          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#e0f2fe'}
+                          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = notif.read ? '#fff' : '#f0f9ff'}
+                        >
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.25rem' }}>
-                            <div style={{ fontSize: '0.875rem', fontWeight: 600, color: notif.read ? 'var(--text-primary)' : 'var(--primary-dark)' }}>{notif.title}</div>
-                            <div style={{ fontSize: '0.65rem', color: 'var(--text-secondary)' }}>{notif.time}</div>
+                            <div style={{ fontSize: '0.8125rem', fontWeight: notif.read ? 600 : 700, color: notif.read ? 'var(--text-primary)' : 'var(--primary-dark)' }}>{notif.title}</div>
+                            <div style={{ fontSize: '0.6875rem', color: '#64748b', whiteSpace: 'nowrap', marginLeft: '0.5rem' }}>{notif.time}</div>
                           </div>
-                          <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: 1.4 }}>{notif.message}</div>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', lineHeight: 1.4 }}>{notif.message}</div>
                         </div>
                       ))
                     ) : (
-                      <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
+                      <div style={{ padding: '2.5rem 1rem', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
                         No notifications yet.
                       </div>
                     )}

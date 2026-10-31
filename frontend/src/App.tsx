@@ -17,6 +17,7 @@ import StaffList from './pages/admin/StaffList';
 import CustomerUpload from './pages/customer/CustomerUpload';
 import EmployeeLayout from './layouts/EmployeeLayout';
 import MyApplications from './pages/employee/MyApplications';
+import EmployeePayments from './pages/employee/EmployeePayments';
 // EmployeeApplicationDetail removed, using ApplicationDetail for both
 import ApplyNow from './pages/customer/ApplyNow';
 import CustomerLeads from './pages/admin/CustomerLeads';
@@ -181,6 +182,7 @@ function App() {
             <Route path="applications/:id" element={<ApplicationView />} />
             <Route path="documents" element={<DocumentsManagement />} />
             <Route path="documents/*" element={<DocumentsManagement />} />
+            <Route path="payments" element={<EmployeePayments />} />
             
             {/* Routes */}
             <Route path="attendance" element={<EmployeeAttendance />} />

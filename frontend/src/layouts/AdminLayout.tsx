@@ -7,6 +7,8 @@ const AdminLayout: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(() => localStorage.getItem('sidebar_collapsed') === 'true');
   const loggedInUser = localStorage.getItem('loggedInUser');
+  const token = localStorage.getItem('token');
+  const userRole = (localStorage.getItem('userRole') || '').toUpperCase();
 
   useEffect(() => {
     const handleToggle = () => {
@@ -16,8 +18,14 @@ const AdminLayout: React.FC = () => {
     return () => window.removeEventListener('sidebar_toggle', handleToggle);
   }, []);
 
-  if (!loggedInUser) {
+  // Strictly enforce authentication
+  if (!loggedInUser || !token) {
     return <Navigate to="/login" replace />;
+  }
+
+  // Strictly enforce Admin role
+  if (userRole !== 'ADMIN' && loggedInUser.toLowerCase() !== 'admin') {
+    return <Navigate to="/employee" replace />;
   }
 
   return (

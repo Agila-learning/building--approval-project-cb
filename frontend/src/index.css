@@ -299,20 +299,22 @@ input[type="text"], input[type="email"], input[type="tel"], input[type="password
   display: flex;
   min-height: 100vh;
   background-color: var(--bg-primary);
+  position: relative;
 }
 
 .layout-content {
   flex: 1;
   display: flex;
   flex-direction: column;
-  margin-left: 70px;
-  transition: margin-left 0.3s ease;
+  margin-left: 250px;
+  width: calc(100% - 250px);
+  transition: margin-left 0.25s cubic-bezier(0.4, 0, 0.2, 1), width 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   min-width: 0; /* Important for flex children to allow scrolling tables */
 }
 
 /* Sidebar Responsive Styles */
 .sidebar-container {
-  width: 70px;
+  width: 250px;
   background-color: var(--sidebar-bg);
   color: var(--sidebar-text);
   display: flex;
@@ -322,75 +324,57 @@ input[type="text"], input[type="email"], input[type="tel"], input[type="password
   left: 0;
   top: 0;
   z-index: 1000;
-  transition: width 0.3s ease, transform 0.3s ease;
+  transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1), transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   overflow-x: hidden;
 }
 
-@media (min-width: 1025px) {
-  .sidebar-container {
-    width: 250px;
-  }
-  
-  .layout-content {
-    margin-left: 250px;
-  }
-
-  .sidebar-container.sidebar-collapsed {
-    width: 70px;
-  }
-  
-  .layout-content.sidebar-collapsed {
-    margin-left: 70px;
-  }
-
-  .sidebar-container:not(.sidebar-collapsed) .sidebar-text,
-  .sidebar-container:not(.sidebar-collapsed) .sidebar-logo-text,
-  .sidebar-container:not(.sidebar-collapsed) .sidebar-profile-info {
-    opacity: 1;
-    visibility: visible;
-  }
-
-  .sidebar-container:not(.sidebar-collapsed) .sidebar-main-menu-text {
-    opacity: 1;
-    visibility: visible;
-    height: auto;
-    margin-bottom: 0.75rem;
-  }
-
-  .sidebar-container:not(.sidebar-collapsed) .sidebar-group {
-    margin-bottom: 1.5rem;
-  }
-
-  .sidebar-container.sidebar-collapsed:hover {
-    width: 250px;
-    box-shadow: 4px 0 16px rgba(0, 0, 0, 0.2);
-  }
-
-  .sidebar-container.sidebar-collapsed:hover .sidebar-text,
-  .sidebar-container.sidebar-collapsed:hover .sidebar-logo-text,
-  .sidebar-container.sidebar-collapsed:hover .sidebar-profile-info {
-    opacity: 1;
-    visibility: visible;
-  }
-
-  .sidebar-container.sidebar-collapsed:hover .sidebar-main-menu-text {
-    opacity: 1;
-    visibility: visible;
-    height: auto;
-    margin-bottom: 0.75rem;
-  }
-
-  .sidebar-container.sidebar-collapsed:hover .sidebar-group {
-    margin-bottom: 1.5rem;
-  }
+/* Collapsed / Minimised State */
+.sidebar-container.sidebar-collapsed {
+  width: 70px !important;
 }
 
-.desktop-collapse-btn {
-  display: flex;
+.layout-content.sidebar-collapsed {
+  margin-left: 70px !important;
+  width: calc(100% - 70px) !important;
+}
+
+.sidebar-container.sidebar-collapsed .sidebar-text,
+.sidebar-container.sidebar-collapsed .sidebar-logo-text,
+.sidebar-container.sidebar-collapsed .sidebar-profile-info,
+.sidebar-container.sidebar-collapsed .sidebar-main-menu-text {
+  display: none !important;
+  opacity: 0;
+  visibility: hidden;
+}
+
+.sidebar-container:not(.sidebar-collapsed) .sidebar-text,
+.sidebar-container:not(.sidebar-collapsed) .sidebar-logo-text,
+.sidebar-container:not(.sidebar-collapsed) .sidebar-profile-info {
+  display: block;
+  opacity: 1;
+  visibility: visible;
+}
+
+.sidebar-container:not(.sidebar-collapsed) .sidebar-main-menu-text {
+  display: block;
+  opacity: 1;
+  visibility: visible;
+  height: auto;
+  margin-bottom: 0.75rem;
+}
+
+.sidebar-container .sidebar-group {
+  margin-bottom: 1.25rem;
+}
+
+.desktop-collapse-btn,
+.desktop-sidebar-toggle-btn {
+  display: flex !important;
 }
 
 @media (max-width: 1024px) {
-  .desktop-collapse-btn {
+  .desktop-collapse-btn,
+  .desktop-sidebar-toggle-btn {
     display: none !important;
   }
 }
@@ -438,8 +422,15 @@ input[type="text"], input[type="email"], input[type="tel"], input[type="password
 
 /* Mobile Overrides */
 @media (max-width: 1024px) {
-  .layout-content {
+  .layout-content,
+  .layout-content.sidebar-collapsed {
     margin-left: 0 !important;
+    width: 100% !important;
+  }
+
+  .mobile-menu-btn,
+  .mobile-close-btn {
+    display: flex !important;
   }
   
   .sidebar-container {

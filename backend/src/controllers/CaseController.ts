@@ -106,7 +106,7 @@ export class CaseController {
       const data = req.body;
       const userRole = (req.headers['x-user-role'] || req.query.role || (req as any).user?.role || '') as string;
       const isAdmin = userRole.toUpperCase() === 'ADMIN' || (req as any).user?.role === 'ADMIN';
-      const isDraft = data.status === 'Draft' || data.isPartial === true;
+      const isDraft = data.status === 'Draft' || data.status === 'LEAD' || data.status === 'Lead' || data.isPartial === true || userRole.toUpperCase() === 'STAFF' || Boolean(data.fullData?.staff) || !data.uploadedFiles;
 
       // 1. Mobile Number Validation: Must be 10 digits starting with 6, 7, 8, or 9
       const rawMobile = data.fullData?.mobile || data.property?.owner_phone || data.mobile;
@@ -141,9 +141,9 @@ export class CaseController {
       }
 
       // 5. PIN Code Validation: Exactly 6 digits only, numbers only!
-      const resPincode = data.fullData?.residentialAddress?.pincode;
+      const resPincode = data.fullData?.residentialAddress?.pincode || data.fullData?.pincode || data.property?.pincode;
       const permPincode = data.fullData?.permanentAddress?.pincode;
-      const propPincode = data.fullData?.propertyDetails?.pincode;
+      const propPincode = data.fullData?.propertyDetails?.pincode || data.property?.pincode;
 
       if (!isDraft) {
         if (!resPincode || !/^\d{6}$/.test(String(resPincode).trim())) {
@@ -163,7 +163,7 @@ export class CaseController {
       // Customers must upload all required documents before submitting their application.
       // If any required document is missing, prevent submission.
       if (!isDraft) {
-        const uploaded = data.uploadedFiles || {};
+        const uploaded = data.uploadedFiles || data.fullData?.documents || {};
         const requiredDocSpecs = [
           { key: 'CUSTOMER PHOTOGRAPH', alts: ['photo', 'customer_photo'], label: 'Applicant Photograph' },
           { key: 'CUSTOMER SIGNATURE', alts: ['signature', 'customer_signature'], label: 'Applicant Signature' },
@@ -253,12 +253,52 @@ export class CaseController {
         }
       }
 
-      // 7. Manual Worker Assignment:
-      // Applications must NOT be automatically assigned to any worker.
-      // Newly submitted customer applications MUST be unassigned until Admin manually assigns them.
-      const isCustomerSubmission = data.isCustomer || !isAdmin;
+      // 7. Staff & Lead Entry Assignment:
+      // If a Staff member creates/registers an application, link them to the case so it appears in their dashboard.
+      // If Customer self-submits (isCustomer = true), leave unassigned for Admin to assign later.
+      const isCustomerSubmission = Boolean(data.isCustomer);
       let assigned_staff_id: string | null = null;
-      if (!isCustomerSubmission) {
+      let creatorStaffName = '';
+      let creatorStaffId = '';
+
+      if (userRole.toUpperCase() === 'STAFF' || (req.headers['x-user-name'] && req.headers['x-user-name'] !== 'Admin')) {
+        const staffLookup = (req.headers['x-staff-id'] || req.headers['x-user-name'] || data.staff || data.fullData?.staff || '') as string;
+        if (staffLookup) {
+          let foundStaff = await prisma.user.findFirst({
+            where: {
+              OR: [
+                { id: /^[0-9a-fA-F]{24}$/.test(staffLookup) ? staffLookup : undefined },
+                { staffId: { equals: staffLookup, mode: 'insensitive' } },
+                { name: { contains: staffLookup, mode: 'insensitive' } }
+              ]
+            }
+          });
+
+          if (!foundStaff && staffLookup && staffLookup.toLowerCase() !== 'admin') {
+            try {
+              const uName = (req.headers['x-user-name'] as string) || staffLookup;
+              const uStaffId = (req.headers['x-staff-id'] as string) || `EMP-${Math.floor(100 + Math.random() * 900)}`;
+              foundStaff = await prisma.user.create({
+                data: {
+                  name: uName,
+                  staffId: uStaffId,
+                  email: `${uName.toLowerCase().replace(/[^a-z0-9]/g, '')}@buildingapproval.in`,
+                  role: 'STAFF',
+                  password_hash: 'default'
+                }
+              });
+            } catch (uErr) {
+              console.warn('Could not auto-create staff user:', uErr);
+            }
+          }
+
+          if (foundStaff) {
+            assigned_staff_id = foundStaff.id;
+            creatorStaffName = foundStaff.name;
+            creatorStaffId = foundStaff.staffId || foundStaff.id;
+          }
+        }
+      } else if (!isCustomerSubmission) {
         if (data.assigned_staff_id) {
           assigned_staff_id = data.assigned_staff_id;
         } else if (data.assigned_staff?.name && data.assigned_staff.name !== 'Unassigned') {
@@ -287,7 +327,9 @@ export class CaseController {
       const initialStages = buildDefaultStages({ status: caseStatus, created_at: new Date() });
       const fullData = {
         ...(data.fullData || {}),
-        staff: assigned_staff_id ? (data.fullData?.staff || 'Staff') : 'Unassigned',
+        staff: creatorStaffName || (assigned_staff_id ? (data.fullData?.staff || data.staff || 'Staff') : 'Unassigned'),
+        createdByStaff: creatorStaffName || (data.fullData?.createdByStaff || ''),
+        createdByStaffId: creatorStaffId || (data.fullData?.createdByStaffId || ''),
         stages: (data.fullData && Array.isArray(data.fullData.stages) && data.fullData.stages.length > 0)
           ? data.fullData.stages
           : initialStages
@@ -422,19 +464,21 @@ export class CaseController {
       if (status) whereCondition.status = String(status);
 
       // Worker Isolation: Workers must only see cases assigned to them!
+      let staffUserId = staffId ? String(staffId) : '';
       if (userRole.toUpperCase() === 'STAFF' || (staffName && userRole.toUpperCase() !== 'ADMIN' && staffName !== 'Admin')) {
-        let staffUserId = staffId ? String(staffId) : '';
-        if (!staffUserId && staffName) {
-          const userRecord = await prisma.user.findFirst({
-            where: {
-              OR: [
-                { name: { equals: String(staffName), mode: 'insensitive' } },
-                { staffId: { equals: String(staffName), mode: 'insensitive' } },
-                { email: { equals: String(staffName), mode: 'insensitive' } }
-              ]
-            }
-          });
-          if (userRecord) staffUserId = userRecord.id;
+        if (!staffUserId || !/^[0-9a-fA-F]{24}$/.test(staffUserId)) {
+          if (staffName || staffId) {
+            const userRecord = await prisma.user.findFirst({
+              where: {
+                OR: [
+                  { name: { equals: String(staffName), mode: 'insensitive' } },
+                  { staffId: { equals: String(staffId || staffName), mode: 'insensitive' } },
+                  { email: { equals: String(staffName), mode: 'insensitive' } }
+                ]
+              }
+            });
+            if (userRecord) staffUserId = userRecord.id;
+          }
         }
 
         const orClauses: any[] = [];
@@ -446,11 +490,9 @@ export class CaseController {
           orClauses.push({ assigned_staff: { staffId: { equals: String(staffName), mode: 'insensitive' } } });
         }
 
-        if (orClauses.length === 0) {
-          return res.json([]);
+        if (orClauses.length > 0) {
+          whereCondition.OR = orClauses;
         }
-
-        whereCondition.OR = orClauses;
       } else if (assigned_staff_id) {
         whereCondition.assigned_staff_id = String(assigned_staff_id);
       }
@@ -461,8 +503,23 @@ export class CaseController {
         orderBy: { created_at: 'desc' }
       });
 
+      // Filter in memory to ensure staff only see their own applications under all schema formats
+      let finalCases = cases;
+      if (userRole.toUpperCase() === 'STAFF') {
+        finalCases = cases.filter(c => {
+          const full = (c.fullData as any) || {};
+          const isStaffAssigned = (staffUserId && c.assigned_staff_id === staffUserId) ||
+            (staffName && c.assigned_staff?.name && c.assigned_staff.name.toLowerCase() === staffName.toLowerCase()) ||
+            (staffName && c.assigned_staff?.staffId && c.assigned_staff.staffId.toLowerCase() === staffName.toLowerCase()) ||
+            (staffName && full.staff && String(full.staff).toLowerCase() === staffName.toLowerCase()) ||
+            (staffName && full.createdByStaff && String(full.createdByStaff).toLowerCase() === staffName.toLowerCase()) ||
+            (staffId && full.staffId && String(full.staffId).toLowerCase() === staffId.toLowerCase());
+          return isStaffAssigned;
+        });
+      }
+
       // Enrich stages
-      const enrichedCases = cases.map(c => ({
+      const enrichedCases = finalCases.map(c => ({
         ...c,
         fullData: {
           ...((c.fullData as any) || {}),

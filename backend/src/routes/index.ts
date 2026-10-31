@@ -12,6 +12,8 @@ import feeRoutes from './fee.routes';
 import dashboardRoutes from './dashboard.routes';
 import leadRoutes from './lead.routes';
 import userRoutes from './user.routes';
+import paymentRoutes from './payment.routes';
+import settingsRoutes from './settings.routes';
 import { authController } from '../controllers/AuthController';
 
 const router = Router();
@@ -80,5 +82,7 @@ router.use('/dashboard', dashboardRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/leads', leadRoutes);
 router.use('/users', userRoutes);
+router.use('/payments', paymentRoutes);
+router.use('/settings', settingsRoutes);
 
 export default router;

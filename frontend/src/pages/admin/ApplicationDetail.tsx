@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, User, Building, FileText, Upload, CheckCircle, X, Save, Send, Download, AlertTriangle, RotateCcw, Eye, Archive, MessageCircle } from 'lucide-react';
+import { ArrowLeft, ArrowRight, User, Building, FileText, Upload, CheckCircle, X, Save, Send, Download, AlertTriangle, RotateCcw, Eye, Archive, MessageCircle, CreditCard, QrCode, Copy, Printer } from 'lucide-react';
 import toast from 'react-hot-toast';
 import JSZip from 'jszip';
 import { uploadFileToCloudinary, getApiUrl } from '../../config/api';
@@ -171,6 +171,28 @@ const ApplicationDetail: React.FC = () => {
     return {};
   });
 
+  // Payment states for Step 3
+  const [paymentMethod, setPaymentMethod] = useState<string>('UPI / QR Code');
+  const [transactionId, setTransactionId] = useState('');
+  const [paymentDate, setPaymentDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [paymentStatus, setPaymentStatus] = useState<'PENDING' | 'PAID'>('PENDING');
+  const [verifiedPaymentData, setVerifiedPaymentData] = useState<any>(null);
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+  const [companySettings, setCompanySettings] = useState<any>(null);
+
+  React.useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        const res = await fetch(`${getApiUrl()}/settings`);
+        if (res.ok) {
+          const data = await res.json();
+          setCompanySettings(data);
+        }
+      } catch (err) {}
+    };
+    fetchSettings();
+  }, []);
+
   React.useEffect(() => {
     if (!id || location.pathname.endsWith('/new')) {
       localStorage.removeItem('newApp_formData');
@@ -236,6 +258,13 @@ const ApplicationDetail: React.FC = () => {
             }
             if (c.fullData) {
               setFormData((prev: any) => sanitizeFormData({ ...prev, ...c.fullData }));
+              if (c.fullData.payment) {
+                setPaymentStatus(c.fullData.payment.status || 'PAID');
+                if (c.fullData.payment.transactionId) setTransactionId(c.fullData.payment.transactionId);
+                if (c.fullData.payment.paymentMethod) setPaymentMethod(c.fullData.payment.paymentMethod);
+                if (c.fullData.payment.paymentDate) setPaymentDate(c.fullData.payment.paymentDate);
+                setVerifiedPaymentData(c.fullData.payment);
+              }
             } else if (c.property) {
               setFormData((prev: any) => sanitizeFormData({
                 ...prev,
@@ -251,6 +280,9 @@ const ApplicationDetail: React.FC = () => {
                   surveyNo: c.property.survey_number || ''
                 }
               }));
+            }
+            if (c.payment_status === 'PAID') {
+              setPaymentStatus('PAID');
             }
           }
         } catch (e) {
@@ -547,54 +579,106 @@ const ApplicationDetail: React.FC = () => {
     }
   };
 
-  const handleNext = () => {
+  const validateStep = (stepToCheck: number): boolean => {
     let errors: string[] = [];
-    
+
     // Validation for Step 1
-    if (currentStep === 1) {
+    if (stepToCheck === 1) {
       if (!formData.serviceType) errors.push('serviceType');
       if (!formData.staff) errors.push('staff');
       if (!formData.customerName) errors.push('customerName');
       if (!formData.fatherName) errors.push('fatherName');
       if (!formData.dob) errors.push('dob');
-      if (!formData.mobile) errors.push('mobile');
-      if (!formData.email) errors.push('email');
-      if (!formData.aadhar) errors.push('aadhar');
-      if (!formData.pan) errors.push('pan');
       
+      const cleanMobile = (formData.mobile || '').replace(/\D/g, '');
+      if (!cleanMobile || !/^[6-9]\d{9}$/.test(cleanMobile)) {
+        errors.push('mobile');
+        toast.error('Mobile number must be a valid 10-digit number.');
+      }
+      
+      if (!formData.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) {
+        errors.push('email');
+      }
+      
+      const cleanAadhar = (formData.aadhar || '').replace(/\D/g, '');
+      if (!cleanAadhar || cleanAadhar.length !== 12) {
+        errors.push('aadhar');
+        toast.error('Aadhaar number must be exactly 12 digits.');
+      }
+      
+      const cleanPan = (formData.pan || '').trim().toUpperCase();
+      if (!cleanPan || !/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(cleanPan)) {
+        errors.push('pan');
+        toast.error('PAN number must be 10 characters (e.g. ABCDE1234F).');
+      }
+
       if (!formData.residentialAddress?.houseNo) errors.push('res_houseNo');
       if (!formData.residentialAddress?.streetName) errors.push('res_streetName');
       if (!formData.residentialAddress?.city) errors.push('res_city');
+      const resPin = (formData.residentialAddress?.pincode || '').replace(/\D/g, '');
+      if (!resPin || !/^\d{6}$/.test(resPin)) {
+        errors.push('res_pincode');
+        toast.error('PIN code must be exactly 6 digits.');
+      }
       if (!formData.residentialAddress?.state) errors.push('res_state');
-      
+
       const isSameAsRes = formData.permanentAddress?.sameAsResidential ?? true;
-      const perm = isSameAsRes ? (formData.residentialAddress || {}) : (formData.permanentAddress || {});
-      if (!perm.houseNo) errors.push('perm_houseNo');
-      if (!perm.streetName) errors.push('perm_streetName');
-      if (!perm.city) errors.push('perm_city');
-      if (!perm.state) errors.push('perm_state');
+      if (!isSameAsRes) {
+        const perm = formData.permanentAddress || {};
+        if (!perm.houseNo) errors.push('perm_houseNo');
+        if (!perm.streetName) errors.push('perm_streetName');
+        if (!perm.city) errors.push('perm_city');
+        const permPin = (perm.pincode || '').replace(/\D/g, '');
+        if (!permPin || !/^\d{6}$/.test(permPin)) {
+          errors.push('perm_pincode');
+          toast.error('Permanent PIN code must be exactly 6 digits.');
+        }
+        if (!perm.state) errors.push('perm_state');
+      }
+
+      // Mandatory Step 1 Documents
+      const step1Docs = ['CUSTOMER PHOTOGRAPH', 'CUSTOMER SIGNATURE'];
+      const missingStep1Docs = step1Docs.filter(d => !uploadedFiles[d as keyof typeof uploadedFiles]);
+      if (missingStep1Docs.length > 0) {
+        toast.error(`Please upload ${missingStep1Docs.join(' & ')} on Step 1 to proceed.`);
+        setFormErrors(prev => Array.from(new Set([...prev, ...errors])));
+        return false;
+      }
     }
-    
+
     // Validation for Step 2
-    if (currentStep === 2) {
+    if (stepToCheck === 2) {
       if (!formData.propertyDetails?.surveyNo) errors.push('prop_surveyNo');
       if (!formData.propertyDetails?.pattaNo) errors.push('prop_pattaNo');
+      if (formData.propertyDetails?.pincode) {
+        const propPin = formData.propertyDetails.pincode.replace(/\D/g, '');
+        if (!/^\d{6}$/.test(propPin)) {
+          errors.push('prop_pincode');
+          toast.error('Property PIN code must be exactly 6 digits.');
+        }
+      }
     }
 
     // Validation for Step 3
-    if (currentStep === 3) {
+    if (stepToCheck === 3) {
       if (!formData.feesAmount) errors.push('feesAmount');
     }
 
     if (errors.length > 0) {
       setFormErrors(errors);
-      toast.error("Please fill all mandatory fields (highlighted in red) to proceed.");
-      return;
+      toast.error(`Please fill all mandatory fields on Step ${stepToCheck} (highlighted in red) to proceed.`);
+      return false;
     }
 
     setFormErrors([]);
+    return true;
+  };
+
+  const handleNext = () => {
+    if (!validateStep(currentStep)) return;
     if (currentStep < totalSteps) {
       setCurrentStep(currentStep + 1);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
 
@@ -617,7 +701,12 @@ const ApplicationDetail: React.FC = () => {
         {steps.map((step, idx) => (
           <React.Fragment key={step.num}>
             <div 
-              onClick={() => setCurrentStep(step.num)}
+              onClick={() => {
+                if (step.num > currentStep) {
+                  if (!validateStep(currentStep)) return;
+                }
+                setCurrentStep(step.num);
+              }}
               role="button"
               tabIndex={0}
               title={`Click to switch to Step ${step.num}: ${step.label}`}
@@ -921,18 +1010,37 @@ const ApplicationDetail: React.FC = () => {
     <>
       <div className="card" style={{ position: 'relative' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-        <h3 style={{ fontSize: '1.125rem', fontWeight: 600, color: 'var(--primary-dark)', display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0 }}>
-          <Building size={20} color="var(--primary)" /> Property Details
-        </h3>
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <button 
-            onClick={(e) => { e.preventDefault(); setDocUploadType('LAND DOCUMENT'); setIsUploadModalOpen(true); }}
-            title="Upload Property Documents" 
-            style={{ background: 'white', border: '1px solid var(--border-color)', borderRadius: '0.25rem', padding: '0.4rem', color: 'var(--primary)', cursor: 'pointer', display: 'flex', boxShadow: '0 1px 2px rgba(0,0,0,0.1)' }}>
-            <Upload size={18} />
-          </button>
+          <h3 style={{ fontSize: '1.125rem', fontWeight: 600, color: 'var(--primary-dark)', display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0 }}>
+            <Building size={20} color="var(--primary)" /> Property Details
+          </h3>
         </div>
-      </div>
+
+        {/* Clear Property Ownership Document Upload Slot */}
+        <div style={{ padding: '1.25rem', border: '1px dashed var(--border-color)', borderRadius: '0.5rem', backgroundColor: '#f8fafc', marginBottom: '1.75rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
+          <div>
+            <div style={{ fontWeight: 600, color: 'var(--primary-dark)', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <FileText size={18} color="var(--primary)" /> Property Ownership Document (Sale Deed / Title Deed / Patta Copy)
+            </div>
+            <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
+              Upload registered Sale Deed, Title Deed, or Patta copy proving ownership of the property (PDF or Image).
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            {(uploadedFiles['SALE DEED'] || uploadedFiles['LAND DOCUMENT']) ? (
+              <span style={{ fontSize: '0.85rem', color: '#16a34a', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                <CheckCircle size={16} /> Document Uploaded
+              </span>
+            ) : null}
+            <button
+              type="button"
+              onClick={(e) => { e.preventDefault(); setDocUploadType('SALE DEED'); setIsUploadModalOpen(true); }}
+              className="btn-primary"
+              style={{ padding: '0.45rem 1rem', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+            >
+              <Upload size={15} /> {(uploadedFiles['SALE DEED'] || uploadedFiles['LAND DOCUMENT']) ? 'Change Document' : 'Upload Document'}
+            </button>
+          </div>
+        </div>
       
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '1.5rem', marginBottom: '2.5rem' }}>
         <div>
@@ -1017,42 +1125,306 @@ const ApplicationDetail: React.FC = () => {
   </>
   );
 
-  const renderStep3 = () => (
-    <div className="card">
-      <h3 style={{ fontSize: '1.125rem', fontWeight: 600, color: 'var(--primary-dark)', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-        <FileText size={20} color="var(--primary)" /> Fees Details
-      </h3>
-      
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.5rem' }}>
-        <div>
-          <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: 'var(--primary-dark)', marginBottom: '0.5rem' }}>Estimated Total Amount (₹) *</label>
-          <input type="number" value={formData.feesAmount} onChange={e => setFormData({...formData, feesAmount: e.target.value})} placeholder="e.g. 50000" style={getInputStyle('feesAmount', formData.feesAmount)} />
-        </div>
-        
-        <div>
-          <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: 'var(--primary-dark)', marginBottom: '0.5rem' }}>Additional Notes regarding fees</label>
-          <textarea value={formData.feeNotes} onChange={e => setFormData({...formData, feeNotes: e.target.value})} rows={3} placeholder="Fee breakdown or notes..." style={{ ...getInputStyle('feeNotes', formData.feeNotes), resize: 'vertical' }}></textarea>
-        </div>
-      </div>
+  const handleVerifyAndPay = async () => {
+    if (!formData.feesAmount || Number(formData.feesAmount) <= 0) {
+      toast.error('Please enter a valid Estimated Total Amount.');
+      return;
+    }
+    if (!transactionId.trim()) {
+      toast.error('Please enter the Transaction ID / UTR Number.');
+      return;
+    }
 
-      <div style={{ marginTop: '2.5rem', paddingTop: '1.5rem', borderTop: '1px solid var(--border-color)', display: 'flex', justifyContent: 'center' }}>
-        <button 
-          onClick={() => {
-            if (id) {
-              const previewData = { ...formData, uploadedFiles };
-              localStorage.setItem('print_preview_data', JSON.stringify(previewData));
-              window.open(`/print/application/${id}`, '_blank');
-            } else {
-              toast.error("Please save the draft first to generate an application PDF");
-            }
-          }}
-          style={{ padding: '0.75rem 1.5rem', borderRadius: '0.5rem', backgroundColor: 'var(--bg-surface)', border: '2px solid var(--primary)', color: 'var(--primary)', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
-        >
-          <FileText size={18} /> Download Application
-        </button>
+    setIsProcessingPayment(true);
+    try {
+      const apiUrl = getApiUrl();
+      const userRole = localStorage.getItem('userRole') || (isEmployee ? 'STAFF' : 'ADMIN');
+      const staffName = localStorage.getItem('loggedInUser') || (isEmployee ? 'Staff' : 'Admin');
+      const res = await fetch(`${apiUrl}/payments/verify`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-role': userRole,
+          'x-user-name': staffName
+        },
+        body: JSON.stringify({
+          caseId: id || formData.application_number || 'DRAFT',
+          amount: Number(formData.feesAmount),
+          transactionId: transactionId.trim(),
+          paymentMethod,
+          paymentDate,
+          customerName: formData.customerName,
+          customerEmail: formData.email,
+          customerPhone: formData.mobile,
+          verifiedBy: staffName
+        })
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        toast.success(`Payment verified successfully! Receipt #${data.payment?.receiptNumber || 'REC'} generated.`);
+        setPaymentStatus('PAID');
+        setVerifiedPaymentData(data.payment);
+        setFormData((prev: any) => ({
+          ...prev,
+          payment: data.payment,
+          paymentStatus: 'PAID'
+        }));
+      } else {
+        toast.error(data.error || 'Payment verification failed.');
+      }
+    } catch (e: any) {
+      console.error(e);
+      toast.error('Error connecting to payment verification server.');
+    } finally {
+      setIsProcessingPayment(false);
+    }
+  };
+
+  const renderStep3 = () => {
+    const bank = companySettings || {
+      bankName: 'State Bank of India',
+      accountName: 'C.B. BUILDING APPROVALS',
+      accountNumber: '40123456789',
+      ifscCode: 'SBIN0001234',
+      branch: 'Shoolagiri Main Branch',
+      upiId: 'cbapprovals@upi',
+      qrCodeUrl: ''
+    };
+
+    return (
+      <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '1rem' }}>
+          <div>
+            <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--primary-dark)', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <CreditCard size={22} color="var(--primary)" /> Fees Details & Payment
+            </h3>
+            <p style={{ margin: '0.25rem 0 0', fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
+              Configure estimated charges, select payment mode, and verify transactions.
+            </p>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            {paymentStatus === 'PAID' ? (
+              <span style={{ backgroundColor: '#dcfce7', color: '#15803d', padding: '0.4rem 0.85rem', borderRadius: '2rem', fontSize: '0.8125rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                <CheckCircle size={16} /> Payment Status: PAID
+              </span>
+            ) : (
+              <span style={{ backgroundColor: '#fef3c7', color: '#b45309', padding: '0.4rem 0.85rem', borderRadius: '2rem', fontSize: '0.8125rem', fontWeight: 700 }}>
+                Payment Status: PENDING
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Amount & Notes */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.5rem' }}>
+          <div>
+            <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: 'var(--primary-dark)', marginBottom: '0.4rem' }}>
+              Estimated Total Amount (₹) *
+            </label>
+            <input 
+              type="number" 
+              value={formData.feesAmount} 
+              onChange={e => setFormData({ ...formData, feesAmount: e.target.value })} 
+              placeholder="e.g. 15000" 
+              style={getInputStyle('feesAmount', formData.feesAmount)} 
+            />
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: 'var(--primary-dark)', marginBottom: '0.4rem' }}>
+              Amount Payable (₹)
+            </label>
+            <input 
+              type="text" 
+              value={formData.feesAmount ? `₹ ${Number(formData.feesAmount).toLocaleString('en-IN')}` : '₹ 0'} 
+              disabled 
+              style={{ ...getInputStyle('feesAmount', formData.feesAmount), backgroundColor: '#f8fafc', color: 'var(--primary)', fontWeight: 700 }} 
+            />
+          </div>
+
+          <div style={{ gridColumn: '1 / -1' }}>
+            <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: 'var(--primary-dark)', marginBottom: '0.4rem' }}>
+              Additional Notes regarding fees
+            </label>
+            <textarea 
+              value={formData.feeNotes} 
+              onChange={e => setFormData({ ...formData, feeNotes: e.target.value })} 
+              rows={2} 
+              placeholder="Breakdown of government scrutiny fee, site inspection charges, and processing fees..." 
+              style={{ ...getInputStyle('feeNotes', formData.feeNotes), resize: 'vertical' }}
+            />
+          </div>
+        </div>
+
+        {/* Payment Methods Section */}
+        <div style={{ border: '1px solid var(--border-color)', borderRadius: '0.5rem', padding: '1.5rem', backgroundColor: '#f8fafc' }}>
+          <h4 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--primary-dark)', margin: '0 0 1rem' }}>
+            Select Payment Method
+          </h4>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.75rem', marginBottom: '1.5rem' }}>
+            {[
+              { id: 'UPI / QR Code', label: 'UPI / QR Code', icon: <QrCode size={18} /> },
+              { id: 'Bank Transfer (NEFT/RTGS)', label: 'Bank Transfer', icon: <Building size={18} /> },
+              { id: 'Razorpay / Gateway', label: 'Online Gateway', icon: <CreditCard size={18} /> },
+              { id: 'Cash', label: 'Cash Payment', icon: <CheckCircle size={18} /> }
+            ].map(m => (
+              <button
+                key={m.id}
+                type="button"
+                onClick={() => setPaymentMethod(m.id)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  padding: '0.75rem 1rem',
+                  borderRadius: '0.375rem',
+                  border: paymentMethod === m.id ? '2px solid var(--primary)' : '1px solid var(--border-color)',
+                  backgroundColor: paymentMethod === m.id ? 'white' : 'transparent',
+                  color: paymentMethod === m.id ? 'var(--primary)' : 'var(--text-secondary)',
+                  fontWeight: paymentMethod === m.id ? 700 : 500,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+              >
+                {m.icon} {m.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Payment Details Box */}
+          {paymentMethod === 'UPI / QR Code' && (
+            <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center', flexWrap: 'wrap', backgroundColor: '#ffffff', padding: '1.25rem', borderRadius: '0.5rem', border: '1px solid #e2e8f0' }}>
+              <div style={{ width: '130px', height: '130px', border: '1px solid #e2e8f0', borderRadius: '0.375rem', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f8fafc', overflow: 'hidden' }}>
+                {bank.qrCodeUrl ? (
+                  <img src={bank.qrCodeUrl} alt="UPI QR Code" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                ) : (
+                  <img src={`https://api.qrserver.com/v1/create-qr-code/?size=130x130&data=${encodeURIComponent(`upi://pay?pa=${bank.upiId || 'cbapprovals@upi'}&pn=CB%20Building%20Approvals&am=${formData.feesAmount || '0'}&cu=INR`)}`} alt="Dynamic UPI QR" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                )}
+              </div>
+              <div style={{ flex: 1, minWidth: '220px' }}>
+                <div style={{ fontWeight: 700, color: 'var(--primary-dark)', fontSize: '1rem', marginBottom: '0.35rem' }}>
+                  Scan & Pay via Google Pay / PhonePe / Paytm
+                </div>
+                <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '0.75rem' }}>
+                  Official Company UPI ID: <strong>{bank.upiId || 'cbapprovals@upi'}</strong>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(bank.upiId || 'cbapprovals@upi');
+                    toast.success('UPI ID copied to clipboard!');
+                  }}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', padding: '0.35rem 0.75rem', backgroundColor: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '0.25rem', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer' }}
+                >
+                  <Copy size={13} /> Copy UPI ID
+                </button>
+              </div>
+            </div>
+          )}
+
+          {paymentMethod === 'Bank Transfer (NEFT/RTGS)' && (
+            <div style={{ backgroundColor: '#ffffff', padding: '1.25rem', borderRadius: '0.5rem', border: '1px solid #e2e8f0', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
+              <div>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block' }}>Account Name</span>
+                <strong style={{ fontSize: '0.9rem', color: 'var(--primary-dark)' }}>{bank.accountName || 'C.B. BUILDING APPROVALS'}</strong>
+              </div>
+              <div>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block' }}>Bank Name</span>
+                <strong style={{ fontSize: '0.9rem', color: 'var(--primary-dark)' }}>{bank.bankName || 'State Bank of India'}</strong>
+              </div>
+              <div>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block' }}>Account Number</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <strong style={{ fontSize: '0.9rem', color: 'var(--primary-dark)' }}>{bank.accountNumber || '40123456789'}</strong>
+                  <button type="button" onClick={() => { navigator.clipboard.writeText(bank.accountNumber || '40123456789'); toast.success('Account number copied!'); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--primary)' }}><Copy size={14} /></button>
+                </div>
+              </div>
+              <div>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block' }}>IFSC Code</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <strong style={{ fontSize: '0.9rem', color: 'var(--primary-dark)' }}>{bank.ifscCode || 'SBIN0001234'}</strong>
+                  <button type="button" onClick={() => { navigator.clipboard.writeText(bank.ifscCode || 'SBIN0001234'); toast.success('IFSC copied!'); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--primary)' }}><Copy size={14} /></button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Transaction Input & Verification */}
+          <div style={{ marginTop: '1.5rem', paddingTop: '1.25rem', borderTop: '1px solid #e2e8f0', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem', alignItems: 'flex-end' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: 'var(--primary-dark)', marginBottom: '0.35rem' }}>
+                Transaction ID / UTR Number *
+              </label>
+              <input 
+                type="text" 
+                value={transactionId} 
+                onChange={e => setTransactionId(e.target.value)} 
+                placeholder="e.g. 423985729103 or UPI Ref" 
+                style={{ width: '100%', padding: '0.6rem', border: '1px solid var(--border-color)', borderRadius: '0.375rem', fontSize: '0.875rem' }} 
+              />
+            </div>
+
+            <div>
+              <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: 'var(--primary-dark)', marginBottom: '0.35rem' }}>
+                Payment Date *
+              </label>
+              <input 
+                type="date" 
+                value={paymentDate} 
+                onChange={e => setPaymentDate(e.target.value)} 
+                style={{ width: '100%', padding: '0.6rem', border: '1px solid var(--border-color)', borderRadius: '0.375rem', fontSize: '0.875rem' }} 
+              />
+            </div>
+
+            <div>
+              <button
+                type="button"
+                onClick={handleVerifyAndPay}
+                disabled={isProcessingPayment}
+                className="btn-primary"
+                style={{ width: '100%', padding: '0.65rem 1rem', fontSize: '0.875rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', cursor: isProcessingPayment ? 'not-allowed' : 'pointer' }}
+              >
+                <CheckCircle size={16} /> {isProcessingPayment ? 'Verifying with Backend...' : paymentStatus === 'PAID' ? 'Update & Re-verify Payment' : 'Pay Now & Verify Payment'}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Action Row: Receipts & Application PDF */}
+        <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', flexWrap: 'wrap', paddingTop: '1rem', borderTop: '1px solid var(--border-color)' }}>
+          {paymentStatus === 'PAID' && (
+            <button 
+              type="button"
+              onClick={() => {
+                const targetId = id || verifiedPaymentData?.proposalNumber || 'NEW';
+                window.open(`/print/receipt/${targetId}`, '_blank');
+              }}
+              style={{ padding: '0.75rem 1.5rem', borderRadius: '0.5rem', backgroundColor: '#15803d', border: 'none', color: 'white', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+            >
+              <Printer size={18} /> Print Verified Payment Receipt
+            </button>
+          )}
+
+          <button 
+            type="button"
+            onClick={() => {
+              if (id) {
+                const previewData = { ...formData, uploadedFiles };
+                localStorage.setItem('print_preview_data', JSON.stringify(previewData));
+                window.open(`/print/application/${id}`, '_blank');
+              } else {
+                toast.error("Please save the draft first to generate an application PDF");
+              }
+            }}
+            style={{ padding: '0.75rem 1.5rem', borderRadius: '0.5rem', backgroundColor: 'var(--bg-surface)', border: '2px solid var(--primary)', color: 'var(--primary)', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+          >
+            <FileText size={18} /> Download Application
+          </button>
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   const renderStep4 = () => {
     const handleDownload = (url: string, filename: string) => {

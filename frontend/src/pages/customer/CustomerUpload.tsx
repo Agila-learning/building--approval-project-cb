@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
-import { Upload, CheckCircle2, FileText, ShieldCheck, AlertCircle, X, HelpCircle } from 'lucide-react';
+import { useParams, Link } from 'react-router-dom';
+import { Upload, CheckCircle2, FileText, ShieldCheck, AlertCircle, X, HelpCircle, Lock, Clock } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { uploadFileToCloudinary, getApiUrl } from '../../config/api';
 import { validateUploadFile } from '../../utils/imageValidation';
@@ -8,19 +8,20 @@ import { validateUploadFile } from '../../utils/imageValidation';
 const CustomerUpload: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [isPaymentVerified, setIsPaymentVerified] = useState<boolean | null>(null);
   const [requestedDocIds, setRequestedDocIds] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   // Track uploaded documents
   const [documents, setDocuments] = useState<any[]>([
-    { id: 'sale_deed', name: 'Land document sale Deed', fileName: null, status: 'Missing' },
-    { id: 'patta', name: 'Patta', fileName: null, status: 'Missing' },
-    { id: 'fmb', name: 'FMB', fileName: null, status: 'Missing' },
-    { id: 'pan', name: 'Pancard', fileName: null, status: 'Missing' },
-    { id: 'aadhar', name: 'Aadhar card', fileName: null, status: 'Missing' },
-    { id: 'photo', name: 'Photo (passport size)', fileName: null, status: 'Missing' },
-    { id: 'signature', name: 'Signature', fileName: null, status: 'Missing' },
-    { id: 'building_plan', name: 'Building plan', fileName: null, status: 'Missing' }
+    { id: 'sale_deed', name: 'Land Document / Sale Deed', required: true, fileName: null, status: 'Missing' },
+    { id: 'patta', name: 'Patta', required: true, fileName: null, status: 'Missing' },
+    { id: 'fmb', name: 'FMB (Field Measurement Book)', required: false, fileName: null, status: 'Missing' },
+    { id: 'pan', name: 'PAN Card', required: true, fileName: null, status: 'Missing' },
+    { id: 'aadhar', name: 'Aadhar Card', required: true, fileName: null, status: 'Missing' },
+    { id: 'photo', name: 'Passport Size Photograph', required: true, fileName: null, status: 'Missing' },
+    { id: 'signature', name: 'Customer Signature', required: true, fileName: null, status: 'Missing' },
+    { id: 'building_plan', name: 'Proposed Building Plan', required: false, fileName: null, status: 'Missing' }
   ]);
 
   useEffect(() => {
@@ -54,13 +55,21 @@ const CustomerUpload: React.FC = () => {
           const res = await fetch(`${apiUrl}/cases/${id}`);
           if (res.ok) {
             const apiCase = await res.json();
+
+            // Phase 6 & 7: Check that fee payment has been verified before enabling upload
+            const pStatus = (apiCase.fullData?.payment?.paymentStatus || '').toUpperCase();
+            const pAmount = parseFloat(apiCase.fullData?.payment?.amount || apiCase.fullData?.paidAmount || '0');
+            const isPaid = pStatus === 'PAID' || apiCase.status === 'PAYMENT_COMPLETED' || pAmount > 0;
+            setIsPaymentVerified(isPaid);
+
             if (apiCase.requestedReuploads && apiCase.requestedReuploads.length > 0) {
               reqList = apiCase.requestedReuploads;
             } else if (apiCase.fullData?.requestedReuploads && apiCase.fullData.requestedReuploads.length > 0) {
               reqList = apiCase.fullData.requestedReuploads;
             }
 
-            if (apiCase.uploadedFiles) {
+            const caseFiles = apiCase.uploadedFiles || apiCase.fullData?.documents || {};
+            if (caseFiles) {
               const reverseMap: any = {
                 'CUSTOMER PHOTOGRAPH': 'photo',
                 'CUSTOMER SIGNATURE': 'signature',
@@ -73,8 +82,8 @@ const CustomerUpload: React.FC = () => {
               };
               currentDocs = currentDocs.map((d: any) => {
                 const foundKey = Object.keys(reverseMap).find(k => reverseMap[k] === d.id);
-                if (foundKey && apiCase.uploadedFiles[foundKey]) {
-                  return { ...d, fileData: apiCase.uploadedFiles[foundKey], fileName: `${foundKey}.jpg`, status: 'Uploaded' };
+                if (foundKey && caseFiles[foundKey]) {
+                  return { ...d, fileData: caseFiles[foundKey], fileName: `${foundKey}.jpg`, status: 'Uploaded' };
                 }
                 return d;
               });
@@ -263,10 +272,22 @@ const CustomerUpload: React.FC = () => {
   const [showConfirmModal, setShowConfirmModal] = useState(false);
 
   const handleSubmit = () => {
-    // Check if at least one document is uploaded
-    const hasUploads = documents.some(doc => doc.fileName !== null);
-    if (!hasUploads) {
-      toast.success("Please upload at least one document before submitting.");
+    // If reupload mode is active, verify all requested items have files
+    if (requestedDocIds.length > 0) {
+      const missingReuploads = documents.filter(doc => requestedDocIds.includes(doc.id) && !doc.fileName && !doc.fileData);
+      if (missingReuploads.length > 0) {
+        toast.error(`Please upload all requested documents (${missingReuploads.map(d => d.name).join(', ')}) before submitting.`);
+        return;
+      }
+      handleReuploadSubmit();
+      return;
+    }
+
+    // Phase 7: Prevent final document submission if any required document is missing
+    const mandatoryIds = ['sale_deed', 'patta', 'pan', 'aadhar', 'photo', 'signature'];
+    const missingMandatory = documents.filter(doc => mandatoryIds.includes(doc.id) && !doc.fileName && !doc.fileData);
+    if (missingMandatory.length > 0) {
+      toast.error(`Required documents missing: ${missingMandatory.map(d => d.name).join(', ')}. Please upload all mandatory documents before submitting.`);
       return;
     }
     
@@ -325,6 +346,29 @@ const CustomerUpload: React.FC = () => {
     setViewingDoc({ name: doc.name, fileData: doc.fileData });
   };
 
+  if (isPaymentVerified === false) {
+    return (
+      <div style={{ minHeight: '100vh', backgroundColor: '#f8fafc', padding: '3rem 1rem', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+        <div style={{ maxWidth: '520px', width: '100%', backgroundColor: '#ffffff', borderRadius: '1rem', border: '1px solid #e2e8f0', padding: '2.5rem', textAlign: 'center', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}>
+          <div style={{ width: '64px', height: '64px', borderRadius: '50%', backgroundColor: '#fef3c7', color: '#d97706', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.5rem auto' }}>
+            <Lock size={32} />
+          </div>
+          <h2 style={{ fontSize: '1.5rem', fontWeight: 800, color: '#0f172a', margin: '0 0 0.75rem 0' }}>Payment Verification Required</h2>
+          <p style={{ color: '#64748b', fontSize: '0.95rem', lineHeight: 1.5, margin: '0 0 1.5rem 0' }}>
+            Document upload access is unlocked after your initial application payment is verified. Proposal <strong>#{id}</strong> currently has payment status <strong>Pending</strong>.
+          </p>
+          <div style={{ padding: '1rem', backgroundColor: '#f8fafc', borderRadius: '0.5rem', border: '1px solid #e2e8f0', fontSize: '0.85rem', color: '#475569', marginBottom: '1.5rem', textAlign: 'left', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            <div>• Please contact your assigned staff coordinator or complete payment.</div>
+            <div>• Once verified by the team, this upload portal will be immediately unlocked.</div>
+          </div>
+          <Link to="/track" style={{ display: 'inline-block', padding: '0.75rem 1.5rem', borderRadius: '0.5rem', backgroundColor: '#0284c7', color: '#ffffff', textDecoration: 'none', fontWeight: 700, fontSize: '0.875rem' }}>
+            Track Application Status
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#f8fafc', padding: '2rem 1rem' }}>
       <div style={{ maxWidth: '800px', margin: '0 auto' }}>
@@ -366,7 +410,7 @@ const CustomerUpload: React.FC = () => {
             <AlertCircle size={24} color="var(--primary)" style={{ flexShrink: 0 }} />
             <div>
               <h3 style={{ fontSize: '1.125rem', fontWeight: 600, color: 'var(--primary-dark)', margin: '0 0 0.25rem 0' }}>Action Required</h3>
-              <p style={{ color: 'var(--text-secondary)', margin: 0, fontSize: '0.875rem' }}>Please upload the requested documents below. Once all documents are uploaded, click the Submit button at the bottom of the page. <strong>Note: You cannot modify files after submission.</strong></p>
+              <p style={{ color: 'var(--text-secondary)', margin: 0, fontSize: '0.875rem' }}>Please upload the requested documents below. All mandatory documents marked with <strong>REQUIRED</strong> must be provided before final submission.</p>
             </div>
           </div>
         )}
@@ -380,10 +424,16 @@ const CustomerUpload: React.FC = () => {
                   {(doc.fileName || doc.file) && doc.status !== 'Needs Reupload' ? <CheckCircle2 size={24} /> : <FileText size={24} />}
                 </div>
                 <div>
-                  <h4 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--primary-dark)', margin: '0 0 0.25rem 0' }}>{doc.name}</h4>
+                  <h4 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--primary-dark)', margin: '0 0 0.25rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    {doc.name}
+                    {doc.required ? (
+                      <span style={{ fontSize: '0.65rem', padding: '0.15rem 0.4rem', borderRadius: '0.25rem', backgroundColor: '#fee2e2', color: '#b91c1c', fontWeight: 800 }}>REQUIRED</span>
+                    ) : (
+                      <span style={{ fontSize: '0.65rem', padding: '0.15rem 0.4rem', borderRadius: '0.25rem', backgroundColor: '#f1f5f9', color: '#64748b', fontWeight: 600 }}>OPTIONAL</span>
+                    )}
+                  </h4>
                   <p style={{ fontSize: '0.875rem', color: doc.status === 'Needs Reupload' ? 'var(--warning-gold)' : (doc.fileName || doc.file) ? 'var(--success-green)' : 'var(--text-secondary)', margin: 0 }}>
                     {doc.status === 'Needs Reupload' ? 'Reupload Requested' : (doc.fileName || doc.file) ? `Uploaded: ${doc.fileName || doc.file}` : 'Pending Upload'}
-                  </p>
                 </div>
               </div>
               
