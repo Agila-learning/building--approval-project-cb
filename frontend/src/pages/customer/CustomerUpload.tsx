@@ -346,29 +346,6 @@ const CustomerUpload: React.FC = () => {
     setViewingDoc({ name: doc.name, fileData: doc.fileData });
   };
 
-  if (isPaymentVerified === false) {
-    return (
-      <div style={{ minHeight: '100vh', backgroundColor: '#f8fafc', padding: '3rem 1rem', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-        <div style={{ maxWidth: '520px', width: '100%', backgroundColor: '#ffffff', borderRadius: '1rem', border: '1px solid #e2e8f0', padding: '2.5rem', textAlign: 'center', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}>
-          <div style={{ width: '64px', height: '64px', borderRadius: '50%', backgroundColor: '#fef3c7', color: '#d97706', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.5rem auto' }}>
-            <Lock size={32} />
-          </div>
-          <h2 style={{ fontSize: '1.5rem', fontWeight: 800, color: '#0f172a', margin: '0 0 0.75rem 0' }}>Payment Verification Required</h2>
-          <p style={{ color: '#64748b', fontSize: '0.95rem', lineHeight: 1.5, margin: '0 0 1.5rem 0' }}>
-            Document upload access is unlocked after your initial application payment is verified. Proposal <strong>#{id}</strong> currently has payment status <strong>Pending</strong>.
-          </p>
-          <div style={{ padding: '1rem', backgroundColor: '#f8fafc', borderRadius: '0.5rem', border: '1px solid #e2e8f0', fontSize: '0.85rem', color: '#475569', marginBottom: '1.5rem', textAlign: 'left', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-            <div>• Please contact your assigned staff coordinator or complete payment.</div>
-            <div>• Once verified by the team, this upload portal will be immediately unlocked.</div>
-          </div>
-          <Link to="/track" style={{ display: 'inline-block', padding: '0.75rem 1.5rem', borderRadius: '0.5rem', backgroundColor: '#0284c7', color: '#ffffff', textDecoration: 'none', fontWeight: 700, fontSize: '0.875rem' }}>
-            Track Application Status
-          </Link>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#f8fafc', padding: '2rem 1rem' }}>
       <div style={{ maxWidth: '800px', margin: '0 auto' }}>

@@ -153,6 +153,27 @@ export class PaymentController {
         }
       }
 
+      // Requirement: The application must not proceed to the Payment stage until all required documents are verified and approved
+      if (paymentStatus === 'Paid') {
+        const fullDataTemp = (targetCase.fullData as any) || {};
+        const stagesTemp = fullDataTemp.stages || [];
+        const docStage = stagesTemp.find((s: any) => s.key === 'stage_doc_completed' || s.key === 'stage_doc_verification');
+        const isDocStageCompleted = docStage?.status === 'Completed' || targetCase.status === 'Document Completed' || targetCase.status === 'DOCUMENTS_VERIFIED';
+        
+        const docVer = fullDataTemp.documentVerification || {};
+        const requiredDocKeys = ['CUSTOMER PHOTOGRAPH', 'CUSTOMER SIGNATURE', 'AADHAR CARD', 'PAN CARD', 'SALE DEED', 'PATTA', 'BUILDING PLAN'];
+        const hasUnverified = requiredDocKeys.some(k => {
+          const item = docVer[k] || (k === 'SALE DEED' ? docVer['LAND DOCUMENT'] : undefined);
+          return !item || item.status !== 'Verified';
+        });
+
+        if (!isDocStageCompleted && hasUnverified) {
+          return res.status(400).json({
+            error: 'The application cannot proceed to the Payment stage until all required documents are verified and approved by Admin.'
+          });
+        }
+      }
+
       const fullData = (targetCase.fullData as any) || {};
       const receiptNumber = fullData.payment?.receiptNumber || `RCP-${Date.now().toString().slice(-6)}`;
       const userRole = (req.headers['x-user-role'] || '') as string;

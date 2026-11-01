@@ -3,14 +3,16 @@ import { useNavigate, useParams, Link } from 'react-router-dom';
 import { 
   ArrowLeft, Pencil, CheckCircle2, Clock, AlertCircle, Calendar, 
   User, Building2, MapPin, FileText, Download, Eye, ExternalLink,
-  ShieldCheck, ShieldAlert, ArrowRight, UserCheck, X
+  ShieldCheck, ShieldAlert, ArrowRight, UserCheck, X, MessageCircle,
+  CreditCard, Check, Lock, Send
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getApiUrl } from '../../config/api';
 
 interface StageRecord {
-  id: number;
+  id?: number;
   name: string;
+  key?: string;
   status: 'Completed' | 'In Progress' | 'Pending';
   startedDate: string | null;
   completedDate: string | null;
@@ -20,11 +22,10 @@ interface StageRecord {
 
 const STAGE_NAMES = [
   'Application Submitted',
-  'Document Verification',
-  'Payment Process',
-  'Site Visit',
-  'Final Review',
-  'Application Completed'
+  'Document Completed',
+  'Payment',
+  'Site Visit Completed',
+  'Final Approval'
 ];
 
 const ApplicationView: React.FC = () => {
@@ -50,6 +51,20 @@ const ApplicationView: React.FC = () => {
 
   // Document Preview Modal
   const [previewDoc, setPreviewDoc] = useState<{ title: string; url: string } | null>(null);
+
+  // Payment Modal state
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [payAmount, setPayAmount] = useState('15000');
+  const [payMethod, setPayMethod] = useState('UPI / QR Code');
+  const [payTxId, setPayTxId] = useState('');
+  const [payNotes, setPayNotes] = useState('');
+  const [isSavingPayment, setIsSavingPayment] = useState(false);
+
+  // Site Visit Modal state
+  const [isSiteVisitModalOpen, setIsSiteVisitModalOpen] = useState(false);
+  const [visitDate, setVisitDate] = useState(new Date().toISOString().split('T')[0]);
+  const [inspectorNotes, setInspectorNotes] = useState('');
+  const [isSavingSiteVisit, setIsSavingSiteVisit] = useState(false);
 
   const fetchStaffList = async () => {
     try {
@@ -131,12 +146,190 @@ const ApplicationView: React.FC = () => {
     );
   }
 
-  const stages: StageRecord[] = caseRecord.stages || [];
+  const stages: StageRecord[] = (caseRecord.fullData?.stages && caseRecord.fullData.stages.length > 0)
+    ? caseRecord.fullData.stages
+    : (caseRecord.stages || []);
+
   const fullData = caseRecord.fullData || {};
   const property = caseRecord.property || {};
   const proposalNumber = caseRecord.application_number || id;
   const currentStatus = caseRecord.status || 'Application Submitted';
   const assignedStaffName = caseRecord.assigned_staff?.name || fullData.staff || 'Unassigned';
+
+  const isDocStageCompleted = stages[1]?.status === 'Completed' || currentStatus === 'Document Completed';
+  const isPaymentCompleted = stages[2]?.status === 'Completed' || currentStatus === 'Payment Completed' || fullData.payment?.paymentStatus === 'Paid';
+  const isSiteVisitCompleted = stages[3]?.status === 'Completed' || currentStatus === 'Site Visit Completed';
+  const isFinalApproved = stages[4]?.status === 'Completed' || currentStatus === 'Final Approval' || currentStatus === 'Application Completed';
+
+  const handleShareWhatsApp = () => {
+    const cleanMobile = (property.owner_phone || fullData.mobile || '').replace(/\D/g, '').slice(-10);
+    if (!cleanMobile || cleanMobile.length !== 10) {
+      toast.error('Customer phone number not available or invalid.');
+      return;
+    }
+    const uploadUrl = `${window.location.origin}/upload/${proposalNumber}`;
+    const customerName = property.owner_name || fullData.customerName || 'Customer';
+    const text = `Dear ${customerName},\n\nGreetings from C.B. Building Approvals.\nYour building approval application (${proposalNumber}) is in progress. Please upload your required documents using your secure personal upload link below:\n\n${uploadUrl}\n\nRequired Documents Checklist:\n1. Applicant Passport Photograph\n2. Applicant Signature\n3. Aadhaar Card\n4. PAN Card\n5. Sale Deed / Land Document\n6. Patta Copy\n7. Proposed Building Plan\n\nOnce uploaded, our team will verify and submit for approval.\nThank you!\nC.B. Building Approvals`;
+    window.open(`https://wa.me/91${cleanMobile}?text=${encodeURIComponent(text)}`, '_blank');
+  };
+
+  const handleApproveAllDocs = async () => {
+    if (!isAdmin) return;
+    try {
+      const res = await fetch(`${getApiUrl()}/documents/approve-all`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-role': 'ADMIN',
+          'x-user-name': loggedInUser
+        },
+        body: JSON.stringify({ caseId: caseRecord.id || id })
+      });
+      if (res.ok) {
+        toast.success('All required documents approved! Payment stage is now unlocked.');
+        fetchCaseDetails();
+      } else {
+        const err = await res.json();
+        toast.error(err.error || 'Failed to approve documents.');
+      }
+    } catch (e) {
+      toast.error('Network error approving documents.');
+    }
+  };
+
+  const handleVerifySingleDoc = async (docKey: string, status: 'Verified' | 'Worker Verified' | 'Re-upload Required') => {
+    try {
+      const res = await fetch(`${getApiUrl()}/documents/verify-status`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-role': userRole,
+          'x-user-name': loggedInUser,
+          'x-staff-id': staffId
+        },
+        body: JSON.stringify({
+          caseId: caseRecord.id || id,
+          documentKey: docKey,
+          status
+        })
+      });
+      if (res.ok) {
+        toast.success(isAdmin ? `Document ${status}` : 'Document marked as Worker Verified');
+        fetchCaseDetails();
+      } else {
+        const err = await res.json();
+        toast.error(err.error || 'Failed to update document status');
+      }
+    } catch (e) {
+      toast.error('Network error updating document status');
+    }
+  };
+
+  const handleSavePayment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!payTxId.trim()) {
+      toast.error('Please enter Transaction ID / UTR.');
+      return;
+    }
+    setIsSavingPayment(true);
+    try {
+      const res = await fetch(`${getApiUrl()}/payments/verify`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-role': 'ADMIN',
+          'x-user-name': loggedInUser
+        },
+        body: JSON.stringify({
+          caseId: caseRecord.id || id,
+          amount: parseFloat(payAmount) || 0,
+          paymentMethod: payMethod,
+          transactionId: payTxId.trim(),
+          paymentStatus: 'Paid',
+          notes: payNotes.trim(),
+          sendEmail: true
+        })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        toast.success('Payment verified & recorded! Site Visit stage unlocked.');
+        setIsPaymentModalOpen(false);
+        fetchCaseDetails();
+      } else {
+        toast.error(data.error || 'Payment recording failed.');
+      }
+    } catch (err) {
+      toast.error('Network error recording payment.');
+    } finally {
+      setIsSavingPayment(false);
+    }
+  };
+
+  const handleSaveSiteVisit = async (adminConfirmed: boolean) => {
+    setIsSavingSiteVisit(true);
+    try {
+      const res = await fetch(`${getApiUrl()}/cases/${caseRecord.id || id}/site-visit`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-role': userRole,
+          'x-user-name': loggedInUser,
+          'x-staff-id': staffId
+        },
+        body: JSON.stringify({
+          visitDate,
+          inspectorNotes,
+          inspectionStatus: 'Completed',
+          adminConfirmed
+        })
+      });
+      if (res.ok) {
+        toast.success(adminConfirmed ? 'Site visit confirmed! Final Approval stage unlocked.' : 'Site visit report submitted for Admin review.');
+        setIsSiteVisitModalOpen(false);
+        fetchCaseDetails();
+      } else {
+        const err = await res.json();
+        toast.error(err.error || 'Failed to update site visit.');
+      }
+    } catch (e) {
+      toast.error('Network error saving site visit.');
+    } finally {
+      setIsSavingSiteVisit(false);
+    }
+  };
+
+  const handleGrantFinalApproval = async () => {
+    if (!isAdmin) return;
+    const confirm = window.confirm(`Grant Final Approval for proposal #${proposalNumber}? This will issue sanction and dispatch the official application completion email to ${property.owner_email || fullData.email}.`);
+    if (!confirm) return;
+
+    try {
+      const res = await fetch(`${getApiUrl()}/cases/${caseRecord.id || id}/stages/update`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-role': 'ADMIN',
+          'x-user-name': loggedInUser
+        },
+        body: JSON.stringify({
+          stageKey: 'stage_final_approval',
+          stageIndex: 4,
+          status: 'Completed',
+          remarks: 'Official building plan approval order sanctioned and dispatched.',
+          responsiblePerson: loggedInUser
+        })
+      });
+      if (res.ok) {
+        toast.success('Application Sanctioned & Approved! Completion email dispatched.');
+        fetchCaseDetails();
+      } else {
+        const err = await res.json();
+        toast.error(err.error || 'Failed to grant final approval.');
+      }
+    } catch (e) {
+      toast.error('Network error updating stage.');
+    }
+  };
 
   const handleOpenUpdateModal = (stageIndex: number) => {
     if (!isAdmin) {
@@ -232,6 +425,23 @@ const ApplicationView: React.FC = () => {
     { key: 'PATTA', label: 'Patta Copy' },
     { key: 'BUILDING PLAN', label: 'Building Plan' },
   ];
+
+  const uploadedFilesCount = documentList.filter(d => uploadedFiles[d.key] || (d.altKey && uploadedFiles[d.altKey])).length;
+  const workerVerifiedCount = documentList.filter(d => {
+    const v = docVerification[d.key] || (d.altKey && docVerification[d.altKey]);
+    return v && (v.status === 'Worker Verified' || v.status === 'Verified');
+  }).length;
+  const adminApprovedCount = documentList.filter(d => {
+    const v = docVerification[d.key] || (d.altKey && docVerification[d.altKey]);
+    return v && v.status === 'Verified';
+  }).length;
+  const allDocsApproved = adminApprovedCount >= documentList.length && documentList.length > 0;
+
+  const isStage0Done = stages[0]?.status === 'Completed';
+  const isStage1Done = stages[1]?.status === 'Completed' || allDocsApproved;
+  const isStage2Done = stages[2]?.status === 'Completed' || fullData.payment?.paymentStatus === 'Paid';
+  const isStage3Done = stages[3]?.status === 'Completed' || Boolean(fullData.siteVisit?.adminConfirmed);
+  const isStage4Done = stages[4]?.status === 'Completed' || currentStatus === 'Application Completed';
 
   return (
     <div style={{ maxWidth: '1100px', margin: '0 auto', paddingBottom: '3rem' }}>
@@ -344,44 +554,69 @@ const ApplicationView: React.FC = () => {
         </div>
 
         {/* Worker Assignment Card */}
-        <div className="card" style={{ padding: '1.25rem' }}>
-          <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            Assigned Worker
-          </div>
-          <div style={{ fontSize: '1.1rem', fontWeight: 700, color: assignedStaffName === 'Unassigned' ? '#dc2626' : 'var(--primary-dark)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-            <UserCheck size={18} color={assignedStaffName === 'Unassigned' ? '#dc2626' : 'var(--primary)'} />
-            {assignedStaffName}
-          </div>
-          {isAdmin ? (
-            <div style={{ marginTop: '0.5rem' }}>
-              <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.25rem' }}>
-                Reassign Worker:
-              </label>
-              <select
-                value={assignedStaffName}
-                onChange={(e) => handleAdminAssignWorker(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '0.35rem 0.5rem',
-                  fontSize: '0.8125rem',
-                  borderRadius: '0.375rem',
-                  border: '1px solid var(--border-color)',
-                  backgroundColor: 'var(--bg-surface)'
-                }}
-              >
-                <option value="Unassigned">Unassigned (Hold)</option>
-                {staffList.map((s: any) => (
-                  <option key={s.id} value={s.name}>
-                    {s.name} ({s.staffId || 'Staff'})
-                  </option>
-                ))}
-              </select>
+        <div className="card" style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+          <div>
+            <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Assigned Worker
             </div>
-          ) : (
-            <div style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
-              Assigned by Admin
+            <div style={{ fontSize: '1.1rem', fontWeight: 700, color: assignedStaffName === 'Unassigned' ? '#dc2626' : 'var(--primary-dark)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <UserCheck size={18} color={assignedStaffName === 'Unassigned' ? '#dc2626' : 'var(--primary)'} />
+              {assignedStaffName}
             </div>
-          )}
+            {isAdmin ? (
+              <div style={{ marginTop: '0.5rem' }}>
+                <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.25rem' }}>
+                  Assign Worker:
+                </label>
+                <select
+                  value={assignedStaffName}
+                  onChange={(e) => handleAdminAssignWorker(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '0.35rem 0.5rem',
+                    fontSize: '0.8125rem',
+                    borderRadius: '0.375rem',
+                    border: '1px solid var(--border-color)',
+                    backgroundColor: 'var(--bg-surface)'
+                  }}
+                >
+                  <option value="Unassigned">Unassigned (Hold)</option>
+                  {staffList.map((s: any) => (
+                    <option key={s.id} value={s.name}>
+                      {s.name} ({s.staffId || 'Staff'})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <div style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
+                Assigned by Admin
+              </div>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={handleShareWhatsApp}
+            style={{
+              width: '100%',
+              marginTop: '0.75rem',
+              padding: '0.45rem',
+              borderRadius: '0.375rem',
+              backgroundColor: '#25D366',
+              color: 'white',
+              border: 'none',
+              fontWeight: 600,
+              fontSize: '0.75rem',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.4rem',
+              cursor: 'pointer'
+            }}
+            title="Send WhatsApp document upload link to customer"
+          >
+            <MessageCircle size={14} /> Send WhatsApp Upload Link
+          </button>
         </div>
 
         {/* Product / Service Card */}
@@ -414,7 +649,7 @@ const ApplicationView: React.FC = () => {
         </div>
       </div>
 
-      {/* Main Section: The 6 Stages Progress Timeline */}
+      {/* Main Section: The 5 Stages Progress Timeline */}
       <div className="card" style={{ marginBottom: '2rem', padding: '2rem' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '1rem' }}>
           <div>
@@ -428,7 +663,7 @@ const ApplicationView: React.FC = () => {
 
           {isAdmin && (
             <div style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', fontWeight: 500 }}>
-              Click any stage below to update status & remarks
+              Click any stage below to update remarks or override status
             </div>
           )}
         </div>
@@ -448,7 +683,7 @@ const ApplicationView: React.FC = () => {
                   gap: '1.5rem',
                   alignItems: 'flex-start',
                   cursor: isAdmin ? 'pointer' : 'default',
-                  padding: '1rem',
+                  padding: '1.25rem',
                   borderRadius: '0.5rem',
                   backgroundColor: isInProgress ? 'rgba(30, 58, 138, 0.04)' : 'transparent',
                   border: isInProgress ? '1.5px solid var(--primary)' : '1px solid var(--border-color)',
@@ -495,13 +730,213 @@ const ApplicationView: React.FC = () => {
 
                     {isAdmin && (
                       <span style={{ fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 600 }}>
-                        Click to Update →
+                        Click to Edit Remarks →
                       </span>
                     )}
                   </div>
 
+                  {/* Stage Context / Metrics */}
+                  {idx === 0 && (
+                    <div style={{ marginTop: '0.5rem', fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
+                      Worker Assignment: <strong style={{ color: assignedStaffName === 'Unassigned' ? '#dc2626' : 'var(--primary)' }}>
+                        {assignedStaffName === 'Unassigned' ? 'Unassigned (Waiting for Admin assignment)' : `Assigned to ${assignedStaffName}`}
+                      </strong>
+                    </div>
+                  )}
+
+                  {idx === 1 && (
+                    <div style={{ marginTop: '0.5rem', display: 'flex', gap: '1rem', flexWrap: 'wrap', fontSize: '0.8125rem' }}>
+                      <span style={{ color: 'var(--text-secondary)' }}>Uploads: <strong>{uploadedFilesCount}/{documentList.length}</strong></span>
+                      <span style={{ color: '#0369a1' }}>Worker Verified: <strong>{workerVerifiedCount}/{documentList.length}</strong></span>
+                      <span style={{ color: allDocsApproved ? '#059669' : '#b45309', fontWeight: 600 }}>
+                        Admin Approved: <strong>{adminApprovedCount}/{documentList.length}</strong> {allDocsApproved ? '✓ (Completed)' : ''}
+                      </span>
+                    </div>
+                  )}
+
+                  {idx === 2 && (
+                    <div style={{ marginTop: '0.5rem', fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
+                      {isStage2Done ? (
+                        <span style={{ color: '#059669', fontWeight: 600 }}>
+                          ✓ Payment Verified: ₹{fullData.payment?.amount || payAmount} via {fullData.payment?.paymentMethod || payMethod} (TxID: {fullData.payment?.transactionId || 'Confirmed'})
+                        </span>
+                      ) : (
+                        <span style={{ color: isStage1Done ? '#b45309' : '#64748b' }}>
+                          {isStage1Done ? 'Stage 2 Documents Approved. Ready for payment collection & verification.' : 'Locked: Requires all required documents to be approved by Admin.'}
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                  {idx === 3 && (
+                    <div style={{ marginTop: '0.5rem', fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
+                      {isStage3Done ? (
+                        <span style={{ color: '#059669', fontWeight: 600 }}>
+                          ✓ Site Inspection Confirmed by Admin {fullData.siteVisit?.visitDate ? `on ${new Date(fullData.siteVisit.visitDate).toLocaleDateString('en-GB')}` : ''}
+                        </span>
+                      ) : (
+                        <span style={{ color: isStage2Done ? '#b45309' : '#64748b' }}>
+                          {isStage2Done ? (fullData.siteVisit?.inspectorNotes ? 'Site findings submitted by field worker. Awaiting Admin confirmation.' : 'Payment confirmed. Ready for physical site inspection.') : 'Locked: Requires Stage 3 Payment to be completed first.'}
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                  {idx === 4 && (
+                    <div style={{ marginTop: '0.5rem', fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
+                      {isStage4Done ? (
+                        <span style={{ color: '#059669', fontWeight: 600 }}>
+                          ✓ Official Building Sanction Order Issued. Automated Completion Email dispatched to customer via Brevo.
+                        </span>
+                      ) : (
+                        <span style={{ color: (isStage0Done && isStage1Done && isStage2Done && isStage3Done) ? '#b45309' : '#64748b' }}>
+                          {(isStage0Done && isStage1Done && isStage2Done && isStage3Done) 
+                            ? 'All preliminary stages completed! Ready for Admin Final Approval.'
+                            : 'Locked: Requires Stages 1 to 4 to be completed first.'}
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Stage Action Buttons */}
+                  <div style={{ marginTop: '0.75rem', display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
+                    {idx === 0 && (
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); handleShareWhatsApp(); }}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.4rem',
+                          padding: '0.4rem 0.8rem',
+                          borderRadius: '0.375rem',
+                          backgroundColor: '#25D366',
+                          color: 'white',
+                          border: 'none',
+                          fontWeight: 600,
+                          fontSize: '0.8125rem',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        <MessageCircle size={15} /> Share WhatsApp Upload Link
+                      </button>
+                    )}
+
+                    {idx === 1 && isAdmin && !allDocsApproved && (
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); handleApproveAllDocs(); }}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.4rem',
+                          padding: '0.4rem 0.8rem',
+                          borderRadius: '0.375rem',
+                          backgroundColor: '#059669',
+                          color: 'white',
+                          border: 'none',
+                          fontWeight: 600,
+                          fontSize: '0.8125rem',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        <CheckCircle2 size={15} /> Approve All Required Documents
+                      </button>
+                    )}
+
+                    {idx === 2 && isAdmin && !isStage2Done && (
+                      <button
+                        type="button"
+                        disabled={!isStage1Done}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (!isStage1Done) {
+                            toast.error('Payment locked: All required documents must be approved by Admin first.');
+                            return;
+                          }
+                          setIsPaymentModalOpen(true);
+                        }}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.4rem',
+                          padding: '0.4rem 0.8rem',
+                          borderRadius: '0.375rem',
+                          backgroundColor: isStage1Done ? 'var(--primary)' : '#cbd5e1',
+                          color: 'white',
+                          border: 'none',
+                          fontWeight: 600,
+                          fontSize: '0.8125rem',
+                          cursor: isStage1Done ? 'pointer' : 'not-allowed'
+                        }}
+                      >
+                        <CreditCard size={15} /> {isStage1Done ? 'Record & Verify Payment' : 'Locked (Docs Approval Required)'}
+                      </button>
+                    )}
+
+                    {idx === 3 && !isStage3Done && (
+                      <button
+                        type="button"
+                        disabled={!isStage2Done}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (!isStage2Done) {
+                            toast.error('Site Visit locked: Stage 3 (Payment) must be completed first.');
+                            return;
+                          }
+                          setIsSiteVisitModalOpen(true);
+                        }}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.4rem',
+                          padding: '0.4rem 0.8rem',
+                          borderRadius: '0.375rem',
+                          backgroundColor: isStage2Done ? (isAdmin ? '#7c3aed' : 'var(--primary)') : '#cbd5e1',
+                          color: 'white',
+                          border: 'none',
+                          fontWeight: 600,
+                          fontSize: '0.8125rem',
+                          cursor: isStage2Done ? 'pointer' : 'not-allowed'
+                        }}
+                      >
+                        <MapPin size={15} /> {isStage2Done ? (isAdmin ? 'Confirm Site Visit Completion' : 'Submit Inspection Report') : 'Locked (Payment Required)'}
+                      </button>
+                    )}
+
+                    {idx === 4 && isAdmin && !isStage4Done && (
+                      <button
+                        type="button"
+                        disabled={!isStage0Done || !isStage1Done || !isStage2Done || !isStage3Done}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (!isStage0Done || !isStage1Done || !isStage2Done || !isStage3Done) {
+                            toast.error('Stages 1 to 4 must all be completed before granting Final Approval.');
+                            return;
+                          }
+                          handleGrantFinalApproval();
+                        }}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.4rem',
+                          padding: '0.45rem 1rem',
+                          borderRadius: '0.375rem',
+                          backgroundColor: (isStage0Done && isStage1Done && isStage2Done && isStage3Done) ? '#059669' : '#cbd5e1',
+                          color: 'white',
+                          border: 'none',
+                          fontWeight: 700,
+                          fontSize: '0.8125rem',
+                          cursor: (isStage0Done && isStage1Done && isStage2Done && isStage3Done) ? 'pointer' : 'not-allowed'
+                        }}
+                      >
+                        <ShieldCheck size={16} /> Grant Final Approval & Issue Sanction Email
+                      </button>
+                    )}
+                  </div>
+
                   {/* Dates & Responsible Person */}
-                  <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap', marginTop: '0.625rem', fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
+                  <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap', marginTop: '0.75rem', fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
                     <div>
                       Started Date: <strong style={{ color: 'var(--text-primary)' }}>
                         {stage.startedDate ? new Date(stage.startedDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
@@ -541,21 +976,63 @@ const ApplicationView: React.FC = () => {
               Verified document checklist for application #{proposalNumber}
             </p>
           </div>
-          <Link
-            to={isAdmin ? '/admin/documents' : '/employee/documents'}
-            style={{
-              padding: '0.5rem 1rem',
-              borderRadius: '0.375rem',
-              backgroundColor: 'var(--bg-secondary)',
-              border: '1px solid var(--border-color)',
-              color: 'var(--primary)',
-              fontSize: '0.8125rem',
-              fontWeight: 600,
-              textDecoration: 'none'
-            }}
-          >
-            Open All Documents Tab →
-          </Link>
+          <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+            <button
+              onClick={handleShareWhatsApp}
+              style={{
+                padding: '0.5rem 0.85rem',
+                borderRadius: '0.375rem',
+                backgroundColor: '#25D366',
+                border: 'none',
+                color: 'white',
+                fontSize: '0.8125rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.35rem'
+              }}
+              title="Share document upload link via WhatsApp"
+            >
+              <MessageCircle size={14} /> Send WhatsApp Link
+            </button>
+            {isAdmin && !allDocsApproved && (
+              <button
+                onClick={handleApproveAllDocs}
+                style={{
+                  padding: '0.5rem 0.85rem',
+                  borderRadius: '0.375rem',
+                  backgroundColor: '#059669',
+                  border: 'none',
+                  color: 'white',
+                  fontSize: '0.8125rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.35rem'
+                }}
+                title="Admin Approve all uploaded documents at once"
+              >
+                <CheckCircle2 size={14} /> Approve All Documents
+              </button>
+            )}
+            <Link
+              to={isAdmin ? '/admin/documents' : '/employee/documents'}
+              style={{
+                padding: '0.5rem 1rem',
+                borderRadius: '0.375rem',
+                backgroundColor: 'var(--bg-secondary)',
+                border: '1px solid var(--border-color)',
+                color: 'var(--primary)',
+                fontSize: '0.8125rem',
+                fontWeight: 600,
+                textDecoration: 'none'
+              }}
+            >
+              Open All Documents Tab →
+            </Link>
+          </div>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1rem' }}>
@@ -589,10 +1066,10 @@ const ApplicationView: React.FC = () => {
                       fontWeight: 700,
                       padding: '0.15rem 0.45rem',
                       borderRadius: '1rem',
-                      backgroundColor: status === 'Verified' ? '#dcfce7' : status === 'Pending Review' ? '#e0f2fe' : '#fee2e2',
-                      color: status === 'Verified' ? '#166534' : status === 'Pending Review' ? '#0369a1' : '#b91c1c'
+                      backgroundColor: status === 'Verified' ? '#dcfce7' : status === 'Worker Verified' ? '#dbeafe' : status === 'Pending Review' ? '#fef3c7' : '#fee2e2',
+                      color: status === 'Verified' ? '#166534' : status === 'Worker Verified' ? '#1e40af' : status === 'Pending Review' ? '#b45309' : '#b91c1c'
                     }}>
-                      {status}
+                      {status === 'Verified' ? 'Admin Approved ✓' : status === 'Worker Verified' ? 'Worker Verified (Pending Admin)' : status}
                     </span>
                     {verData.verifiedBy && (
                       <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>
@@ -607,13 +1084,13 @@ const ApplicationView: React.FC = () => {
                   )}
                 </div>
 
-                <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                   {fileUrl ? (
                     <>
                       <button
                         onClick={() => setPreviewDoc({ title: doc.label, url: fileUrl })}
                         style={{
-                          padding: '0.4rem 0.6rem',
+                          padding: '0.35rem 0.6rem',
                           borderRadius: '0.25rem',
                           backgroundColor: 'var(--bg-secondary)',
                           border: '1px solid var(--border-color)',
@@ -635,7 +1112,7 @@ const ApplicationView: React.FC = () => {
                         rel="noopener noreferrer"
                         download
                         style={{
-                          padding: '0.4rem 0.6rem',
+                          padding: '0.35rem 0.6rem',
                           borderRadius: '0.25rem',
                           backgroundColor: 'var(--primary)',
                           border: 'none',
@@ -651,6 +1128,80 @@ const ApplicationView: React.FC = () => {
                       >
                         <Download size={13} />
                       </a>
+
+                      {/* Worker verification button */}
+                      {!isAdmin && status !== 'Verified' && status !== 'Worker Verified' && (
+                        <button
+                          onClick={() => handleVerifySingleDoc(doc.key, 'Worker Verified')}
+                          style={{
+                            padding: '0.35rem 0.6rem',
+                            borderRadius: '0.25rem',
+                            backgroundColor: '#3b82f6',
+                            border: 'none',
+                            color: 'white',
+                            cursor: 'pointer',
+                            fontSize: '0.75rem',
+                            fontWeight: 600,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.25rem'
+                          }}
+                          title="Mark Document as Worker Verified"
+                        >
+                          <Check size={13} /> Verify
+                        </button>
+                      )}
+
+                      {/* Admin approval button */}
+                      {isAdmin && status !== 'Verified' && (
+                        <button
+                          onClick={() => handleVerifySingleDoc(doc.key, 'Verified')}
+                          style={{
+                            padding: '0.35rem 0.6rem',
+                            borderRadius: '0.25rem',
+                            backgroundColor: '#059669',
+                            border: 'none',
+                            color: 'white',
+                            cursor: 'pointer',
+                            fontSize: '0.75rem',
+                            fontWeight: 600,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.25rem'
+                          }}
+                          title="Approve Document (Admin)"
+                        >
+                          <ShieldCheck size={13} /> Approve
+                        </button>
+                      )}
+
+                      {/* Admin Request Re-upload button */}
+                      {isAdmin && status !== 'Re-upload Required' && (
+                        <button
+                          onClick={() => {
+                            const reason = window.prompt(`Specify reason for re-uploading ${doc.label}:`);
+                            if (reason && reason.trim()) {
+                              handleVerifySingleDoc(doc.key, 'Re-upload Required');
+                            }
+                          }}
+                          style={{
+                            padding: '0.35rem 0.6rem',
+                            borderRadius: '0.25rem',
+                            backgroundColor: '#fee2e2',
+                            border: '1px solid #fca5a5',
+                            color: '#b91c1c',
+                            cursor: 'pointer',
+                            fontSize: '0.75rem',
+                            fontWeight: 600,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.25rem'
+                          }}
+                          title="Request Re-upload"
+                        >
+                          <AlertCircle size={13} /> Re-upload
+                        </button>
+                      )}
                     </>
                   ) : (
                     <span style={{ fontSize: '0.75rem', color: '#b91c1c', fontWeight: 600 }}>
@@ -792,9 +1343,9 @@ const ApplicationView: React.FC = () => {
                 />
               </div>
 
-              {targetStageIndex === 5 && newStageStatus === 'Completed' && (
+              {targetStageIndex === 4 && newStageStatus === 'Completed' && (
                 <div style={{ marginBottom: '1.25rem', padding: '0.75rem', backgroundColor: '#ecfdf5', borderRadius: '0.375rem', border: '1px solid #a7f3d0', fontSize: '0.8125rem', color: '#065f46' }}>
-                  <strong>Note:</strong> Marking Stage 6 (Application Completed) as Completed will automatically send the branded Application Completion Email to customer <strong>{property.owner_email || fullData.email}</strong> via Brevo notification service.
+                  <strong>Note:</strong> Marking Stage 5 (Final Approval) as Completed will issue the official sanction and automatically send the branded Application Completion Email to customer <strong>{property.owner_email || fullData.email}</strong> via Brevo notification service.
                 </div>
               )}
 
@@ -829,6 +1380,297 @@ const ApplicationView: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Payment Modal */}
+      {isPaymentModalOpen && (
+        <div style={{
+          position: 'fixed',
+          top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.5)',
+          zIndex: 1050,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '1rem'
+        }}>
+          <div style={{
+            width: '480px',
+            maxWidth: '100%',
+            backgroundColor: 'var(--bg-surface)',
+            borderRadius: '0.75rem',
+            overflow: 'hidden',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2)',
+            border: '1px solid var(--border-color)'
+          }}>
+            <div style={{
+              backgroundColor: 'var(--primary-dark)',
+              color: 'white',
+              padding: '1.25rem 1.5rem',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center'
+            }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700 }}>Record / Verify Payment</h3>
+                <div style={{ fontSize: '0.75rem', opacity: 0.85, marginTop: '0.2rem' }}>
+                  Stage 3 Payment • Proposal #{proposalNumber}
+                </div>
+              </div>
+              <button
+                onClick={() => setIsPaymentModalOpen(false)}
+                style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSavePayment} style={{ padding: '1.5rem' }}>
+              <div style={{ marginBottom: '1rem' }}>
+                <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, color: 'var(--primary-dark)', marginBottom: '0.35rem' }}>
+                  Payment Amount (₹):
+                </label>
+                <input
+                  type="number"
+                  value={payAmount}
+                  onChange={(e) => setPayAmount(e.target.value)}
+                  required
+                  style={{
+                    width: '100%',
+                    padding: '0.625rem',
+                    borderRadius: '0.375rem',
+                    border: '1px solid var(--border-color)',
+                    backgroundColor: 'var(--bg-surface)',
+                    fontSize: '0.875rem'
+                  }}
+                />
+              </div>
+
+              <div style={{ marginBottom: '1rem' }}>
+                <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, color: 'var(--primary-dark)', marginBottom: '0.35rem' }}>
+                  Payment Method:
+                </label>
+                <select
+                  value={payMethod}
+                  onChange={(e) => setPayMethod(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '0.625rem',
+                    borderRadius: '0.375rem',
+                    border: '1px solid var(--border-color)',
+                    backgroundColor: 'var(--bg-surface)',
+                    fontSize: '0.875rem'
+                  }}
+                >
+                  <option value="UPI / QR Code">UPI / QR Code (PhonePe, GPay, Paytm)</option>
+                  <option value="Bank Transfer / NEFT / RTGS">Bank Transfer / NEFT / RTGS</option>
+                  <option value="Credit / Debit Card">Credit / Debit Card</option>
+                  <option value="Cash">Cash at Office</option>
+                  <option value="Cheque / DD">Cheque / Demand Draft</option>
+                </select>
+              </div>
+
+              <div style={{ marginBottom: '1rem' }}>
+                <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, color: 'var(--primary-dark)', marginBottom: '0.35rem' }}>
+                  Transaction ID / UTR Number <span style={{ color: '#dc2626' }}>*</span>:
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. UPI-20261101987654 or UTR12345678"
+                  value={payTxId}
+                  onChange={(e) => setPayTxId(e.target.value)}
+                  required
+                  style={{
+                    width: '100%',
+                    padding: '0.625rem',
+                    borderRadius: '0.375rem',
+                    border: '1px solid var(--border-color)',
+                    backgroundColor: 'var(--bg-surface)',
+                    fontSize: '0.875rem'
+                  }}
+                />
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block', marginTop: '0.25rem' }}>
+                  System checks against duplicate transaction IDs across all cases.
+                </span>
+              </div>
+
+              <div style={{ marginBottom: '1.25rem' }}>
+                <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, color: 'var(--primary-dark)', marginBottom: '0.35rem' }}>
+                  Payment Remarks / Notes:
+                </label>
+                <textarea
+                  rows={2}
+                  value={payNotes}
+                  onChange={(e) => setPayNotes(e.target.value)}
+                  placeholder="Optional payment notes or branch details..."
+                  style={{
+                    width: '100%',
+                    padding: '0.625rem',
+                    borderRadius: '0.375rem',
+                    border: '1px solid var(--border-color)',
+                    backgroundColor: 'var(--bg-surface)',
+                    fontSize: '0.875rem',
+                    resize: 'vertical'
+                  }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+                <button
+                  type="button"
+                  onClick={() => setIsPaymentModalOpen(false)}
+                  style={{
+                    padding: '0.625rem 1.25rem',
+                    borderRadius: '0.375rem',
+                    backgroundColor: 'var(--bg-surface)',
+                    border: '1px solid var(--border-color)',
+                    cursor: 'pointer',
+                    fontSize: '0.875rem'
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingPayment}
+                  className="btn-primary"
+                  style={{
+                    padding: '0.625rem 1.5rem',
+                    borderRadius: '0.375rem',
+                    fontWeight: 600,
+                    fontSize: '0.875rem',
+                    cursor: isSavingPayment ? 'not-allowed' : 'pointer'
+                  }}
+                >
+                  {isSavingPayment ? 'Recording...' : 'Verify & Unlock Site Visit'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Site Visit Modal */}
+      {isSiteVisitModalOpen && (
+        <div style={{
+          position: 'fixed',
+          top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.5)',
+          zIndex: 1050,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '1rem'
+        }}>
+          <div style={{
+            width: '500px',
+            maxWidth: '100%',
+            backgroundColor: 'var(--bg-surface)',
+            borderRadius: '0.75rem',
+            overflow: 'hidden',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2)',
+            border: '1px solid var(--border-color)'
+          }}>
+            <div style={{
+              backgroundColor: 'var(--primary-dark)',
+              color: 'white',
+              padding: '1.25rem 1.5rem',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center'
+            }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700 }}>
+                  {isAdmin ? 'Confirm Site Visit Inspection' : 'Submit Site Visit Report'}
+                </h3>
+                <div style={{ fontSize: '0.75rem', opacity: 0.85, marginTop: '0.2rem' }}>
+                  Stage 4 Site Visit • Proposal #{proposalNumber}
+                </div>
+              </div>
+              <button
+                onClick={() => setIsSiteVisitModalOpen(false)}
+                style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div style={{ padding: '1.5rem' }}>
+              <div style={{ marginBottom: '1rem' }}>
+                <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, color: 'var(--primary-dark)', marginBottom: '0.35rem' }}>
+                  Inspection / Visit Date:
+                </label>
+                <input
+                  type="date"
+                  value={visitDate}
+                  onChange={(e) => setVisitDate(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '0.625rem',
+                    borderRadius: '0.375rem',
+                    border: '1px solid var(--border-color)',
+                    backgroundColor: 'var(--bg-surface)',
+                    fontSize: '0.875rem'
+                  }}
+                />
+              </div>
+
+              <div style={{ marginBottom: '1.25rem' }}>
+                <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, color: 'var(--primary-dark)', marginBottom: '0.35rem' }}>
+                  Field Inspector Observations & Site Findings:
+                </label>
+                <textarea
+                  rows={4}
+                  value={inspectorNotes}
+                  onChange={(e) => setInspectorNotes(e.target.value)}
+                  placeholder="Record site inspection findings: road width, physical setbacks, boundary markers verified, no encroachment..."
+                  style={{
+                    width: '100%',
+                    padding: '0.625rem',
+                    borderRadius: '0.375rem',
+                    border: '1px solid var(--border-color)',
+                    backgroundColor: 'var(--bg-surface)',
+                    fontSize: '0.875rem',
+                    resize: 'vertical'
+                  }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+                <button
+                  type="button"
+                  onClick={() => setIsSiteVisitModalOpen(false)}
+                  style={{
+                    padding: '0.625rem 1.25rem',
+                    borderRadius: '0.375rem',
+                    backgroundColor: 'var(--bg-surface)',
+                    border: '1px solid var(--border-color)',
+                    cursor: 'pointer',
+                    fontSize: '0.875rem'
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={isSavingSiteVisit}
+                  onClick={() => handleSaveSiteVisit(isAdmin)}
+                  className="btn-primary"
+                  style={{
+                    padding: '0.625rem 1.5rem',
+                    borderRadius: '0.375rem',
+                    fontWeight: 600,
+                    fontSize: '0.875rem',
+                    cursor: isSavingSiteVisit ? 'not-allowed' : 'pointer',
+                    backgroundColor: isAdmin ? '#059669' : 'var(--primary)'
+                  }}
+                >
+                  {isSavingSiteVisit ? 'Saving...' : isAdmin ? 'Confirm Completion & Unlock Final Approval' : 'Submit Report for Admin Review'}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

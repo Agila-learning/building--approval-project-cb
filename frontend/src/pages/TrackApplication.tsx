@@ -19,12 +19,11 @@ export interface StageItem {
 }
 
 const OFFICIAL_STAGES: { key: string; name: string; description: string }[] = [
-  { key: 'stage_submitted', name: 'Application Submitted', description: 'Application registered and initial details submitted.' },
-  { key: 'stage_doc_verification', name: 'Document Verification', description: 'Identity, ownership, and building plan documents scrutiny.' },
-  { key: 'stage_payment', name: 'Payment Process', description: 'Municipal and scrutiny fee processing and clearance.' },
-  { key: 'stage_site_visit', name: 'Site Visit', description: 'Field officer inspection and geo-verification of the property site.' },
-  { key: 'stage_final_review', name: 'Final Review', description: 'Final planning authority technical scrutiny and report compilation.' },
-  { key: 'stage_completed', name: 'Application Completed', description: 'Official building plan approval order sanctioned and dispatched.' },
+  { key: 'stage_submitted', name: 'Application Submitted', description: 'Application registered, reviewed by Admin and assigned to worker coordinator.' },
+  { key: 'stage_doc_completed', name: 'Document Completed', description: 'Document upload via secure link, worker verification, and official Admin document approval.' },
+  { key: 'stage_payment', name: 'Payment', description: 'Statutory fees calculation, customer payment completion, and official receipt confirmation.' },
+  { key: 'stage_site_visit', name: 'Site Visit Completed', description: 'Authorized field officer site visit, physical boundary inspection, and geo-verification.' },
+  { key: 'stage_final_approval', name: 'Final Approval', description: 'Executive planning authority final scrutiny, sanction order sanctioned, and completion certificate dispatched.' },
 ];
 
 const STATUS_TO_STAGE_INDEX: Record<string, number> = {
@@ -33,6 +32,8 @@ const STATUS_TO_STAGE_INDEX: Record<string, number> = {
   'APPLICATION SUBMITTED': 0,
   'SUBMITTED': 0,
   'INTAKE': 0,
+  'DOCUMENT COMPLETED': 1,
+  'DOCUMENTS COMPLETED': 1,
   'DOCUMENT VERIFICATION': 1,
   'DOCUMENTS_VERIFICATION': 1,
   'DOCUMENTS_PENDING': 1,
@@ -42,24 +43,26 @@ const STATUS_TO_STAGE_INDEX: Record<string, number> = {
   'ACTION REQUIRED': 1,
   'ACTION_NEEDED': 1,
   'UNDER REVIEW': 1,
+  'PAYMENT': 2,
   'PAYMENT PROCESS': 2,
   'PAYMENT_PENDING': 2,
   'PAYMENT_COMPLETED': 2,
+  'PAYMENT COMPLETED': 2,
+  'PAID': 2,
   'SITE VISIT': 3,
   'SITE_VISIT': 3,
+  'SITE VISIT COMPLETED': 3,
+  'SITE_VISIT_COMPLETED': 3,
   'INSPECTION_SCHEDULED': 3,
   'INSPECTION_DONE': 3,
   'FINAL REVIEW': 4,
   'FINAL_REVIEW': 4,
   'SCRUTINY': 4,
-  'APPLICATION PREPARED': 4,
-  'APPLICATION_PREP': 4,
-  'GOVT_SUBMISSION': 4,
-  'APPLICATION COMPLETED': 5,
-  'APPROVED': 5,
-  'FINAL APPROVAL': 5,
-  'SANCTIONED': 5,
-  'CLOSED': 5,
+  'FINAL APPROVAL': 4,
+  'APPLICATION COMPLETED': 4,
+  'APPROVED': 4,
+  'SANCTIONED': 4,
+  'CLOSED': 4,
   'REJECTED': -1,
   'REJECT': -1
 };
@@ -329,7 +332,7 @@ const TrackApplication: React.FC = () => {
 
       let finalStages: StageItem[] = [];
 
-      if (Array.isArray(rawStages) && rawStages.length === 6) {
+      if (Array.isArray(rawStages) && rawStages.length === 5) {
         finalStages = rawStages.map((st: any, idx: number) => {
           const config = OFFICIAL_STAGES[idx] || { key: `stage_${idx}`, name: st.name, description: '' };
           return {
@@ -339,7 +342,7 @@ const TrackApplication: React.FC = () => {
             startedDate: st.startedDate || (idx <= currentActiveIndex ? (foundCase.created_at || new Date().toISOString()) : null),
             completedDate: st.completedDate || (idx < currentActiveIndex ? (foundCase.created_at || new Date().toISOString()) : null),
             remarks: st.remarks || (idx === 0 ? 'Application registered and initial details submitted.' : ''),
-            responsiblePerson: st.responsiblePerson || (idx === 0 ? 'Customer' : (foundCase.assigned_staff?.name || (foundCase.fullData as any)?.staff || 'CB Construction Team')),
+            responsiblePerson: st.responsiblePerson || (idx === 0 ? 'Customer' : (foundCase.assigned_staff?.name || (foundCase.fullData as any)?.staff || 'Admin')),
             description: config.description
           };
         });

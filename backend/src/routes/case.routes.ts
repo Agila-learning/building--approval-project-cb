@@ -13,5 +13,6 @@ router.post('/:id/stages/update', caseController.updateStage);
 router.put('/:id/stages/update', caseController.updateStage);
 router.put('/:id/stage', caseController.updateStage);
 router.post('/:id/stage', caseController.updateStage);
+router.post('/:id/site-visit', caseController.submitSiteVisit);
 
 export default router;

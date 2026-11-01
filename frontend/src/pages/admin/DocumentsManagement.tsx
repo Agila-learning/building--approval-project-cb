@@ -18,7 +18,7 @@ interface DocumentRecord {
   name: string;
   fileUrl: string;
   uploadedAt: string;
-  status: 'Pending Review' | 'Verified' | 'Re-upload Required';
+  status: 'Pending Review' | 'Worker Verified' | 'Verified' | 'Re-upload Required';
   verificationStatus?: string;
   verifiedBy?: string;
   reuploadReason?: string;
@@ -78,15 +78,17 @@ const DocumentsManagement: React.FC = () => {
   const summary = React.useMemo(() => {
     const total = documents.length;
     const pending = documents.filter(d => d.status === 'Pending Review').length;
+    const workerVerified = documents.filter(d => d.status === 'Worker Verified').length;
     const verified = documents.filter(d => d.status === 'Verified').length;
     const reupload = documents.filter(d => d.status === 'Re-upload Required').length;
-    return { total, pending, verified, reupload };
+    return { total, pending, workerVerified, verified, reupload };
   }, [documents]);
 
   const filteredDocs = React.useMemo(() => {
     return documents.filter(doc => {
       // Status filter
       if (filterStatus === 'PENDING' && doc.status !== 'Pending Review') return false;
+      if (filterStatus === 'WORKER_VERIFIED' && doc.status !== 'Worker Verified') return false;
       if (filterStatus === 'VERIFIED' && doc.status !== 'Verified') return false;
       if (filterStatus === 'REUPLOAD' && doc.status !== 'Re-upload Required') return false;
 
@@ -117,7 +119,7 @@ const DocumentsManagement: React.FC = () => {
     window.open(waUrl, '_blank');
   };
 
-  const handleVerify = async (doc: DocumentRecord) => {
+  const handleVerify = async (doc: DocumentRecord, targetStatus: 'Verified' | 'Worker Verified' = isAdmin ? 'Verified' : 'Worker Verified') => {
     try {
       const apiUrl = getApiUrl();
       const targetKey = doc.docKey || doc.documentKey || doc.id.split('_').slice(1).join('_');
@@ -126,20 +128,21 @@ const DocumentsManagement: React.FC = () => {
         headers: {
           'Content-Type': 'application/json',
           'x-user-role': userRole,
-          'x-user-name': loggedInUser
+          'x-user-name': loggedInUser,
+          'x-staff-id': staffId
         },
         body: JSON.stringify({
           caseId: doc.caseId,
           docKey: targetKey,
           documentKey: targetKey,
-          status: 'Verified',
+          status: targetStatus,
           verifiedBy: loggedInUser
         })
       });
 
       if (res.ok) {
-        toast.success(`${doc.name} marked as Verified!`);
-        setDocuments(prev => prev.map(d => (d.caseId === doc.caseId && (d.docKey === doc.docKey || d.id === doc.id)) ? { ...d, status: 'Verified', verificationStatus: 'Verified', verifiedBy: loggedInUser } : d));
+        toast.success(targetStatus === 'Verified' ? `${doc.name} approved by Admin!` : `${doc.name} marked as Worker Verified!`);
+        setDocuments(prev => prev.map(d => (d.caseId === doc.caseId && (d.docKey === doc.docKey || d.id === doc.id)) ? { ...d, status: targetStatus, verificationStatus: targetStatus, verifiedBy: loggedInUser } : d));
       } else {
         const errJson = await res.json().catch(() => ({}));
         toast.error(errJson.error || 'Failed to update verification status.');
@@ -242,7 +245,7 @@ const DocumentsManagement: React.FC = () => {
       </div>
 
       {/* Summary Cards Row */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1.25rem', marginBottom: '2rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.25rem', marginBottom: '2rem' }}>
         {/* Total Uploaded */}
         <div 
           onClick={() => setFilterStatus('ALL')}
@@ -297,7 +300,36 @@ const DocumentsManagement: React.FC = () => {
             </div>
           </div>
           <div style={{ fontSize: '0.75rem', color: '#0369a1', marginTop: '0.5rem', fontWeight: 600 }}>
-            Awaiting verification check
+            Awaiting worker review
+          </div>
+        </div>
+
+        {/* Worker Verified */}
+        <div 
+          onClick={() => setFilterStatus('WORKER_VERIFIED')}
+          className="card" 
+          style={{ 
+            padding: '1.25rem', 
+            cursor: 'pointer',
+            border: filterStatus === 'WORKER_VERIFIED' ? '2px solid #4f46e5' : '1px solid var(--border-color)',
+            transition: 'all 0.2s'
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                Worker Verified
+              </div>
+              <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#4f46e5', marginTop: '0.25rem' }}>
+                {summary.workerVerified}
+              </div>
+            </div>
+            <div style={{ width: '44px', height: '44px', borderRadius: '0.5rem', backgroundColor: '#e0e7ff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <ShieldCheck size={22} color="#4f46e5" />
+            </div>
+          </div>
+          <div style={{ fontSize: '0.75rem', color: '#4f46e5', marginTop: '0.5rem', fontWeight: 600 }}>
+            Awaiting Admin final approval
           </div>
         </div>
 
@@ -315,7 +347,7 @@ const DocumentsManagement: React.FC = () => {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
               <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                Verified
+                Admin Approved
               </div>
               <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#059669', marginTop: '0.25rem' }}>
                 {summary.verified}
@@ -368,7 +400,8 @@ const DocumentsManagement: React.FC = () => {
             {[
               { key: 'ALL', label: 'All Documents', count: summary.total },
               { key: 'PENDING', label: 'Pending Review', count: summary.pending },
-              { key: 'VERIFIED', label: 'Verified', count: summary.verified },
+              { key: 'WORKER_VERIFIED', label: 'Worker Verified', count: summary.workerVerified },
+              { key: 'VERIFIED', label: 'Admin Approved', count: summary.verified },
               { key: 'REUPLOAD', label: 'Re-upload Required', count: summary.reupload },
             ].map(f => (
               <button
@@ -461,6 +494,7 @@ const DocumentsManagement: React.FC = () => {
               {filteredDocs.length > 0 ? (
                 filteredDocs.map((doc, idx) => {
                   const isVerified = doc.status === 'Verified';
+                  const isWorkerVerified = doc.status === 'Worker Verified';
                   const isPending = doc.status === 'Pending Review';
                   const isReupload = doc.status === 'Re-upload Required';
 
@@ -513,14 +547,14 @@ const DocumentsManagement: React.FC = () => {
                           fontWeight: 700,
                           padding: '0.25rem 0.6rem',
                           borderRadius: '1rem',
-                          backgroundColor: isVerified ? '#dcfce7' : isPending ? '#e0f2fe' : '#fee2e2',
-                          color: isVerified ? '#166534' : isPending ? '#0369a1' : '#b91c1c',
+                          backgroundColor: isVerified ? '#dcfce7' : isWorkerVerified ? '#e0e7ff' : isPending ? '#e0f2fe' : '#fee2e2',
+                          color: isVerified ? '#166534' : isWorkerVerified ? '#4338ca' : isPending ? '#0369a1' : '#b91c1c',
                           display: 'inline-flex',
                           alignItems: 'center',
                           gap: '0.3rem'
                         }}>
                           <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: 'currentColor' }}></span>
-                          {doc.status}
+                          {isVerified ? 'Admin Approved' : isWorkerVerified ? 'Worker Verified' : doc.status}
                         </span>
                       </td>
 
@@ -581,9 +615,31 @@ const DocumentsManagement: React.FC = () => {
                       {/* Actions */}
                       <td style={{ padding: '0.85rem 1rem', textAlign: 'right' }}>
                         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.4rem' }}>
-                          {!isVerified && (
+                          {!isAdmin && !isVerified && !isWorkerVerified && (
                             <button
-                              onClick={() => handleVerify(doc)}
+                              onClick={() => handleVerify(doc, 'Worker Verified')}
+                              style={{
+                                padding: '0.35rem 0.65rem',
+                                borderRadius: '0.25rem',
+                                backgroundColor: '#4f46e5',
+                                border: 'none',
+                                color: 'white',
+                                fontSize: '0.75rem',
+                                fontWeight: 600,
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '0.25rem'
+                              }}
+                              title="Mark as Worker Verified"
+                            >
+                              <Check size={13} /> Verify
+                            </button>
+                          )}
+
+                          {isAdmin && !isVerified && (
+                            <button
+                              onClick={() => handleVerify(doc, 'Verified')}
                               style={{
                                 padding: '0.35rem 0.65rem',
                                 borderRadius: '0.25rem',
@@ -597,9 +653,9 @@ const DocumentsManagement: React.FC = () => {
                                 alignItems: 'center',
                                 gap: '0.25rem'
                               }}
-                              title="Verify Document"
+                              title="Approve Document (Admin)"
                             >
-                              <Check size={13} /> Verify
+                              <ShieldCheck size={13} /> Approve
                             </button>
                           )}
 

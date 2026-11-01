@@ -69,7 +69,7 @@ const Landing: React.FC = () => {
 
   return (
     <div style={{ width: '100%', overflowX: 'hidden' }}>
-      <HeroSection />
+      <HeroSection onOpenEnquiry={() => setIsEnquireModalOpen(true)} />
       <AboutUsSection />
       <ServicesSection />
       <ProcessSection />

@@ -2,7 +2,11 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { Users, Clock, FileText, Bell } from 'lucide-react';
 
-const HeroSection: React.FC = () => {
+interface HeroSectionProps {
+  onOpenEnquiry?: () => void;
+}
+
+const HeroSection: React.FC<HeroSectionProps> = ({ onOpenEnquiry }) => {
   return (
     <section className="section hero-section" style={{ 
       paddingTop: '3rem', 
@@ -20,14 +24,19 @@ const HeroSection: React.FC = () => {
             <span style={{ color: 'var(--accent)' }}>Done Right.</span>
           </h1>
           
-
-          
-          <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginBottom: '3rem' }}>
-            <Link to="/apply" className="btn-primary" style={{ padding: '0.75rem 1.5rem', fontSize: '0.875rem', fontWeight: 600, backgroundColor: 'var(--accent)', color: 'var(--primary-dark)', border: 'none', borderRadius: '0.25rem' }}>
-              Start an Application &rarr;
+          <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginBottom: '3rem', alignItems: 'center' }}>
+            <Link to="/apply" className="btn-primary" style={{ padding: '0.75rem 1.5rem', fontSize: '0.9rem', fontWeight: 700, backgroundColor: 'var(--accent)', color: 'var(--primary-dark)', border: 'none', borderRadius: '0.375rem', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}>
+              Start Application &rarr;
             </Link>
-            <Link to="/track-application" className="btn-secondary" style={{ padding: '0.75rem 1.5rem', fontSize: '0.875rem', fontWeight: 600, border: '1px solid var(--primary-dark)', color: 'var(--primary-dark)', backgroundColor: 'transparent', borderRadius: '0.25rem' }}>
-              Track Existing Application
+            <button 
+              type="button"
+              onClick={() => onOpenEnquiry ? onOpenEnquiry() : window.dispatchEvent(new CustomEvent('open-enquiry-modal'))}
+              style={{ padding: '0.75rem 1.5rem', fontSize: '0.9rem', fontWeight: 700, backgroundColor: 'var(--primary)', color: '#ffffff', border: 'none', borderRadius: '0.375rem', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.5rem', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}
+            >
+              Enquiry
+            </button>
+            <Link to="/track-application" className="btn-secondary" style={{ padding: '0.75rem 1.25rem', fontSize: '0.875rem', fontWeight: 600, border: '1px solid var(--primary-dark)', color: 'var(--primary-dark)', backgroundColor: 'transparent', borderRadius: '0.375rem', textDecoration: 'none' }}>
+              Track Application
             </Link>
           </div>
 

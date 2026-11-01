@@ -10,32 +10,32 @@ export function buildDefaultStages(caseData?: any) {
   const createdDate = caseData?.created_at ? new Date(caseData.created_at).toISOString() : now;
 
   const isCompletedStage = (key: string) => {
-    if (['APPLICATION COMPLETED', 'APPROVED', 'CLOSED'].includes(currentStatus)) return true;
+    if (['FINAL APPROVAL', 'APPLICATION COMPLETED', 'APPROVED', 'CLOSED'].includes(currentStatus)) return true;
     if (key === 'stage_submitted') return true;
-    if (key === 'stage_doc_verification') {
-      return ['PAYMENT PROCESS', 'SITE VISIT', 'FINAL REVIEW', 'APPLICATION COMPLETED', 'APPROVED', 'CLOSED', 'DOCUMENTS_VERIFIED', 'SUBMITTED_FOR_APPROVAL'].includes(currentStatus);
+    if (key === 'stage_doc_completed' || key === 'stage_doc_verification') {
+      return ['DOCUMENT COMPLETED', 'DOCUMENTS_VERIFIED', 'PAYMENT', 'PAYMENT PROCESS', 'PAYMENT_COMPLETED', 'SITE VISIT', 'SITE VISIT COMPLETED', 'FINAL APPROVAL', 'APPLICATION COMPLETED', 'APPROVED', 'CLOSED'].includes(currentStatus);
     }
     if (key === 'stage_payment') {
-      return ['SITE VISIT', 'FINAL REVIEW', 'APPLICATION COMPLETED', 'APPROVED', 'CLOSED'].includes(currentStatus);
+      return ['PAYMENT_COMPLETED', 'SITE VISIT', 'SITE VISIT COMPLETED', 'FINAL APPROVAL', 'APPLICATION COMPLETED', 'APPROVED', 'CLOSED'].includes(currentStatus);
     }
     if (key === 'stage_site_visit') {
-      return ['FINAL REVIEW', 'APPLICATION COMPLETED', 'APPROVED', 'CLOSED'].includes(currentStatus);
+      return ['SITE VISIT COMPLETED', 'FINAL APPROVAL', 'APPLICATION COMPLETED', 'APPROVED', 'CLOSED'].includes(currentStatus);
     }
-    if (key === 'stage_final_review') {
-      return ['APPLICATION COMPLETED', 'APPROVED', 'CLOSED'].includes(currentStatus);
+    if (key === 'stage_final_approval' || key === 'stage_completed' || key === 'stage_final_review') {
+      return ['FINAL APPROVAL', 'APPLICATION COMPLETED', 'APPROVED', 'CLOSED'].includes(currentStatus);
     }
     return false;
   };
 
   const isInProgressStage = (key: string) => {
-    if (['APPLICATION COMPLETED', 'APPROVED', 'CLOSED'].includes(currentStatus)) return false;
+    if (['FINAL APPROVAL', 'APPLICATION COMPLETED', 'APPROVED', 'CLOSED'].includes(currentStatus)) return false;
     if (key === 'stage_submitted') return false;
-    if (key === 'stage_doc_verification') {
+    if (key === 'stage_doc_completed' || key === 'stage_doc_verification') {
       return ['APPLICATION SUBMITTED', 'DOCUMENTS_VERIFICATION', 'DOCUMENTS_PENDING', 'DOCUMENT_COLLECTION', 'INTAKE', 'SUBMITTED', 'NEW', 'DRAFT'].includes(currentStatus);
     }
-    if (key === 'stage_payment') return currentStatus === 'PAYMENT PROCESS';
-    if (key === 'stage_site_visit') return ['SITE VISIT', 'INSPECTION_SCHEDULED', 'INSPECTION_DONE'].includes(currentStatus);
-    if (key === 'stage_final_review') return ['FINAL REVIEW', 'SCRUTINY'].includes(currentStatus);
+    if (key === 'stage_payment') return ['DOCUMENT COMPLETED', 'PAYMENT', 'PAYMENT PROCESS', 'PAYMENT_PENDING'].includes(currentStatus);
+    if (key === 'stage_site_visit') return ['PAYMENT_COMPLETED', 'SITE VISIT', 'INSPECTION_SCHEDULED'].includes(currentStatus);
+    if (key === 'stage_final_approval' || key === 'stage_completed' || key === 'stage_final_review') return ['SITE VISIT COMPLETED', 'FINAL REVIEW', 'SCRUTINY'].includes(currentStatus);
     return false;
   };
 
@@ -52,48 +52,39 @@ export function buildDefaultStages(caseData?: any) {
       responsiblePerson: 'Customer'
     },
     {
-      name: 'Document Verification',
-      key: 'stage_doc_verification',
-      status: isCompletedStage('stage_doc_verification') ? 'Completed' : (isInProgressStage('stage_doc_verification') ? 'In Progress' : 'Pending'),
+      name: 'Document Completed',
+      key: 'stage_doc_completed',
+      status: isCompletedStage('stage_doc_completed') ? 'Completed' : (isInProgressStage('stage_doc_completed') ? 'In Progress' : 'Pending'),
       startedDate: createdDate,
-      completedDate: isCompletedStage('stage_doc_verification') ? createdDate : null,
-      remarks: 'Identity, ownership, and plan documents scrutiny.',
+      completedDate: isCompletedStage('stage_doc_completed') ? createdDate : null,
+      remarks: 'Document upload, worker verification, and admin approval.',
       responsiblePerson: assignedWorker !== 'Unassigned' ? assignedWorker : 'Admin'
     },
     {
-      name: 'Payment Process',
+      name: 'Payment',
       key: 'stage_payment',
       status: isCompletedStage('stage_payment') ? 'Completed' : (isInProgressStage('stage_payment') ? 'In Progress' : 'Pending'),
       startedDate: (isInProgressStage('stage_payment') || isCompletedStage('stage_payment')) ? createdDate : null,
       completedDate: isCompletedStage('stage_payment') ? createdDate : null,
-      remarks: 'Statutory fees calculation and payment receipt verification.',
+      remarks: 'Statutory fees and municipal scrutiny charges payment verification.',
       responsiblePerson: 'Admin'
     },
     {
-      name: 'Site Visit',
+      name: 'Site Visit Completed',
       key: 'stage_site_visit',
       status: isCompletedStage('stage_site_visit') ? 'Completed' : (isInProgressStage('stage_site_visit') ? 'In Progress' : 'Pending'),
       startedDate: (isInProgressStage('stage_site_visit') || isCompletedStage('stage_site_visit')) ? createdDate : null,
       completedDate: isCompletedStage('stage_site_visit') ? createdDate : null,
-      remarks: 'Physical field inspection and boundary verification.',
+      remarks: 'Physical field inspection and geo-verification completed.',
       responsiblePerson: assignedWorker !== 'Unassigned' ? assignedWorker : 'Field Officer'
     },
     {
-      name: 'Final Review',
-      key: 'stage_final_review',
-      status: isCompletedStage('stage_final_review') ? 'Completed' : (isInProgressStage('stage_final_review') ? 'In Progress' : 'Pending'),
-      startedDate: (isInProgressStage('stage_final_review') || isCompletedStage('stage_final_review')) ? createdDate : null,
-      completedDate: isCompletedStage('stage_final_review') ? createdDate : null,
-      remarks: 'Executive review, compliance check, and sanction order preparation.',
-      responsiblePerson: 'Admin'
-    },
-    {
-      name: 'Application Completed',
-      key: 'stage_completed',
-      status: isCompletedStage('stage_completed') ? 'Completed' : 'Pending',
-      startedDate: isCompletedStage('stage_completed') ? createdDate : null,
-      completedDate: isCompletedStage('stage_completed') ? createdDate : null,
-      remarks: 'Official building plan approval order sanctioned and issued.',
+      name: 'Final Approval',
+      key: 'stage_final_approval',
+      status: isCompletedStage('stage_final_approval') ? 'Completed' : (isInProgressStage('stage_final_approval') ? 'In Progress' : 'Pending'),
+      startedDate: (isInProgressStage('stage_final_approval') || isCompletedStage('stage_final_approval')) ? createdDate : null,
+      completedDate: isCompletedStage('stage_final_approval') ? createdDate : null,
+      remarks: 'Official building plan approval order sanctioned and dispatched.',
       responsiblePerson: 'Admin'
     }
   ];
@@ -254,14 +245,14 @@ export class CaseController {
       }
 
       // 7. Staff & Lead Entry Assignment:
+      // If Customer self-submits (isCustomer = true or staff is 'Unassigned'), leave strictly unassigned for Admin review.
       // If a Staff member creates/registers an application, link them to the case so it appears in their dashboard.
-      // If Customer self-submits (isCustomer = true), leave unassigned for Admin to assign later.
-      const isCustomerSubmission = Boolean(data.isCustomer);
+      const isCustomerSubmission = Boolean(data.isCustomer) || data.staff === 'Unassigned' || data.fullData?.staff === 'Unassigned';
       let assigned_staff_id: string | null = null;
       let creatorStaffName = '';
       let creatorStaffId = '';
 
-      if (userRole.toUpperCase() === 'STAFF' || (req.headers['x-user-name'] && req.headers['x-user-name'] !== 'Admin')) {
+      if (!isCustomerSubmission && (userRole.toUpperCase() === 'STAFF' || (req.headers['x-user-name'] && req.headers['x-user-name'] !== 'Admin'))) {
         const staffLookup = (req.headers['x-staff-id'] || req.headers['x-user-name'] || data.staff || data.fullData?.staff || '') as string;
         if (staffLookup) {
           let foundStaff = await prisma.user.findFirst({
@@ -822,9 +813,9 @@ export class CaseController {
         return res.status(400).json({ error: `Stage ${rawIndex !== undefined ? rawIndex : stageKey} not recognized.` });
       }
 
-      // Check validation rules:
-      // Rule 1: Cannot complete "Document Verification" before all required documents are verified
-      if (stages[stageIndex].key === 'stage_doc_verification' && status === 'Completed') {
+      // Check sequential validation rules:
+      // Rule 1: Cannot complete Stage 2 "Document Completed" before all required documents are verified & approved by Admin
+      if ((stages[stageIndex].key === 'stage_doc_completed' || stages[stageIndex].key === 'stage_doc_verification') && status === 'Completed') {
         const docVerification = (found.fullData as any)?.documentVerification || {};
         const requiredDocKeys = ['CUSTOMER PHOTOGRAPH', 'CUSTOMER SIGNATURE', 'AADHAR CARD', 'PAN CARD', 'SALE DEED', 'PATTA', 'BUILDING PLAN'];
         
@@ -835,18 +826,38 @@ export class CaseController {
 
         if (unverified.length > 0) {
           return res.status(400).json({ 
-            error: 'Document Verification stage cannot be completed until all required documents are verified.',
+            error: 'Document Completed stage cannot be marked Completed until all required documents are verified and approved by Admin.',
             unverifiedDocuments: unverified
           });
         }
       }
 
-      // Rule 2: Cannot mark "Application Completed" before prior stages (0 to 4) are completed
-      if (stages[stageIndex].key === 'stage_completed' && (status === 'Completed' || status === 'In Progress')) {
-        const incompletePrior = stages.slice(0, 5).filter(s => s.status !== 'Completed');
+      // Rule 2: Cannot proceed to Stage 3 "Payment" until Stage 2 "Document Completed" is Completed
+      if (stages[stageIndex].key === 'stage_payment' && (status === 'Completed' || status === 'In Progress')) {
+        const docStage = stages.find((s: any) => s.key === 'stage_doc_completed' || s.key === 'stage_doc_verification');
+        if (docStage && docStage.status !== 'Completed') {
+          return res.status(400).json({
+            error: 'The application cannot proceed to Payment stage until Document Completed stage is verified and approved by Admin.'
+          });
+        }
+      }
+
+      // Rule 3: Cannot proceed to Stage 4 "Site Visit Completed" until Stage 3 "Payment" is Completed
+      if (stages[stageIndex].key === 'stage_site_visit' && (status === 'Completed' || status === 'In Progress')) {
+        const paymentStage = stages.find((s: any) => s.key === 'stage_payment');
+        if (paymentStage && paymentStage.status !== 'Completed') {
+          return res.status(400).json({
+            error: 'The application cannot proceed to Site Visit stage until statutory Payment is confirmed and completed.'
+          });
+        }
+      }
+
+      // Rule 4: Cannot complete Stage 5 "Final Approval" before prior stages (0 to 3) are all Completed
+      if ((stages[stageIndex].key === 'stage_final_approval' || stages[stageIndex].key === 'stage_completed') && status === 'Completed') {
+        const incompletePrior = stages.slice(0, 4).filter(s => s.status !== 'Completed');
         if (incompletePrior.length > 0) {
           return res.status(400).json({ 
-            error: 'Application cannot be marked Completed before all prior stages are completed.',
+            error: 'Final Approval stage cannot be granted until all prior stages (Application, Documents, Payment, Site Visit) are completed.',
             incompleteStages: incompletePrior.map(s => s.name)
           });
         }
@@ -879,8 +890,8 @@ export class CaseController {
 
       let completionEmailSent = (found.fullData as any)?.completionEmailSent || false;
 
-      // If moving to Application Completed and not already sent, trigger completion email!
-      if (overallStatus === 'Application Completed' && !completionEmailSent) {
+      // If moving to Final Approval / Application Completed and not already sent, trigger Brevo completion email!
+      if ((overallStatus === 'Final Approval' || overallStatus === 'Application Completed' || (stageIndex === 4 && status === 'Completed')) && !completionEmailSent) {
         const customerEmail = found.property?.owner_email || (found.fullData as any)?.email;
         const customerName = found.property?.owner_name || (found.fullData as any)?.customerName || 'Valued Applicant';
         const proposalNo = found.application_number || found.id;
@@ -1002,6 +1013,100 @@ export class CaseController {
       res.json(updated);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
+    }
+  }
+
+  async submitSiteVisit(req: Request, res: Response) {
+    try {
+      const id = req.params.id as string;
+      const { visitDate, inspectorNotes, inspectionStatus = 'Completed', adminConfirmed } = req.body;
+      const userRole = (req.headers['x-user-role'] || req.query.role || (req as any).user?.role || '') as string;
+      const userName = (req.headers['x-user-name'] || '') as string;
+      const isAdmin = userRole.toUpperCase() === 'ADMIN' || userName.toLowerCase() === 'admin';
+
+      const isObjectId = /^[0-9a-fA-F]{24}$/.test(id);
+      const target = await prisma.case.findFirst({
+        where: isObjectId
+          ? { OR: [{ id }, { application_number: id }] }
+          : { application_number: id },
+        include: { property: true, assigned_staff: true }
+      });
+
+      if (!target) return res.status(404).json({ error: 'Case not found' });
+
+      // Worker Isolation check
+      if (!isAdmin && userRole.toUpperCase() === 'STAFF') {
+        const staffName = (req.headers['x-user-name'] || '') as string;
+        const staffId = (req.headers['x-staff-id'] || '') as string;
+        const isAssigned = (staffId && target.assigned_staff_id === staffId) ||
+          (staffName && target.assigned_staff?.name?.toLowerCase() === staffName.toLowerCase());
+        if (!isAssigned) {
+          return res.status(403).json({ error: 'Forbidden: You are not assigned to this case.' });
+        }
+      }
+
+      const fullData = (target.fullData as any) || {};
+      const currentSiteVisit = fullData.siteVisit || {};
+
+      fullData.siteVisit = {
+        ...currentSiteVisit,
+        visitDate: visitDate || currentSiteVisit.visitDate || new Date().toISOString(),
+        inspectorNotes: inspectorNotes !== undefined ? inspectorNotes : (currentSiteVisit.inspectorNotes || ''),
+        inspectionStatus: inspectionStatus || currentSiteVisit.inspectionStatus || 'Completed',
+        submittedBy: userName || (isAdmin ? 'Admin' : 'Field Worker'),
+        submittedAt: new Date().toISOString(),
+        adminConfirmed: Boolean(adminConfirmed || (isAdmin && currentSiteVisit.adminConfirmed))
+      };
+
+      // If Admin confirms, mark Stage 4 (Site Visit Completed) as Completed
+      if (isAdmin && adminConfirmed) {
+        if (Array.isArray(fullData.stages)) {
+          fullData.stages = fullData.stages.map((s: any) => {
+            if (s.key === 'stage_site_visit') {
+              return {
+                ...s,
+                status: 'Completed',
+                completedDate: new Date().toISOString(),
+                remarks: inspectorNotes || s.remarks || 'Site visit inspected and verified by Admin.'
+              };
+            }
+            if ((s.key === 'stage_final_approval' || s.key === 'stage_completed') && s.status === 'Pending') {
+              return {
+                ...s,
+                status: 'In Progress',
+                startedDate: new Date().toISOString()
+              };
+            }
+            return s;
+          });
+        }
+      }
+
+      const updated = await prisma.case.update({
+        where: { id: target.id },
+        data: {
+          fullData,
+          status: (isAdmin && adminConfirmed) ? 'Site Visit Completed' : target.status
+        },
+        include: { property: true, assigned_staff: true }
+      });
+
+      try {
+        await prisma.notification.create({
+          data: {
+            title: `Site Visit ${isAdmin && adminConfirmed ? 'Confirmed' : 'Report Submitted'}: ${target.application_number}`,
+            message: `Site visit details updated by ${userName || 'Officer'} for proposal #${target.application_number}.`,
+            type: 'site_visit_update',
+            case_id: target.application_number
+          }
+        });
+      } catch (nErr) {
+        console.warn('Site visit notification skipped:', nErr);
+      }
+
+      res.json(updated);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
     }
   }
 

@@ -291,15 +291,21 @@ export class DocumentController {
 
       const reasonToSave = status === 'Re-upload Required' ? (reuploadReason || rejectionReason || 'Please upload a clearer copy.') : '';
 
+      // If worker verifies, mark as "Worker Verified". Only Admin can mark final "Verified".
+      let effectiveStatus = status;
+      if (!isAdmin && (status === 'Verified' || status === 'Worker Verified')) {
+        effectiveStatus = 'Worker Verified';
+      }
+
       docVerification[documentKey] = {
-        status, // 'Verified' | 'Pending Review' | 'Re-upload Required'
+        status: effectiveStatus, // 'Verified' | 'Worker Verified' | 'Pending Review' | 'Re-upload Required'
         rejectionReason: reasonToSave,
         reuploadReason: reasonToSave,
         verifiedBy,
         verifiedAt: new Date().toISOString()
       };
 
-      if (status === 'Re-upload Required') {
+      if (effectiveStatus === 'Re-upload Required') {
         if (!requestedReuploads.includes(documentKey)) requestedReuploads.push(documentKey);
       } else {
         requestedReuploads = requestedReuploads.filter(k => k !== documentKey);
@@ -308,17 +314,52 @@ export class DocumentController {
       fullData.documentVerification = docVerification;
       fullData.requestedReuploads = requestedReuploads;
 
+      // Check if all required documents are approved by Admin
+      const requiredDocKeys = ['CUSTOMER PHOTOGRAPH', 'CUSTOMER SIGNATURE', 'AADHAR CARD', 'PAN CARD', 'SALE DEED', 'PATTA', 'BUILDING PLAN'];
+      const allApproved = requiredDocKeys.every(k => {
+        const item = docVerification[k] || (k === 'SALE DEED' ? docVerification['LAND DOCUMENT'] : undefined);
+        return item?.status === 'Verified';
+      });
+
+      let updatedCaseStatus = targetCase.status;
+      if (allApproved && isAdmin) {
+        updatedCaseStatus = 'Document Completed';
+        if (Array.isArray(fullData.stages)) {
+          fullData.stages = fullData.stages.map((st: any) => {
+            if (st.key === 'stage_doc_completed' || st.key === 'stage_doc_verification') {
+              return {
+                ...st,
+                status: 'Completed',
+                completedDate: new Date().toISOString(),
+                remarks: 'All required documents verified by staff and approved by Admin.'
+              };
+            }
+            if (st.key === 'stage_payment' && st.status === 'Pending') {
+              return {
+                ...st,
+                status: 'In Progress',
+                startedDate: new Date().toISOString()
+              };
+            }
+            return st;
+          });
+        }
+      }
+
       const updated = await prisma.case.update({
         where: { id: targetCase.id },
-        data: { fullData }
+        data: { 
+          fullData,
+          status: updatedCaseStatus
+        }
       });
 
       // Notification
       try {
         await prisma.notification.create({
           data: {
-            title: `Document ${status}: ${documentKey}`,
-            message: `${documentKey} was marked as ${status} by ${verifiedBy} for proposal ${targetCase.application_number}.`,
+            title: `Document ${effectiveStatus}: ${documentKey}`,
+            message: `${documentKey} was marked as ${effectiveStatus} by ${verifiedBy} for proposal ${targetCase.application_number}.`,
             type: 'document_verification',
             case_id: targetCase.application_number
           }
@@ -330,6 +371,95 @@ export class DocumentController {
       res.json({ success: true, case: updated });
     } catch (err: any) {
       console.error('Error updating document status:', err);
+      res.status(500).json({ error: err.message });
+    }
+  }
+
+  async approveAllDocuments(req: Request, res: Response) {
+    try {
+      const { caseId } = req.body;
+      const userRole = (req.headers['x-user-role'] || req.query.role || '') as string;
+      const userName = (req.headers['x-user-name'] || '') as string;
+      const isAdmin = userRole.toUpperCase() === 'ADMIN' || userName.toLowerCase() === 'admin';
+
+      if (!isAdmin) {
+        return res.status(403).json({ error: 'Forbidden: Only Admin has final authority to approve documents.' });
+      }
+
+      const isObjectId = /^[0-9a-fA-F]{24}$/.test(caseId);
+      const targetCase = await prisma.case.findFirst({
+        where: isObjectId
+          ? { OR: [{ id: caseId }, { application_number: caseId }] }
+          : { application_number: caseId },
+        include: { assigned_staff: true, property: true }
+      });
+
+      if (!targetCase) return res.status(404).json({ error: 'Case not found' });
+
+      const fullData = (targetCase.fullData as any) || {};
+      const docVerification = fullData.documentVerification || {};
+      const requiredDocKeys = ['CUSTOMER PHOTOGRAPH', 'CUSTOMER SIGNATURE', 'AADHAR CARD', 'PAN CARD', 'SALE DEED', 'PATTA', 'BUILDING PLAN'];
+
+      const now = new Date().toISOString();
+      for (const k of requiredDocKeys) {
+        docVerification[k] = {
+          status: 'Verified',
+          rejectionReason: '',
+          reuploadReason: '',
+          verifiedBy: userName || 'Admin',
+          verifiedAt: now
+        };
+      }
+
+      fullData.documentVerification = docVerification;
+      fullData.requestedReuploads = [];
+
+      // Update stages: Stage 2 Completed, Stage 3 In Progress
+      if (Array.isArray(fullData.stages)) {
+        fullData.stages = fullData.stages.map((st: any) => {
+          if (st.key === 'stage_doc_completed' || st.key === 'stage_doc_verification') {
+            return {
+              ...st,
+              status: 'Completed',
+              completedDate: now,
+              remarks: 'All required documents approved by Admin.'
+            };
+          }
+          if (st.key === 'stage_payment' && st.status === 'Pending') {
+            return {
+              ...st,
+              status: 'In Progress',
+              startedDate: now
+            };
+          }
+          return st;
+        });
+      }
+
+      const updated = await prisma.case.update({
+        where: { id: targetCase.id },
+        data: {
+          fullData,
+          status: 'Document Completed'
+        },
+        include: { property: true, assigned_staff: true }
+      });
+
+      try {
+        await prisma.notification.create({
+          data: {
+            title: `Documents Approved: ${targetCase.application_number}`,
+            message: `All required documents approved by Admin. Application advanced to Payment stage.`,
+            type: 'document_verification',
+            case_id: targetCase.application_number
+          }
+        });
+      } catch (nErr) {
+        console.warn('Notification skipped:', nErr);
+      }
+
+      res.json({ success: true, case: updated });
+    } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
   }

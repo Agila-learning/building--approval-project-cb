@@ -36,9 +36,15 @@ const CustomerLeads: React.FC = () => {
     const loadLeads = async () => {
       try {
         const apiUrl = getApiUrl();
-        const res = await fetch(`${apiUrl}/leads`);
-        if (res.ok) {
-          const data = await res.json();
+        const [leadsRes, casesRes] = await Promise.all([
+          fetch(`${apiUrl}/leads`),
+          fetch(`${apiUrl}/cases`)
+        ]);
+
+        let combinedLeads: any[] = [];
+
+        if (leadsRes.ok) {
+          const data = await leadsRes.json();
           const formattedLeads = data
             .filter((lead: any) => lead.type === 'Lead')
             .map((lead: any) => ({
@@ -54,7 +60,7 @@ const CustomerLeads: React.FC = () => {
               days: (() => {
                  if (!lead.created_at) return 0;
                  const start = new Date(lead.created_at).getTime();
-                 const isCompleted = ['Rejected', 'Approved'].includes(lead.status);
+                 const isCompleted = ['Rejected', 'Approved', 'Application Created'].includes(lead.status);
                  const end = isCompleted && lead.updated_at ? new Date(lead.updated_at).getTime() : new Date().getTime();
                  return Math.ceil(Math.max(0, end - start) / (1000 * 60 * 60 * 24));
               })(),
@@ -63,22 +69,51 @@ const CustomerLeads: React.FC = () => {
               aadharFile: lead.aadharFile,
               aadharFileName: lead.aadharFileName,
               buildingPhoto: lead.buildingPhoto,
-              buildingPhotoName: lead.buildingPhotoName
+              buildingPhotoName: lead.buildingPhotoName,
+              isCase: false
             }));
-          setLeads(formattedLeads);
-        } else {
-          // Fallback to local storage if API fails
-          const saved = localStorage.getItem('mock_saved_cases');
-          if (saved) {
-            const localCases = JSON.parse(saved).filter((c: any) => c.type === 'Lead');
-            setLeads(localCases);
-          } else {
-            setLeads([]);
+          combinedLeads = [...formattedLeads];
+        }
+
+        if (casesRes.ok) {
+          const casesData = await casesRes.json();
+          const staffLeads = casesData
+            .filter((c: any) => {
+              const full = c.fullData || {};
+              return c.type === 'Lead' || full.isLead || full.leadId || c.status === 'Draft' || c.status === 'Lead' || full.createdByStaff;
+            })
+            .map((c: any) => {
+              const full = c.fullData || {};
+              const prop = c.property || {};
+              return {
+                id: c.id,
+                displayId: c.application_number || c.id,
+                name: prop.owner_name || full.customerName || 'Staff Lead',
+                phone: prop.owner_phone || full.mobile || '',
+                email: prop.owner_email || full.email || '',
+                location: prop.address || prop.village || '',
+                projectType: c.approval_type || full.serviceType || 'Building Approval',
+                propertyDetails: `Survey: ${prop.survey_number || 'TBD'}, Village: ${prop.village || 'TBD'}`,
+                date: c.created_at ? new Date(c.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—',
+                days: c.created_at ? Math.ceil(Math.max(0, new Date().getTime() - new Date(c.created_at).getTime()) / (1000 * 60 * 60 * 24)) : 0,
+                status: c.status || 'New',
+                assignedTo: c.assigned_staff?.name || full.staff || '',
+                isCase: true,
+                caseId: c.id
+              };
+            });
+
+          const existingIds = new Set(combinedLeads.map(l => l.displayId));
+          for (const sl of staffLeads) {
+            if (!existingIds.has(sl.displayId)) {
+              combinedLeads.push(sl);
+            }
           }
         }
+
+        setLeads(combinedLeads);
       } catch (error) {
         console.error("Failed to fetch leads:", error);
-        // Fallback to local storage
         const saved = localStorage.getItem('mock_saved_cases');
         if (saved) {
           const localCases = JSON.parse(saved).filter((c: any) => c.type === 'Lead');
@@ -91,12 +126,9 @@ const CustomerLeads: React.FC = () => {
     
     loadLeads();
     
-    // Periodically refresh (since localStorage event won't fire across devices)
     const interval = setInterval(loadLeads, 10000);
     return () => clearInterval(interval);
   }, []);
-
-
 
   const handleReject = async () => {
     if (!rejectingLeadId || !rejectionRemarks.trim()) return;
@@ -118,8 +150,6 @@ const CustomerLeads: React.FC = () => {
     }
   };
 
-
-
   const handleAssignWorker = async (leadId: string, staffName: string) => {
     setLeads(prev => prev.map(l => l.id === leadId ? { ...l, assignedTo: staffName } : l));
     if (viewingLead && viewingLead.id === leadId) {
@@ -128,14 +158,30 @@ const CustomerLeads: React.FC = () => {
     try {
       const apiUrl = getApiUrl();
       const currentLead = leads.find(l => l.id === leadId);
-      await fetch(`${apiUrl}/leads/${leadId}/status`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          status: currentLead?.status || 'New',
-          assignedTo: staffName 
-        })
-      });
+      if (currentLead?.isCase) {
+        const staffObj = staffMembers.find(s => s.name === staffName);
+        await fetch(`${apiUrl}/cases/${leadId}`, {
+          method: 'PUT',
+          headers: { 
+            'Content-Type': 'application/json',
+            'x-user-role': 'ADMIN',
+            'x-user-name': 'Admin'
+          },
+          body: JSON.stringify({ 
+            staff: staffName || 'Unassigned',
+            assigned_staff_id: staffObj ? staffObj.id : null
+          })
+        });
+      } else {
+        await fetch(`${apiUrl}/leads/${leadId}/status`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            status: currentLead?.status || 'New',
+            assignedTo: staffName 
+          })
+        });
+      }
       toast.success(staffName ? `Assigned to ${staffName}` : 'Lead unassigned');
     } catch (e) {
       console.error(e);
