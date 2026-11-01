@@ -416,7 +416,7 @@ const ApplicationView: React.FC = () => {
   const uploadedFiles = caseRecord.uploadedFiles || {};
   const docVerification = caseRecord.documentVerification || {};
 
-  const documentList = [
+  const baseDocumentList = [
     { key: 'CUSTOMER PHOTOGRAPH', label: 'Customer Photograph' },
     { key: 'CUSTOMER SIGNATURE', label: 'Customer Signature' },
     { key: 'AADHAR CARD', label: 'Aadhaar Card' },
@@ -424,6 +424,18 @@ const ApplicationView: React.FC = () => {
     { key: 'SALE DEED', altKey: 'LAND DOCUMENT', label: 'Sale Deed / Land Document' },
     { key: 'PATTA', label: 'Patta Copy' },
     { key: 'BUILDING PLAN', label: 'Building Plan' },
+  ];
+
+  // Dynamic document keys from custom uploads
+  const standardKeys = ['CUSTOMER PHOTOGRAPH', 'CUSTOMER SIGNATURE', 'PROPERTY SIGNATURE', 'AADHAR CARD', 'AADHAAR CARD', 'PAN CARD', 'SALE DEED', 'LAND DOCUMENT', 'PATTA', 'BUILDING PLAN'];
+  const customUploadedKeys = Object.keys(uploadedFiles).filter(k => !standardKeys.includes(k) && Boolean(uploadedFiles[k]));
+
+  const documentList = [
+    ...baseDocumentList,
+    ...customUploadedKeys.map(k => ({
+      key: k,
+      label: k.split('_').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ')
+    }))
   ];
 
   const uploadedFilesCount = documentList.filter(d => uploadedFiles[d.key] || (d.altKey && uploadedFiles[d.altKey])).length;
@@ -489,7 +501,28 @@ const ApplicationView: React.FC = () => {
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+          <button
+            onClick={() => window.open(`/print/application/${proposalNumber || id}`, '_blank')}
+            style={{
+              padding: '0.625rem 1.25rem',
+              borderRadius: '0.375rem',
+              backgroundColor: 'var(--bg-surface)',
+              border: '1.5px solid var(--primary)',
+              color: 'var(--primary)',
+              fontWeight: 700,
+              fontSize: '0.875rem',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.45rem',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+            }}
+            title="Download complete application dossier with photo, uploaded documents list, and Admin signature stamp"
+          >
+            <Download size={15} /> Download Application PDF
+          </button>
+
           {isAdmin && (
             <>
               <button

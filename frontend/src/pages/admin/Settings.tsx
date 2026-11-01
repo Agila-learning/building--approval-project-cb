@@ -3,6 +3,26 @@ import { CheckCircle, RefreshCcw, Camera, FileText, Plus, X, PenTool, QrCode, Bu
 import toast from 'react-hot-toast';
 import { getApiUrl } from '../../config/api';
 
+export interface DocumentChecklistItem {
+  key: string;
+  label: string;
+  required: boolean;
+  description?: string;
+}
+
+export const defaultRequiredDocuments: DocumentChecklistItem[] = [
+  { key: 'CUSTOMER PHOTOGRAPH', label: 'Customer Photograph', required: true, description: 'Recent passport size photo of the applicant' },
+  { key: 'CUSTOMER SIGNATURE', label: 'Customer Signature', required: true, description: 'Applicant official specimen signature' },
+  { key: 'AADHAR CARD', label: 'Aadhaar Card', required: true, description: 'Government Aadhaar identity proof of owner/applicant' },
+  { key: 'PAN CARD', label: 'PAN Card', required: true, description: 'Permanent Account Number card' },
+  { key: 'SALE DEED', label: 'Sale Deed / Land Document', required: true, description: 'Registered sale deed or parent document establishing ownership' },
+  { key: 'PATTA', label: 'Patta Copy', required: true, description: 'Latest Patta/Chitta copy in applicant name' },
+  { key: 'BUILDING PLAN', label: 'Proposed Building Plan', required: false, description: 'Architectural floor plan, section and elevation drawings' },
+  { key: 'FMB', label: 'FMB Sketch', required: false, description: 'Field Measurement Book sketch copy' },
+  { key: 'ENCUMBRANCE CERTIFICATE', label: 'Encumbrance Certificate (EC)', required: false, description: 'Latest 15 to 30 years EC from Sub-Registrar' },
+  { key: 'PROPERTY TAX', label: 'Property Tax Receipt', required: false, description: 'Latest municipal / panchayat tax paid receipt' }
+];
+
 const Settings: React.FC = () => {
   const [profilePic, setProfilePic] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -16,6 +36,12 @@ const Settings: React.FC = () => {
   const defaultExpenseCategories = ['Office Supplies', 'Travel', 'Meals & Entertainment', 'Utilities', 'Maintenance', 'Salaries'];
   const [expenseCategories, setExpenseCategories] = useState<string[]>(defaultExpenseCategories);
   const [newExpenseCategory, setNewExpenseCategory] = useState('');
+
+  // Required Documents Configuration
+  const [requiredDocuments, setRequiredDocuments] = useState<DocumentChecklistItem[]>(defaultRequiredDocuments);
+  const [newDocLabel, setNewDocLabel] = useState('');
+  const [newDocDesc, setNewDocDesc] = useState('');
+  const [newDocRequired, setNewDocRequired] = useState(true);
   
   // Admin Signature
   const [adminSignature, setAdminSignature] = useState<string>('');
@@ -51,6 +77,9 @@ const Settings: React.FC = () => {
         if (data.adminSignature) setAdminSignature(data.adminSignature);
         if (data.adminName) setAdminName(data.adminName);
         if (data.adminDesignation) setAdminDesignation(data.adminDesignation);
+        if (data.requiredDocuments && Array.isArray(data.requiredDocuments) && data.requiredDocuments.length > 0) {
+          setRequiredDocuments(data.requiredDocuments);
+        }
         setBankDetails(prev => ({
           ...prev,
           ...data
@@ -75,6 +104,13 @@ const Settings: React.FC = () => {
 
     const localSig = localStorage.getItem('adminSignature');
     if (localSig) setAdminSignature(localSig);
+
+    const savedReqDocs = localStorage.getItem('requiredDocuments');
+    if (savedReqDocs) {
+      try {
+        setRequiredDocuments(JSON.parse(savedReqDocs));
+      } catch (err) {}
+    }
 
     const localBank = localStorage.getItem('companyBankDetails');
     if (localBank) {
@@ -174,6 +210,7 @@ const Settings: React.FC = () => {
     }
     localStorage.setItem('customFileTypes', JSON.stringify(fileTypes));
     localStorage.setItem('expenseCategories', JSON.stringify(expenseCategories));
+    localStorage.setItem('requiredDocuments', JSON.stringify(requiredDocuments));
     if (adminSignature) localStorage.setItem('adminSignature', adminSignature);
     localStorage.setItem('companyBankDetails', JSON.stringify(bankDetails));
 
@@ -187,10 +224,11 @@ const Settings: React.FC = () => {
           ...bankDetails,
           adminSignature,
           adminName,
-          adminDesignation
+          adminDesignation,
+          requiredDocuments
         })
       });
-      toast.success('Settings and Official Signature saved permanently!');
+      toast.success('Settings, Required Documents & Official Signature saved permanently!');
     } catch (e) {
       console.error('Could not save settings to backend:', e);
       toast.success('Settings saved to local storage!');
@@ -204,9 +242,11 @@ const Settings: React.FC = () => {
   const resetDefault = () => {
     setFileTypes(defaultFileTypes);
     setExpenseCategories(defaultExpenseCategories);
+    setRequiredDocuments(defaultRequiredDocuments);
     localStorage.setItem('customFileTypes', JSON.stringify(defaultFileTypes));
     localStorage.setItem('expenseCategories', JSON.stringify(defaultExpenseCategories));
-    toast.success('Categories reset to defaults.');
+    localStorage.setItem('requiredDocuments', JSON.stringify(defaultRequiredDocuments));
+    toast.success('Categories and document checklist reset to defaults.');
   };
 
   return (
@@ -349,22 +389,63 @@ const Settings: React.FC = () => {
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
             <div>
-              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Signatory Name</label>
+              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Signatory Name *</label>
               <input 
                 type="text" 
                 value={adminName} 
                 onChange={(e) => setAdminName(e.target.value)} 
+                placeholder="e.g. Er. C. Balakrishnan"
                 style={{ width: '100%', padding: '0.55rem', borderRadius: '0.375rem', border: '1px solid var(--border-color)', fontSize: '0.875rem' }} 
               />
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Signatory Designation</label>
+              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Signatory Designation *</label>
               <input 
                 type="text" 
                 value={adminDesignation} 
                 onChange={(e) => setAdminDesignation(e.target.value)} 
+                placeholder="e.g. Executive Administrator / Sanctioning Authority"
                 style={{ width: '100%', padding: '0.55rem', borderRadius: '0.375rem', border: '1px solid var(--border-color)', fontSize: '0.875rem' }} 
               />
+            </div>
+          </div>
+
+          {/* Official Signature Stamp Live Preview */}
+          <div style={{ marginTop: '1.25rem', padding: '1rem', border: '1px solid var(--border-color)', borderRadius: '0.5rem', backgroundColor: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
+            <div>
+              <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                Official Certificate Stamp Preview
+              </div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.2rem' }}>
+                This signature & designation stamp will be automatically embedded in downloaded application PDFs & sanction orders.
+              </div>
+            </div>
+            <div style={{ 
+              display: 'flex', 
+              flexDirection: 'column', 
+              alignItems: 'center', 
+              justifyContent: 'center',
+              minWidth: '180px', 
+              padding: '0.75rem 1.25rem', 
+              border: '2px dashed #94a3b8', 
+              borderRadius: '0.5rem', 
+              backgroundColor: '#ffffff',
+              boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
+            }}>
+              {adminSignature ? (
+                <img src={adminSignature} alt="Admin Signature" style={{ height: '48px', maxWidth: '160px', objectFit: 'contain' }} />
+              ) : (
+                <div style={{ fontStyle: 'italic', color: '#94a3b8', fontSize: '0.8rem', height: '48px', display: 'flex', alignItems: 'center' }}>
+                  No Signature Saved
+                </div>
+              )}
+              <div style={{ borderTop: '1px solid #cbd5e1', width: '100%', marginTop: '0.35rem', paddingTop: '0.35rem', textAlign: 'center' }}>
+                <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--primary-dark)' }}>{adminName || 'Authorized Signatory'}</div>
+                <div style={{ fontSize: '0.7rem', color: '#64748b' }}>{adminDesignation || 'Sanctioning Authority'}</div>
+                <div style={{ fontSize: '0.625rem', fontWeight: 700, color: '#16a34a', textTransform: 'uppercase', letterSpacing: '0.04em', marginTop: '0.15rem' }}>
+                  CB Building Approvals
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -578,6 +659,199 @@ const Settings: React.FC = () => {
                 </div>
               ))}
               {fileTypes.length === 0 && <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>No file types available. Add one above.</p>}
+            </div>
+          </div>
+        </div>
+
+        {/* Customer Required Document Checklist Configuration */}
+        <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '2.5rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+            <h3 style={{ fontSize: '1.125rem', fontWeight: 600, color: 'var(--primary-dark)', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <FileText size={20} color="var(--primary)" /> Customer Document Upload Checklist Configuration
+            </h3>
+            <span style={{ fontSize: '0.75rem', color: '#059669', fontWeight: 600, backgroundColor: '#dcfce7', padding: '0.2rem 0.6rem', borderRadius: '1rem' }}>
+              Used in Customer Upload Portal & Scrutiny
+            </span>
+          </div>
+          <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginBottom: '1.25rem' }}>
+            Configure the exact list of documents customers must upload. You can add new document types, toggle whether they are mandatory or optional, and remove unwanted items.
+          </p>
+
+          {/* Add New Document Form */}
+          <div style={{
+            padding: '1.25rem',
+            backgroundColor: 'var(--bg-secondary)',
+            borderRadius: '0.5rem',
+            border: '1px solid var(--border-color)',
+            marginBottom: '1.5rem'
+          }}>
+            <div style={{ fontSize: '0.875rem', fontWeight: 700, color: 'var(--primary-dark)', marginBottom: '0.75rem' }}>
+              Add New Document to Upload List
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '0.75rem', marginBottom: '0.75rem' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Document Name *</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Fire NOC Certificate, Structural Stability"
+                  value={newDocLabel}
+                  onChange={(e) => setNewDocLabel(e.target.value)}
+                  style={{ width: '100%', padding: '0.6rem', borderRadius: '0.375rem', border: '1px solid var(--border-color)', fontSize: '0.875rem', backgroundColor: '#fff' }}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Guidance / Description</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Certified copy from Fire Department"
+                  value={newDocDesc}
+                  onChange={(e) => setNewDocDesc(e.target.value)}
+                  style={{ width: '100%', padding: '0.6rem', borderRadius: '0.375rem', border: '1px solid var(--border-color)', fontSize: '0.875rem', backgroundColor: '#fff' }}
+                />
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.8125rem', fontWeight: 600, color: 'var(--primary-dark)' }}>
+                <input
+                  type="checkbox"
+                  checked={newDocRequired}
+                  onChange={(e) => setNewDocRequired(e.target.checked)}
+                  style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                />
+                Mandatory for Application Submission
+              </label>
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (!newDocLabel.trim()) {
+                    toast.error('Please enter a document name.');
+                    return;
+                  }
+                  const cleanKey = newDocLabel.trim().toUpperCase().replace(/[^A-Z0-9]/g, '_');
+                  if (requiredDocuments.some(d => d.key === cleanKey)) {
+                    toast.error('A document with this name or key already exists.');
+                    return;
+                  }
+                  const newDoc: DocumentChecklistItem = {
+                    key: cleanKey,
+                    label: newDocLabel.trim(),
+                    required: newDocRequired,
+                    description: newDocDesc.trim() || undefined
+                  };
+                  setRequiredDocuments([...requiredDocuments, newDoc]);
+                  setNewDocLabel('');
+                  setNewDocDesc('');
+                  setNewDocRequired(true);
+                  toast.success(`Added "${newDoc.label}" to document checklist.`);
+                }}
+                className="btn-primary"
+                style={{ padding: '0.55rem 1.25rem', fontSize: '0.8125rem', display: 'flex', alignItems: 'center', gap: '0.4rem', borderRadius: '0.375rem' }}
+              >
+                <Plus size={16} /> Add to Checklist
+              </button>
+            </div>
+          </div>
+
+          {/* Current Document Checklist Table */}
+          <div style={{ border: '1px solid var(--border-color)', borderRadius: '0.5rem', overflow: 'hidden' }}>
+            <div style={{ padding: '0.75rem 1rem', backgroundColor: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ fontSize: '0.8125rem', fontWeight: 700, color: 'var(--primary-dark)' }}>
+                Active Document Checklist ({requiredDocuments.length} items)
+              </div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                Click Mandatory badge to toggle required / optional
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              {requiredDocuments.map((doc, dIdx) => (
+                <div
+                  key={doc.key || dIdx}
+                  style={{
+                    padding: '0.85rem 1rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    borderBottom: dIdx < requiredDocuments.length - 1 ? '1px solid var(--border-color)' : 'none',
+                    backgroundColor: dIdx % 2 === 0 ? '#ffffff' : '#fafaf9',
+                    flexWrap: 'wrap',
+                    gap: '0.75rem'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', flex: 1, minWidth: '220px' }}>
+                    <span style={{ width: '22px', height: '22px', borderRadius: '50%', backgroundColor: 'rgba(30, 58, 138, 0.08)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem', fontWeight: 700, flexShrink: 0 }}>
+                      {dIdx + 1}
+                    </span>
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: '0.875rem', fontWeight: 700, color: 'var(--primary-dark)' }}>
+                          {doc.label}
+                        </span>
+                        <code style={{ fontSize: '0.675rem', backgroundColor: '#e2e8f0', color: '#334155', padding: '0.1rem 0.4rem', borderRadius: '0.25rem' }}>
+                          {doc.key}
+                        </code>
+                      </div>
+                      {doc.description && (
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.2rem' }}>
+                          {doc.description}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                    {/* Mandatory Toggle Button */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRequiredDocuments(prev => prev.map((item, i) => i === dIdx ? { ...item, required: !item.required } : item));
+                        toast.success(`${doc.label} marked as ${!doc.required ? 'Mandatory' : 'Optional'}`);
+                      }}
+                      style={{
+                        padding: '0.25rem 0.65rem',
+                        borderRadius: '1rem',
+                        fontSize: '0.725rem',
+                        fontWeight: 700,
+                        border: 'none',
+                        cursor: 'pointer',
+                        backgroundColor: doc.required ? '#dcfce7' : '#f1f5f9',
+                        color: doc.required ? '#166534' : '#64748b',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.3rem',
+                        transition: 'all 0.15s'
+                      }}
+                      title="Click to toggle Mandatory / Optional"
+                    >
+                      <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: doc.required ? '#16a34a' : '#94a3b8' }}></span>
+                      {doc.required ? 'Mandatory' : 'Optional'}
+                    </button>
+
+                    {/* Delete Item Button */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRequiredDocuments(prev => prev.filter((_, i) => i !== dIdx));
+                        toast.success(`Removed "${doc.label}" from checklist.`);
+                      }}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: '#ef4444',
+                        cursor: 'pointer',
+                        padding: '0.25rem',
+                        display: 'flex',
+                        alignItems: 'center'
+                      }}
+                      title="Remove this document from checklist"
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </div>

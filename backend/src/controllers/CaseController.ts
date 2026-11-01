@@ -754,6 +754,41 @@ export class CaseController {
               case_id: updated.application_number
             }
           });
+
+          // If status moved to Approved / Final Approval / Application Completed, send approval email to customer
+          const isApprovedStatus = Boolean(updated.status && ['Final Approval', 'Approved', 'Application Completed', 'SANCTIONED'].includes(updated.status));
+          const fullDataObj = (updated.fullData as any) || {};
+          if (isApprovedStatus && !fullDataObj.completionEmailSent) {
+            const customerEmail = updated.property?.owner_email || fullDataObj.email || fullDataObj.customerEmail || fullDataObj.applicant?.email;
+            const customerName = updated.property?.owner_name || fullDataObj.customerName || fullDataObj.applicant?.name || 'Valued Applicant';
+            const proposalNo = updated.application_number || updated.id;
+            const product = updated.approval_type || fullDataObj.serviceType || 'Building Approval';
+            const origin = (req.headers.origin as string) || process.env.FRONTEND_URL || 'https://building-approval-app.vercel.app';
+            const trackUrl = `${origin.replace(/\/$/, '')}/track-application?id=${proposalNo}&mobile=${updated.property?.owner_phone || fullDataObj.mobile || ''}`;
+
+            if (customerEmail) {
+              notificationService.notifyApplicationCompleted({
+                customerEmail,
+                customerName,
+                applicationNumber: proposalNo,
+                product,
+                trackUrl
+              }).then(async () => {
+                console.log(`[Brevo SMTP] Application approval email sent successfully to ${customerEmail}`);
+                await prisma.case.update({
+                  where: { id: updated.id },
+                  data: {
+                    fullData: {
+                      ...fullDataObj,
+                      completionEmailSent: true
+                    }
+                  }
+                });
+              }).catch(err => {
+                console.error('[Brevo SMTP] Failed to send approval email in updateCase:', err);
+              });
+            }
+          }
         } else if (data.uploadedFiles && JSON.stringify(data.uploadedFiles) !== JSON.stringify(existing.uploadedFiles)) {
           await prisma.notification.create({
             data: {
@@ -892,12 +927,13 @@ export class CaseController {
 
       // If moving to Final Approval / Application Completed and not already sent, trigger Brevo completion email!
       if ((overallStatus === 'Final Approval' || overallStatus === 'Application Completed' || (stageIndex === 4 && status === 'Completed')) && !completionEmailSent) {
-        const customerEmail = found.property?.owner_email || (found.fullData as any)?.email;
-        const customerName = found.property?.owner_name || (found.fullData as any)?.customerName || 'Valued Applicant';
+        const full = (found.fullData as any) || {};
+        const customerEmail = found.property?.owner_email || full.email || full.customerEmail || full.applicant?.email;
+        const customerName = found.property?.owner_name || full.customerName || full.applicant?.name || 'Valued Applicant';
         const proposalNo = found.application_number || found.id;
-        const product = found.approval_type || (found.fullData as any)?.serviceType || 'Building Approval';
-        const origin = req.headers.origin || 'http://localhost:5173';
-        const trackUrl = `${origin}/track-application?id=${proposalNo}&mobile=${found.property?.owner_phone || (found.fullData as any)?.mobile || ''}`;
+        const product = found.approval_type || full.serviceType || 'Building Approval';
+        const origin = (req.headers.origin as string) || process.env.FRONTEND_URL || 'https://building-approval-app.vercel.app';
+        const trackUrl = `${origin.replace(/\/$/, '')}/track-application?id=${proposalNo}&mobile=${found.property?.owner_phone || full.mobile || ''}`;
 
         if (customerEmail) {
           notificationService.notifyApplicationCompleted({
@@ -907,9 +943,9 @@ export class CaseController {
             product,
             trackUrl
           }).then(() => {
-            console.log(`Application completion email sent successfully to ${customerEmail}`);
+            console.log(`[Brevo SMTP] Application completion email sent successfully to ${customerEmail}`);
           }).catch(err => {
-            console.error('Failed to send application completion email:', err);
+            console.error('[Brevo SMTP] Failed to send application completion email:', err);
           });
         }
         fullData.completionEmailSent = true;

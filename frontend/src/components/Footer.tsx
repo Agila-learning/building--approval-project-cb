@@ -1,163 +1,268 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { Phone, Mail, MapPin, Clock, ShieldCheck, ArrowRight, MessageCircle } from 'lucide-react';
 
 const Footer: React.FC = () => {
   return (
-    <footer style={{ backgroundColor: 'var(--primary-dark)', color: 'var(--bg-surface)', padding: '2.5rem 0 1.5rem 0' }}>
-      <div className="container">
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2rem', justifyContent: 'space-between', marginBottom: '2rem' }}>
+    <footer style={{ backgroundColor: '#13281e', color: '#f8fafc', padding: '3.5rem 0 1.5rem 0', borderTop: '4px solid #c96f4a', position: 'relative' }}>
+      <div className="container" style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 1.5rem' }}>
+        
+        {/* Top Feature Banner */}
+        <div style={{
+          backgroundColor: '#1c3d2e',
+          borderRadius: '1rem',
+          padding: '1.5rem 2rem',
+          marginBottom: '3rem',
+          display: 'flex',
+          flexWrap: 'wrap',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '1.5rem',
+          boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.3)',
+          border: '1px solid rgba(255, 255, 255, 0.1)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flex: '1 1 300px' }}>
+            <div style={{ width: '48px', height: '48px', borderRadius: '50%', backgroundColor: 'rgba(201, 111, 74, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <ShieldCheck size={28} color="#c96f4a" />
+            </div>
+            <div>
+              <h3 style={{ fontSize: '1.1rem', fontWeight: 800, margin: 0, color: '#ffffff' }}>
+                Need Fast-Track Building Plan Approval?
+              </h3>
+              <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.85rem', color: '#cbd5e1' }}>
+                Certified DTCP & CMDA Consultancy • 100% Compliant Documentation • Shoolagiri & Hosur
+              </p>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+            <a
+              href="https://wa.me/918940206541?text=Hello%20CB%20Building%20Approvals,%20I%20would%20like%20to%20enquire%20about%20building%20approval%20services."
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                backgroundColor: '#25D366',
+                color: '#ffffff',
+                padding: '0.65rem 1.25rem',
+                borderRadius: '0.5rem',
+                fontWeight: 700,
+                fontSize: '0.875rem',
+                textDecoration: 'none',
+                boxShadow: '0 4px 12px rgba(37, 211, 102, 0.25)',
+                transition: 'transform 0.2s'
+              }}
+            >
+              <MessageCircle size={18} /> Chat on WhatsApp
+            </a>
+
+            <a
+              href="tel:+918940206541"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                backgroundColor: '#ffffff',
+                color: '#13281e',
+                padding: '0.65rem 1.25rem',
+                borderRadius: '0.5rem',
+                fontWeight: 700,
+                fontSize: '0.875rem',
+                textDecoration: 'none',
+                transition: 'all 0.2s'
+              }}
+            >
+              <Phone size={18} color="#1c3d2e" /> Call +91 8940206541
+            </a>
+          </div>
+        </div>
+
+        {/* Main Footer Columns */}
+        <div className="footer-columns-grid" style={{ marginBottom: '3rem' }}>
           
-          {/* Brand Info */}
-          <div style={{ flex: '1 1 250px' }}>
-            <Link to="/" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', textDecoration: 'none', marginBottom: '1rem' }}>
-              <div style={{ width: '48px', height: '48px', backgroundColor: '#ffffff', borderRadius: '0.625rem', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.25)', flexShrink: 0 }}>
-                <img src="/assets/logo.jpeg" alt="C.B. Building Approvals Logo" style={{ width: '100%', height: '100%', objectFit: 'contain', borderRadius: '0.375rem' }} />
+          {/* Column 1: Brand & Office Hours */}
+          <div>
+            <Link to="/" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', textDecoration: 'none', marginBottom: '1.25rem' }}>
+              <div style={{ width: '48px', height: '48px', backgroundColor: '#ffffff', borderRadius: '0.5rem', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <img src="/assets/logo.jpeg" alt="C.B. Building Approvals" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <div style={{ fontSize: '1.15rem', fontWeight: 900, lineHeight: 1.1, color: '#ffffff', fontFamily: 'var(--font-heading)', letterSpacing: '0.05em' }}>
+              <div>
+                <div style={{ fontSize: '1.1rem', fontWeight: 900, color: '#ffffff', letterSpacing: '0.04em', lineHeight: 1.1 }}>
                   C.B. BUILDING APPROVALS
                 </div>
-                <div style={{ fontSize: '0.625rem', fontWeight: 600, color: '#fbbf24', letterSpacing: '0.03em', marginTop: '0.2rem' }}>
+                <div style={{ fontSize: '0.65rem', fontWeight: 700, color: '#fbbf24', letterSpacing: '0.05em', marginTop: '3px' }}>
                   YOUR APPROVALS OUR RESPONSIBILITY
                 </div>
               </div>
             </Link>
-          </div>
 
-          {/* Links Grid */}
-          <div className="footer-links-grid" style={{ flex: '2 1 600px' }}>
-            
-            {/* Services */}
-            <div>
-              <h4 style={{ fontSize: '0.8125rem', fontWeight: 700, marginBottom: '0.875rem', fontFamily: 'var(--font-heading)', color: 'var(--bg-surface)' }}>Services</h4>
-              <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '0.5rem', padding: 0, margin: 0 }} className="footer-links">
-                <li><a href="#services">Building Approval</a></li>
-                <li><a href="#services">Documentation</a></li>
-                <li><a href="#services">Application Processing</a></li>
-                <li><Link to="/track-application">Application Tracking</Link></li>
-              </ul>
-            </div>
+            <p style={{ fontSize: '0.825rem', color: '#94a3b8', lineHeight: 1.6, marginBottom: '1.25rem' }}>
+              Premier government liaison consultancy specializing in DTCP, CMDA, Panchayat, and Municipal building plan sanctions, land documentation, and planning permissions across Tamil Nadu.
+            </p>
 
-            {/* Resources */}
-            <div>
-              <h4 style={{ fontSize: '0.8125rem', fontWeight: 700, marginBottom: '0.875rem', fontFamily: 'var(--font-heading)', color: 'var(--bg-surface)' }}>Resources</h4>
-              <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '0.5rem', padding: 0, margin: 0 }} className="footer-links">
-                <li><a href="#documents">Required Documents</a></li>
-                <li><Link to="/track-application">Application Status</Link></li>
-                <li><a href="#faq">FAQ</a></li>
-              </ul>
-            </div>
-
-            {/* Company */}
-            <div>
-              <h4 style={{ fontSize: '0.8125rem', fontWeight: 700, marginBottom: '0.875rem', fontFamily: 'var(--font-heading)', color: 'var(--bg-surface)' }}>Company</h4>
-              <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '0.5rem', padding: 0, margin: 0 }} className="footer-links">
-                <li><a href="#about">About Us</a></li>
-                <li><a href="#areas">Service Areas</a></li>
-              </ul>
-            </div>
-
-            {/* Contact Us */}
-            <div id="contact">
-              <h4 style={{ fontSize: '0.8125rem', fontWeight: 700, marginBottom: '0.875rem', fontFamily: 'var(--font-heading)', color: 'var(--bg-surface)' }}>Contact Us</h4>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', color: 'rgba(255,255,255,0.7)', fontSize: '0.8125rem' }}>
-                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-start' }}>
-                  <span>📍</span>
-                  <span style={{ wordBreak: 'break-word' }}>Near KVB Bank, Manjunatha Hardwares, 1st Floor, Shoolagiri - 635 117</span>
-                </div>
-                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                  <span>✉️</span>
-                  <a href="mailto:cb.construction2019@gmail.com" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', wordBreak: 'break-all' }}>cb.construction2019@gmail.com</a>
-                </div>
-                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                  <span>📞</span>
-                  <a href="tel:+918940206541" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none' }}>+91 8940206541</a>
-                </div>
+            <div style={{ backgroundColor: 'rgba(255, 255, 255, 0.05)', borderRadius: '0.5rem', padding: '0.75rem 1rem', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#fbbf24', fontSize: '0.8rem', fontWeight: 700, marginBottom: '0.35rem' }}>
+                <Clock size={15} /> Office Working Hours
+              </div>
+              <div style={{ fontSize: '0.775rem', color: '#e2e8f0' }}>
+                Monday – Saturday: <strong>9:00 AM – 7:30 PM</strong><br />
+                Sunday: <span style={{ color: '#94a3b8' }}>Closed (Emergency WhatsApp Only)</span>
               </div>
             </div>
-
           </div>
-          
+
+          {/* Column 2: Approvals & Services */}
+          <div>
+            <h4 style={{ fontSize: '0.925rem', fontWeight: 800, color: '#ffffff', marginBottom: '1.25rem', letterSpacing: '0.03em', textTransform: 'uppercase' }}>
+              Approval Services
+            </h4>
+            <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '0.7rem' }}>
+              <li>
+                <a href="#services" className="footer-link">
+                  <ArrowRight size={13} color="#c96f4a" /> DTCP Building Plan Approval
+                </a>
+              </li>
+              <li>
+                <a href="#services" className="footer-link">
+                  <ArrowRight size={13} color="#c96f4a" /> CMDA Planning Permission
+                </a>
+              </li>
+              <li>
+                <a href="#services" className="footer-link">
+                  <ArrowRight size={13} color="#c96f4a" /> Panchayat Building License
+                </a>
+              </li>
+              <li>
+                <a href="#services" className="footer-link">
+                  <ArrowRight size={13} color="#c96f4a" /> Unapproved Layout Regularization
+                </a>
+              </li>
+              <li>
+                <a href="#services" className="footer-link">
+                  <ArrowRight size={13} color="#c96f4a" /> Patta, Chitta & FMB Sketch Transfer
+                </a>
+              </li>
+              <li>
+                <a href="#services" className="footer-link">
+                  <ArrowRight size={13} color="#c96f4a" /> Architectural 2D & 3D Plans
+                </a>
+              </li>
+            </ul>
+          </div>
+
+          {/* Column 3: Customer Quick Links */}
+          <div>
+            <h4 style={{ fontSize: '0.925rem', fontWeight: 800, color: '#ffffff', marginBottom: '1.25rem', letterSpacing: '0.03em', textTransform: 'uppercase' }}>
+              Customer Portal
+            </h4>
+            <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '0.7rem' }}>
+              <li>
+                <Link to="/track-application" className="footer-link">
+                  <ArrowRight size={13} color="#c96f4a" /> Live Application Tracking
+                </Link>
+              </li>
+              <li>
+                <a href="#documents" className="footer-link">
+                  <ArrowRight size={13} color="#c96f4a" /> Mandatory Documents Checklist
+                </a>
+              </li>
+              <li>
+                <Link to="/start-application" className="footer-link">
+                  <ArrowRight size={13} color="#c96f4a" /> Start New Building Application
+                </Link>
+              </li>
+              <li>
+                <a href="#faq" className="footer-link">
+                  <ArrowRight size={13} color="#c96f4a" /> Frequently Asked Questions (FAQ)
+                </a>
+              </li>
+              <li>
+                <Link to="/admin/login" className="footer-link">
+                  <ArrowRight size={13} color="#c96f4a" /> Admin & Officer Portal
+                </Link>
+              </li>
+            </ul>
+          </div>
+
+          {/* Column 4: Contact & Office Location */}
+          <div id="contact">
+            <h4 style={{ fontSize: '0.925rem', fontWeight: 800, color: '#ffffff', marginBottom: '1.25rem', letterSpacing: '0.03em', textTransform: 'uppercase' }}>
+              Head Office Contact
+            </h4>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', fontSize: '0.825rem', color: '#cbd5e1' }}>
+              <div style={{ display: 'flex', gap: '0.65rem', alignItems: 'flex-start' }}>
+                <MapPin size={18} color="#c96f4a" style={{ flexShrink: 0, marginTop: '2px' }} />
+                <span>
+                  Near KVB Bank, Manjunatha Hardwares,<br />
+                  1st Floor, Shoolagiri, Krishnagiri District,<br />
+                  Tamil Nadu – 635 117
+                </span>
+              </div>
+              <div style={{ display: 'flex', gap: '0.65rem', alignItems: 'center' }}>
+                <Phone size={17} color="#c96f4a" style={{ flexShrink: 0 }} />
+                <a href="tel:+918940206541" style={{ color: '#f8fafc', textDecoration: 'none', fontWeight: 600 }}>
+                  +91 8940206541
+                </a>
+              </div>
+              <div style={{ display: 'flex', gap: '0.65rem', alignItems: 'center' }}>
+                <Mail size={17} color="#c96f4a" style={{ flexShrink: 0 }} />
+                <a href="mailto:cb.construction2019@gmail.com" style={{ color: '#cbd5e1', textDecoration: 'none', wordBreak: 'break-all' }}>
+                  cb.construction2019@gmail.com
+                </a>
+              </div>
+            </div>
+          </div>
+
         </div>
 
-        <div className="footer-bottom-row">
-          <div className="footer-bottom-content">
-            <div style={{ display: 'flex', gap: '1.25rem', color: 'rgba(255,255,255,0.6)' }}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"></path></svg>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line></svg>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"></path><rect x="2" y="9" width="4" height="12"></rect><circle cx="4" cy="4" r="2"></circle></svg>
-            </div>
-            <div className="footer-legal-row">
-              <span>&copy; 2026 CB Building Approvals. All rights reserved.</span>
-              <span>•</span>
-              <span>Privacy Policy</span>
-              <span>•</span>
-              <span>Terms & Conditions</span>
-            </div>
+        {/* Bottom Legal Row */}
+        <div style={{ borderTop: '1px solid rgba(255, 255, 255, 0.1)', paddingTop: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', fontSize: '0.785rem', color: '#94a3b8' }}>
+          <div>
+            &copy; {new Date().getFullYear()} C.B. Building Approvals Consultancy. All rights reserved.
+          </div>
+          <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+            <span>DTCP & CMDA Liaison</span>
+            <span>•</span>
+            <span>Privacy Policy</span>
+            <span>•</span>
+            <span>Terms & Conditions</span>
           </div>
         </div>
+
       </div>
+
       <style>{`
-        .footer-links-grid {
+        .footer-columns-grid {
           display: grid;
-          grid-template-columns: repeat(4, 1fr);
-          gap: 1.5rem;
+          grid-template-columns: 1.4fr 1fr 1fr 1.2fr;
+          gap: 2.5rem;
         }
-        @media (max-width: 900px) {
-          .footer-links-grid {
-            grid-template-columns: repeat(2, 1fr);
-            gap: 1.75rem;
+        @media (max-width: 1024px) {
+          .footer-columns-grid {
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
           }
-        }
-        @media (max-width: 480px) {
-          .footer-links-grid {
-            grid-template-columns: 1fr;
-            gap: 1.5rem;
-          }
-        }
-        .footer-bottom-row {
-          border-top: 1px solid rgba(255,255,255,0.1);
-          padding-top: 1.5rem;
-          display: flex;
-          justifyContent: space-between;
-          align-items: center;
-          flex-wrap: wrap;
-          gap: 1rem;
-        }
-        .footer-bottom-content {
-          display: flex;
-          flex-direction: column;
-          align-items: flex-end;
-          gap: 0.75rem;
-          width: 100%;
-        }
-        .footer-legal-row {
-          color: rgba(255,255,255,0.6);
-          font-size: 0.75rem;
-          display: flex;
-          gap: 0.75rem;
-          flex-wrap: wrap;
-          align-items: center;
         }
         @media (max-width: 640px) {
-          .footer-bottom-content {
-            align-items: center !important;
-            text-align: center !important;
-          }
-          .footer-legal-row {
-            justify-content: center !important;
-            text-align: center !important;
-            gap: 0.5rem !important;
+          .footer-columns-grid {
+            grid-template-columns: 1fr;
+            gap: 2rem;
           }
         }
-        .footer-links a {
-          color: rgba(255,255,255,0.65) !important;
-          font-size: 0.8125rem;
+        .footer-link {
+          color: #cbd5e1 !important;
           text-decoration: none;
-          transition: color 0.2s;
+          font-size: 0.825rem;
+          display: inline-flex;
+          align-items: center;
+          gap: 0.4rem;
+          transition: all 0.2s ease;
         }
-        .footer-links a:hover {
-          color: var(--accent) !important;
+        .footer-link:hover {
+          color: #fbbf24 !important;
+          transform: translateX(3px);
         }
       `}</style>
     </footer>

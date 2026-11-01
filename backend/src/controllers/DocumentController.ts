@@ -1,5 +1,23 @@
 import { Request, Response } from 'express';
 import prisma from '../prisma';
+import { BrevoNotificationService } from '../services/BrevoNotificationService';
+
+const brevoService = new BrevoNotificationService();
+
+export const formatDocLabel = (key: string): string => {
+  const u = (key || '').toUpperCase();
+  if (u.includes('PHOTOGRAPH') || u.includes('PHOTO')) return 'Customer Photograph';
+  if (u.includes('SIGNATURE') && !u.includes('PROPERTY')) return 'Customer Signature';
+  if (u.includes('AADHAR')) return 'Aadhaar Card';
+  if (u.includes('PAN')) return 'PAN Card';
+  if (u.includes('SALE DEED') || u.includes('LAND DOCUMENT') || u.includes('TITLE DEED')) return 'Sale Deed / Land Document';
+  if (u.includes('PATTA')) return 'Patta Copy';
+  if (u.includes('BUILDING PLAN')) return 'Proposed Building Plan';
+  if (u.includes('FMB')) return 'FMB Sketch';
+  if (u.includes('EC') || u.includes('ENCUMBRANCE')) return 'Encumbrance Certificate (EC)';
+  if (u.includes('TAX')) return 'Property Tax Receipt';
+  return key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+};
 
 export class DocumentController {
   async uploadDocument(req: Request, res: Response) {
@@ -134,21 +152,6 @@ export class DocumentController {
       });
 
       const docsList: any[] = [];
-
-      const formatDocLabel = (key: string): string => {
-        const u = key.toUpperCase();
-        if (u.includes('PHOTOGRAPH') || u.includes('PHOTO')) return 'Customer Photograph';
-        if (u.includes('SIGNATURE') && !u.includes('PROPERTY')) return 'Customer Signature';
-        if (u.includes('AADHAR')) return 'Aadhaar Card';
-        if (u.includes('PAN')) return 'PAN Card';
-        if (u.includes('SALE DEED') || u.includes('LAND DOCUMENT') || u.includes('TITLE DEED')) return 'Sale Deed / Land Document';
-        if (u.includes('PATTA')) return 'Patta Copy';
-        if (u.includes('BUILDING PLAN')) return 'Proposed Building Plan';
-        if (u.includes('FMB')) return 'FMB Sketch';
-        if (u.includes('EC') || u.includes('ENCUMBRANCE')) return 'Encumbrance Certificate (EC)';
-        if (u.includes('TAX')) return 'Property Tax Receipt';
-        return key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-      };
 
       for (const c of cases) {
         const customerName = c.property?.owner_name || (c.fullData as any)?.customerName || 'Customer';
@@ -307,6 +310,34 @@ export class DocumentController {
 
       if (effectiveStatus === 'Re-upload Required') {
         if (!requestedReuploads.includes(documentKey)) requestedReuploads.push(documentKey);
+
+        // Dispatch automated Re-upload Notification Email to customer via Brevo
+        try {
+          const customerEmail = targetCase.property?.owner_email || (targetCase.fullData as any)?.email || (targetCase.fullData as any)?.customerEmail || (targetCase.fullData as any)?.applicant?.email;
+          const customerName = targetCase.property?.owner_name || (targetCase.fullData as any)?.customerName || (targetCase.fullData as any)?.applicant?.name || 'Valued Applicant';
+          const proposalNo = targetCase.application_number || targetCase.id;
+          const origin = (req.headers.origin as string) || process.env.FRONTEND_URL || 'https://building-approval-app.vercel.app';
+          const uploadUrl = `${origin.replace(/\/$/, '')}/upload/${proposalNo}`;
+
+          if (customerEmail) {
+            brevoService.notifyDocumentReuploadRequired({
+              customerEmail,
+              customerName,
+              proposalNumber: proposalNo,
+              documentName: formatDocLabel(documentKey),
+              reason: reasonToSave,
+              uploadUrl
+            }).then(() => {
+              console.log(`[Brevo SMTP] Re-upload request email successfully dispatched to ${customerEmail} for document "${documentKey}"`);
+            }).catch(e => {
+              console.error('[Brevo SMTP] Failed to send re-upload email:', e);
+            });
+          } else {
+            console.warn(`[Brevo SMTP] No customer email found for proposal ${proposalNo} to send re-upload request`);
+          }
+        } catch (mailErr) {
+          console.error('[Brevo SMTP] Error preparing re-upload email:', mailErr);
+        }
       } else {
         requestedReuploads = requestedReuploads.filter(k => k !== documentKey);
       }

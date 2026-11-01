@@ -1,8 +1,28 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, FileText, X, Pencil, Info, ArrowUpDown, Plus, UserCheck } from 'lucide-react';
+import { Search, FileText, X, Pencil, Info, ArrowUpDown, Plus, UserCheck, Eye, Download } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getApiUrl } from '../../config/api';
+
+const downloadLeadFile = async (url: string, filename: string) => {
+  try {
+    const toastId = toast.loading(`Downloading ${filename}...`);
+    const response = await fetch(url);
+    const blob = await response.blob();
+    const blobUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = blobUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(blobUrl);
+    toast.dismiss(toastId);
+    toast.success('Downloaded successfully!');
+  } catch (e) {
+    window.open(url, '_blank');
+  }
+};
 
 const CustomerLeads: React.FC = () => {
   const navigate = useNavigate();
@@ -70,6 +90,7 @@ const CustomerLeads: React.FC = () => {
               aadharFileName: lead.aadharFileName,
               buildingPhoto: lead.buildingPhoto,
               buildingPhotoName: lead.buildingPhotoName,
+              uploadedFiles: lead.uploadedFiles || {},
               isCase: false
             }));
           combinedLeads = [...formattedLeads];
@@ -85,6 +106,12 @@ const CustomerLeads: React.FC = () => {
             .map((c: any) => {
               const full = c.fullData || {};
               const prop = c.property || {};
+              const caseUploaded = (c.uploadedFiles as Record<string, string>) || (full.uploadedFiles as Record<string, string>) || (full.documents as Record<string, string>) || {};
+              
+              // Resolve specific document URLs if present
+              const aadhar = caseUploaded['AADHAR CARD'] || caseUploaded['AADHAAR CARD'] || full.aadharFile || full.applicant?.aadharFile || '';
+              const photo = caseUploaded['CUSTOMER PHOTOGRAPH'] || caseUploaded['PHOTO'] || caseUploaded['BUILDING PHOTO'] || caseUploaded['BUILDING PLAN'] || full.buildingPhoto || '';
+
               return {
                 id: c.id,
                 displayId: c.application_number || c.id,
@@ -99,7 +126,12 @@ const CustomerLeads: React.FC = () => {
                 status: c.status || 'New',
                 assignedTo: c.assigned_staff?.name || full.staff || '',
                 isCase: true,
-                caseId: c.id
+                caseId: c.id,
+                uploadedFiles: caseUploaded,
+                aadharFile: aadhar,
+                aadharFileName: aadhar ? 'Aadhaar Card' : undefined,
+                buildingPhoto: photo,
+                buildingPhotoName: photo ? 'Site / Building Photo' : undefined
               };
             });
 
@@ -421,14 +453,14 @@ const CustomerLeads: React.FC = () => {
       )}
 
       {viewingLead && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15, 23, 42, 0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, backdropFilter: 'blur(4px)' }}>
-          <div style={{ backgroundColor: 'var(--bg-surface)', borderRadius: '0.75rem', width: '100%', maxWidth: '600px', padding: '1.5rem', maxHeight: '90vh', overflowY: 'auto', position: 'relative' }}>
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15, 23, 42, 0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, backdropFilter: 'blur(4px)', padding: '0.75rem' }}>
+          <div className="modal-content-responsive" style={{ backgroundColor: 'var(--bg-surface)', borderRadius: '0.75rem', width: '100%', maxWidth: '600px', padding: '1.5rem', maxHeight: '90vh', overflowY: 'auto', position: 'relative' }}>
             <button onClick={() => setViewingLead(null)} style={{ position: 'absolute', top: '1rem', right: '1rem', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }}>
               <X size={20} />
             </button>
             <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--primary-dark)', marginBottom: '1.5rem' }}>Lead Details - {viewingLead.displayId}</h3>
             
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
+            <div className="modal-grid-responsive" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
               <div>
                 <strong style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Customer Name</strong>
                 <div style={{ fontSize: '0.875rem', fontWeight: 500 }}>{viewingLead.name}</div>
@@ -475,27 +507,133 @@ const CustomerLeads: React.FC = () => {
             </div>
 
             <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '1.5rem', marginBottom: '1.5rem' }}>
-              <h4 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--primary-dark)', marginBottom: '1rem' }}>Uploaded Documents</h4>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem', border: '1px solid var(--border-color)', borderRadius: '0.5rem' }}>
-                  <div>
-                    <strong style={{ fontSize: '0.875rem' }}>Aadhar Card</strong>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{viewingLead.aadharFileName || 'Not uploaded'}</div>
-                  </div>
-                  {viewingLead.aadharFile && (
-                    <a href={viewingLead.aadharFile} download={viewingLead.aadharFileName || 'aadhar'} style={{ padding: '0.4rem 1rem', backgroundColor: 'var(--primary)', color: 'white', borderRadius: '0.25rem', textDecoration: 'none', fontSize: '0.75rem', fontWeight: 600 }}>Download</a>
-                  )}
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem', border: '1px solid var(--border-color)', borderRadius: '0.5rem' }}>
-                  <div>
-                    <strong style={{ fontSize: '0.875rem' }}>Building Photo (GPS)</strong>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{viewingLead.buildingPhotoName || 'Not uploaded'}</div>
-                  </div>
-                  {viewingLead.buildingPhoto && (
-                    <a href={viewingLead.buildingPhoto} download={viewingLead.buildingPhotoName || 'building_photo'} style={{ padding: '0.4rem 1rem', backgroundColor: 'var(--primary)', color: 'white', borderRadius: '0.25rem', textDecoration: 'none', fontSize: '0.75rem', fontWeight: 600 }}>Download</a>
-                  )}
-                </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                <h4 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--primary-dark)', margin: 0 }}>Uploaded Documents</h4>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                  {(() => {
+                    const up = viewingLead.uploadedFiles || {};
+                    let count = Object.values(up).filter(Boolean).length;
+                    if (!up['AADHAR CARD'] && viewingLead.aadharFile) count++;
+                    if (!up['BUILDING PHOTO'] && !up['CUSTOMER PHOTOGRAPH'] && viewingLead.buildingPhoto) count++;
+                    return `${count} document${count === 1 ? '' : 's'} available`;
+                  })()}
+                </span>
               </div>
+
+              {(() => {
+                const up = viewingLead.uploadedFiles || {};
+                const seenUrls = new Set<string>();
+                const docList: { key: string; name: string; url: string }[] = [];
+
+                // 1. Files from uploadedFiles map
+                for (const [k, v] of Object.entries(up)) {
+                  if (v && typeof v === 'string' && !seenUrls.has(v) && !['username', 'password', 'receiptNumber'].includes(k)) {
+                    seenUrls.add(v);
+                    docList.push({
+                      key: k,
+                      name: k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+                      url: v
+                    });
+                  }
+                }
+
+                // 2. Aadhar if separate
+                if (viewingLead.aadharFile && !seenUrls.has(viewingLead.aadharFile)) {
+                  seenUrls.add(viewingLead.aadharFile);
+                  docList.push({
+                    key: 'AADHAAR',
+                    name: viewingLead.aadharFileName || 'Aadhaar Card',
+                    url: viewingLead.aadharFile
+                  });
+                }
+
+                // 3. Building photo if separate
+                if (viewingLead.buildingPhoto && !seenUrls.has(viewingLead.buildingPhoto)) {
+                  seenUrls.add(viewingLead.buildingPhoto);
+                  docList.push({
+                    key: 'BUILDING_PHOTO',
+                    name: viewingLead.buildingPhotoName || 'Site / Building Photo',
+                    url: viewingLead.buildingPhoto
+                  });
+                }
+
+                if (docList.length === 0) {
+                  return (
+                    <div style={{ padding: '1.5rem', textAlign: 'center', backgroundColor: 'var(--bg-secondary)', borderRadius: '0.5rem', color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
+                      <FileText size={24} style={{ margin: '0 auto 0.5rem', opacity: 0.5, display: 'block' }} />
+                      No documents uploaded yet for this lead.
+                    </div>
+                  );
+                }
+
+                return (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                    {docList.map((doc, dIdx) => (
+                      <div 
+                        key={dIdx} 
+                        style={{ 
+                          display: 'flex', 
+                          justifyContent: 'space-between', 
+                          alignItems: 'center', 
+                          padding: '0.75rem 1rem', 
+                          border: '1px solid var(--border-color)', 
+                          borderRadius: '0.5rem',
+                          backgroundColor: 'var(--bg-surface)' 
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                          <FileText size={18} color="var(--primary)" />
+                          <div>
+                            <strong style={{ fontSize: '0.875rem', color: 'var(--primary-dark)', display: 'block' }}>{doc.name}</strong>
+                            <span style={{ fontSize: '0.7rem', color: '#16a34a', fontWeight: 600 }}>Ready to view</span>
+                          </div>
+                        </div>
+
+                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                          <button
+                            type="button"
+                            onClick={() => window.open(doc.url, '_blank')}
+                            style={{
+                              padding: '0.35rem 0.75rem',
+                              backgroundColor: 'var(--bg-secondary)',
+                              border: '1px solid var(--border-color)',
+                              borderRadius: '0.375rem',
+                              fontSize: '0.75rem',
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '0.3rem',
+                              color: 'var(--primary-dark)'
+                            }}
+                          >
+                            <Eye size={13} /> View
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => downloadLeadFile(doc.url, `${doc.name.replace(/\s+/g, '_')}.jpg`)}
+                            style={{
+                              padding: '0.35rem 0.75rem',
+                              backgroundColor: 'var(--primary)',
+                              border: 'none',
+                              color: 'white',
+                              borderRadius: '0.375rem',
+                              fontSize: '0.75rem',
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '0.3rem'
+                            }}
+                          >
+                            <Download size={13} /> Download
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end' }}>

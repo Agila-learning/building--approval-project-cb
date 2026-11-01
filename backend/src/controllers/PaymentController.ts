@@ -21,7 +21,22 @@ export function loadStoredSettings(): any {
     ensureSettingsDir();
     if (fs.existsSync(SETTINGS_FILE)) {
       const data = fs.readFileSync(SETTINGS_FILE, 'utf-8');
-      return JSON.parse(data);
+      const parsed = JSON.parse(data);
+      if (!parsed.requiredDocuments || !Array.isArray(parsed.requiredDocuments) || parsed.requiredDocuments.length === 0) {
+        parsed.requiredDocuments = [
+          { key: 'CUSTOMER PHOTOGRAPH', label: 'Customer Photograph', required: true, description: 'Recent passport size photo of the applicant' },
+          { key: 'CUSTOMER SIGNATURE', label: 'Customer Signature', required: true, description: 'Applicant official specimen signature' },
+          { key: 'AADHAR CARD', label: 'Aadhaar Card', required: true, description: 'Government Aadhaar identity proof of owner/applicant' },
+          { key: 'PAN CARD', label: 'PAN Card', required: true, description: 'Permanent Account Number card' },
+          { key: 'SALE DEED', label: 'Sale Deed / Land Document', required: true, description: 'Registered sale deed or parent document establishing ownership' },
+          { key: 'PATTA', label: 'Patta Copy', required: true, description: 'Latest Patta/Chitta copy in applicant name' },
+          { key: 'BUILDING PLAN', label: 'Proposed Building Plan', required: false, description: 'Architectural floor plan, section and elevation drawings' },
+          { key: 'FMB', label: 'FMB Sketch', required: false, description: 'Field Measurement Book sketch copy' },
+          { key: 'ENCUMBRANCE CERTIFICATE', label: 'Encumbrance Certificate (EC)', required: false, description: 'Latest 15 to 30 years EC from Sub-Registrar' },
+          { key: 'PROPERTY TAX', label: 'Property Tax Receipt', required: false, description: 'Latest municipal / panchayat tax paid receipt' }
+        ];
+      }
+      return parsed;
     }
   } catch (err) {
     console.warn('Could not read system settings file:', err);
@@ -39,7 +54,19 @@ export function loadStoredSettings(): any {
     paymentInstructions: 'Scan QR code using Google Pay, PhonePe, Paytm or transfer to Bank Account. Enter Proposal Number in remarks.',
     adminSignature: '',
     adminName: 'Authorized Signatory',
-    adminDesignation: 'Executive Administrator'
+    adminDesignation: 'Executive Administrator',
+    requiredDocuments: [
+      { key: 'CUSTOMER PHOTOGRAPH', label: 'Customer Photograph', required: true, description: 'Recent passport size photo of the applicant' },
+      { key: 'CUSTOMER SIGNATURE', label: 'Customer Signature', required: true, description: 'Applicant official specimen signature' },
+      { key: 'AADHAR CARD', label: 'Aadhaar Card', required: true, description: 'Government Aadhaar identity proof of owner/applicant' },
+      { key: 'PAN CARD', label: 'PAN Card', required: true, description: 'Permanent Account Number card' },
+      { key: 'SALE DEED', label: 'Sale Deed / Land Document', required: true, description: 'Registered sale deed or parent document establishing ownership' },
+      { key: 'PATTA', label: 'Patta Copy', required: true, description: 'Latest Patta/Chitta copy in applicant name' },
+      { key: 'BUILDING PLAN', label: 'Proposed Building Plan', required: false, description: 'Architectural floor plan, section and elevation drawings' },
+      { key: 'FMB', label: 'FMB Sketch', required: false, description: 'Field Measurement Book sketch copy' },
+      { key: 'ENCUMBRANCE CERTIFICATE', label: 'Encumbrance Certificate (EC)', required: false, description: 'Latest 15 to 30 years EC from Sub-Registrar' },
+      { key: 'PROPERTY TAX', label: 'Property Tax Receipt', required: false, description: 'Latest municipal / panchayat tax paid receipt' }
+    ]
   };
 }
 

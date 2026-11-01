@@ -508,6 +508,41 @@ export class BrevoNotificationService implements NotificationService {
 
     await this.sendEmail(customerEmail, customerName, subject, htmlContent);
   }
+
+  async notifyDocumentReuploadRequired(params: {
+    customerEmail: string;
+    customerName: string;
+    proposalNumber: string;
+    documentName: string;
+    reason: string;
+    uploadUrl: string;
+  }): Promise<void> {
+    const { customerEmail, customerName, proposalNumber, documentName, reason, uploadUrl } = params;
+    const subject = `Action Required: Document Re-upload Requested for Proposal #${proposalNumber} - CB Building Approvals`;
+    const htmlContent = generateEmailTemplate({
+      eyebrow: 'Action Required',
+      headline: 'Document Re-upload Requested',
+      customerName: customerName || 'Valued Applicant',
+      bodyParagraphs: [
+        `During the scrutiny of your Building Approval Application #${proposalNumber}, our scrutiny team found that the document "${documentName}" requires re-upload.`,
+        'To avoid delays in processing your building approval, please upload a clear, revised copy of this document as soon as possible.',
+        'Click the secure link below to upload your revised document directly to your application file.'
+      ],
+      referenceCard: [
+        { label: 'Proposal Number', value: `#${proposalNumber}` },
+        { label: 'Customer Name', value: customerName },
+        { label: 'Requested Document', value: documentName },
+        { label: 'Reason for Re-upload', value: reason || 'Please upload a clearer copy.' },
+        { label: 'Current Status', value: 'Re-upload Required' }
+      ],
+      cta: {
+        text: 'Re-upload Document Now',
+        url: uploadUrl
+      }
+    });
+
+    await this.sendEmail(customerEmail, customerName, subject, htmlContent);
+  }
 }
 
 

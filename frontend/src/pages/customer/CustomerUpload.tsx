@@ -12,33 +12,95 @@ const CustomerUpload: React.FC = () => {
   const [requestedDocIds, setRequestedDocIds] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
-  // Track uploaded documents
-  const [documents, setDocuments] = useState<any[]>([
+  // Default documents fallback
+  const DEFAULT_DOCS = [
     { id: 'sale_deed', name: 'Land Document / Sale Deed', required: true, fileName: null, status: 'Missing' },
-    { id: 'patta', name: 'Patta', required: true, fileName: null, status: 'Missing' },
-    { id: 'fmb', name: 'FMB (Field Measurement Book)', required: false, fileName: null, status: 'Missing' },
+    { id: 'patta', name: 'Patta Copy', required: true, fileName: null, status: 'Missing' },
+    { id: 'fmb', name: 'FMB Sketch', required: false, fileName: null, status: 'Missing' },
     { id: 'pan', name: 'PAN Card', required: true, fileName: null, status: 'Missing' },
-    { id: 'aadhar', name: 'Aadhar Card', required: true, fileName: null, status: 'Missing' },
+    { id: 'aadhar', name: 'Aadhaar Card', required: true, fileName: null, status: 'Missing' },
     { id: 'photo', name: 'Passport Size Photograph', required: true, fileName: null, status: 'Missing' },
     { id: 'signature', name: 'Customer Signature', required: true, fileName: null, status: 'Missing' },
     { id: 'building_plan', name: 'Proposed Building Plan', required: false, fileName: null, status: 'Missing' }
-  ]);
+  ];
+
+  // Track uploaded documents
+  const [documents, setDocuments] = useState<any[]>(DEFAULT_DOCS);
 
   useEffect(() => {
     const docMapping: any = {
       'SALE DEED': 'sale_deed',
+      'LAND DOCUMENT': 'sale_deed',
       'PATTA': 'patta',
       'FMB': 'fmb',
       'PAN CARD': 'pan',
       'AADHAR CARD': 'aadhar',
+      'AADHAAR CARD': 'aadhar',
       'CUSTOMER PHOTOGRAPH': 'photo',
       'CUSTOMER SIGNATURE': 'signature',
+      'PROPERTY SIGNATURE': 'signature',
       'BUILDING PLAN': 'building_plan'
     };
 
     const loadDocs = async () => {
+      // 1. Fetch dynamic document checklist from backend settings if available
+      let configuredList = DEFAULT_DOCS;
+      try {
+        const apiUrl = getApiUrl();
+        const settingsRes = await fetch(`${apiUrl}/settings`);
+        if (settingsRes.ok) {
+          const settingsData = await settingsRes.json();
+          if (Array.isArray(settingsData.requiredDocuments) && settingsData.requiredDocuments.length > 0) {
+            configuredList = settingsData.requiredDocuments.map((item: any) => ({
+              id: item.id,
+              name: item.name,
+              required: Boolean(item.required),
+              fileName: null,
+              status: 'Missing'
+            }));
+          }
+        }
+      } catch (err) {
+        // Check localStorage fallback
+        const savedChecklist = localStorage.getItem('admin_required_documents');
+        if (savedChecklist) {
+          try {
+            const parsed = JSON.parse(savedChecklist);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              configuredList = parsed.map((item: any) => ({
+                id: item.id,
+                name: item.name,
+                required: Boolean(item.required),
+                fileName: null,
+                status: 'Missing'
+              }));
+            }
+          } catch (e) {}
+        }
+      }
+
+      // Populate mappings for custom items
+      configuredList.forEach(item => {
+        if (!docMapping[item.name.toUpperCase()]) {
+          docMapping[item.name.toUpperCase()] = item.id;
+        }
+      });
+
       const savedDocs = localStorage.getItem(`customerDocs_${id}`);
-      let currentDocs = savedDocs ? JSON.parse(savedDocs) : documents;
+      let currentDocs = configuredList;
+      if (savedDocs) {
+        try {
+          const parsedSaved = JSON.parse(savedDocs);
+          // Merge configuredList with saved uploads
+          currentDocs = configuredList.map(cfg => {
+            const existing = parsedSaved.find((p: any) => p.id === cfg.id || p.name.toUpperCase() === cfg.name.toUpperCase());
+            if (existing) {
+              return { ...cfg, ...existing, required: cfg.required };
+            }
+            return cfg;
+          });
+        } catch (e) {}
+      }
       
       let reqList: string[] = [];
       const localCasesStr = localStorage.getItem('mock_saved_cases');
@@ -70,20 +132,16 @@ const CustomerUpload: React.FC = () => {
 
             const caseFiles = apiCase.uploadedFiles || apiCase.fullData?.documents || {};
             if (caseFiles) {
-              const reverseMap: any = {
-                'CUSTOMER PHOTOGRAPH': 'photo',
-                'CUSTOMER SIGNATURE': 'signature',
-                'AADHAR CARD': 'aadhar',
-                'PAN CARD': 'pan',
-                'SALE DEED': 'sale_deed',
-                'PATTA': 'patta',
-                'FMB': 'fmb',
-                'BUILDING PLAN': 'building_plan'
-              };
               currentDocs = currentDocs.map((d: any) => {
-                const foundKey = Object.keys(reverseMap).find(k => reverseMap[k] === d.id);
-                if (foundKey && caseFiles[foundKey]) {
-                  return { ...d, fileData: caseFiles[foundKey], fileName: `${foundKey}.jpg`, status: 'Uploaded' };
+                // Check direct key or mapped key
+                const fileEntryKey = Object.keys(caseFiles).find(k => {
+                  if (docMapping[k] === d.id) return true;
+                  if (k.toUpperCase() === d.name.toUpperCase()) return true;
+                  if (k.toUpperCase() === d.id.toUpperCase()) return true;
+                  return false;
+                });
+                if (fileEntryKey && caseFiles[fileEntryKey]) {
+                  return { ...d, fileData: caseFiles[fileEntryKey], fileName: `${fileEntryKey}.jpg`, status: 'Uploaded' };
                 }
                 return d;
               });
@@ -95,7 +153,7 @@ const CustomerUpload: React.FC = () => {
       }
 
       if (reqList.length > 0) {
-        const reqIds = reqList.map((r: string) => docMapping[r] || r.toLowerCase().replace(/\s+/g, '_')).filter(Boolean);
+        const reqIds = reqList.map((r: string) => docMapping[r] || docMapping[r.toUpperCase()] || r.toLowerCase().replace(/\s+/g, '_')).filter(Boolean);
         setRequestedDocIds(reqIds);
         
         currentDocs = currentDocs.map((d: any) => {
@@ -235,8 +293,9 @@ const CustomerUpload: React.FC = () => {
         };
         const mappedFiles: any = {};
         newDocs.forEach((d: any) => {
-          if (d.fileData && docMapping[d.id]) {
-            mappedFiles[docMapping[d.id]] = d.fileData;
+          if (d.fileData) {
+            const docKey = docMapping[d.id] || d.name.toUpperCase();
+            mappedFiles[docKey] = d.fileData;
           }
         });
 
@@ -283,9 +342,8 @@ const CustomerUpload: React.FC = () => {
       return;
     }
 
-    // Phase 7: Prevent final document submission if any required document is missing
-    const mandatoryIds = ['sale_deed', 'patta', 'pan', 'aadhar', 'photo', 'signature'];
-    const missingMandatory = documents.filter(doc => mandatoryIds.includes(doc.id) && !doc.fileName && !doc.fileData);
+    // Dynamic mandatory check based on checklist configuration
+    const missingMandatory = documents.filter(doc => doc.required && !doc.fileName && !doc.fileData);
     if (missingMandatory.length > 0) {
       toast.error(`Required documents missing: ${missingMandatory.map(d => d.name).join(', ')}. Please upload all mandatory documents before submitting.`);
       return;
@@ -318,8 +376,9 @@ const CustomerUpload: React.FC = () => {
         };
         const mappedFiles: any = {};
         documents.forEach((d: any) => {
-          if (d.fileData && docMapping[d.id]) {
-            mappedFiles[docMapping[d.id]] = d.fileData;
+          if (d.fileData) {
+            const docKey = docMapping[d.id] || d.name.toUpperCase();
+            mappedFiles[docKey] = d.fileData;
           }
         });
         await fetch(`${apiUrl}/cases/${id}`, {
