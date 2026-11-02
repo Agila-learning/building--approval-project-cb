@@ -8,5 +8,6 @@ router.get('/', leadController.getLeads);
 router.put('/:id/status', leadController.updateLeadStatus);
 router.put('/:id/assign', leadController.updateLeadStatus);
 router.put('/:id', leadController.updateLeadStatus);
+router.delete('/:id', leadController.deleteLead);
 
 export default router;

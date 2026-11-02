@@ -539,14 +539,26 @@ export class CaseController {
         });
       }
 
-      // Enrich stages
-      const enrichedCases = finalCases.map(c => ({
-        ...c,
-        fullData: {
-          ...((c.fullData as any) || {}),
-          stages: (c.fullData as any)?.stages || buildDefaultStages(c)
+      // Enrich stages and strip bulky base64 data URLs in list response for 10x faster initial loading!
+      const enrichedCases = finalCases.map(c => {
+        let lightweightUploadedFiles: any = undefined;
+        if (c.uploadedFiles && typeof c.uploadedFiles === 'object') {
+          lightweightUploadedFiles = {};
+          for (const [k, v] of Object.entries(c.uploadedFiles as any)) {
+            lightweightUploadedFiles[k] = (typeof v === 'string' && v.startsWith('data:')) ? 'UPLOADED' : v;
+          }
         }
-      }));
+
+        const full = (c.fullData as any) || {};
+        return {
+          ...c,
+          uploadedFiles: lightweightUploadedFiles,
+          fullData: {
+            ...full,
+            stages: full.stages || buildDefaultStages(c)
+          }
+        };
+      });
 
       res.json(enrichedCases);
     } catch (error: any) {

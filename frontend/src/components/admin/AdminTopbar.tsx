@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, Bell, ChevronDown, Home, ClipboardList, CheckCircle, Menu } from 'lucide-react';
+import { Search, Bell, ChevronDown, Home, ClipboardList, CheckCircle, Menu, Settings, LogOut } from 'lucide-react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { getApiUrl } from '../../config/api';
 
@@ -37,6 +37,21 @@ const AdminTopbar: React.FC<AdminTopbarProps> = ({ toggleSidebar }) => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const notifRef = useRef<HTMLDivElement>(null);
 
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [profilePic, setProfilePic] = useState<string | null>(null);
+  const [userName, setUserName] = useState('Admin User');
+  const [userRole, setUserRole] = useState('Administrator');
+  const profileRef = useRef<HTMLDivElement>(null);
+
+  const loadProfile = () => {
+    const pic = localStorage.getItem('profilePicture') || localStorage.getItem('adminProfilePic') || null;
+    setProfilePic(pic);
+    const user = localStorage.getItem('loggedInUser');
+    if (user) setUserName(user);
+    const role = localStorage.getItem('userRole');
+    if (role) setUserRole(role.toUpperCase() === 'ADMIN' ? 'Administrator' : role);
+  };
+
   const loadNotifications = async () => {
     try {
       const res = await fetch(`${getApiUrl()}/notifications`);
@@ -68,13 +83,19 @@ const AdminTopbar: React.FC<AdminTopbarProps> = ({ toggleSidebar }) => {
 
   useEffect(() => {
     loadNotifications();
+    loadProfile();
     const interval = setInterval(loadNotifications, 3000); // 3s real-time polling
     window.addEventListener('storage', loadNotifications);
+    window.addEventListener('storage', loadProfile);
     window.addEventListener('focus', loadNotifications);
+    window.addEventListener('focus', loadProfile);
     
     const handleClickOutside = (event: MouseEvent) => {
       if (notifRef.current && !notifRef.current.contains(event.target as Node)) {
         setShowNotifications(false);
+      }
+      if (profileRef.current && !profileRef.current.contains(event.target as Node)) {
+        setShowProfileMenu(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -82,7 +103,9 @@ const AdminTopbar: React.FC<AdminTopbarProps> = ({ toggleSidebar }) => {
     return () => {
       clearInterval(interval);
       window.removeEventListener('storage', loadNotifications);
+      window.removeEventListener('storage', loadProfile);
       window.removeEventListener('focus', loadNotifications);
+      window.removeEventListener('focus', loadProfile);
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, []);
@@ -325,15 +348,121 @@ const AdminTopbar: React.FC<AdminTopbarProps> = ({ toggleSidebar }) => {
           </div>
 
           {/* Profile */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', paddingLeft: '0.75rem', borderLeft: '1px solid var(--border-color)' }}>
-            <div style={{ width: '28px', height: '28px', borderRadius: '50%', backgroundColor: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: '0.75rem', fontFamily: 'var(--font-heading)' }}>
-              AD
+          <div ref={profileRef} style={{ position: 'relative' }}>
+            <div 
+              onClick={() => setShowProfileMenu(prev => !prev)}
+              role="button"
+              tabIndex={0}
+              title="Account Menu"
+              style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: '0.5rem', 
+                cursor: 'pointer', 
+                paddingLeft: '0.75rem', 
+                borderLeft: '1px solid var(--border-color)',
+                userSelect: 'none'
+              }}
+            >
+              {profilePic ? (
+                <img 
+                  src={profilePic} 
+                  alt="Avatar" 
+                  style={{ width: '30px', height: '30px', borderRadius: '50%', objectFit: 'cover', border: '1.5px solid var(--primary-light, #dbeafe)' }} 
+                />
+              ) : (
+                <div style={{ width: '30px', height: '30px', borderRadius: '50%', backgroundColor: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: '0.75rem', fontFamily: 'var(--font-heading)' }}>
+                  {userName.slice(0, 2).toUpperCase()}
+                </div>
+              )}
+              <div className="hidden-mobile" style={{ display: 'flex', flexDirection: 'column' }}>
+                <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--primary-dark)', fontFamily: 'var(--font-heading)', lineHeight: 1 }}>{userName}</div>
+                <div style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', marginTop: '2px' }}>{userRole}</div>
+              </div>
+              <ChevronDown size={14} color="var(--text-secondary)" />
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--primary-dark)', fontFamily: 'var(--font-heading)', lineHeight: 1 }}>Admin User</div>
-              <div className="hidden-mobile-xs" style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', marginTop: '2px' }}>Administrator</div>
-            </div>
-            <ChevronDown size={14} color="var(--text-secondary)" />
+
+            {/* Profile Dropdown Popover */}
+            {showProfileMenu && (
+              <div style={{
+                position: 'absolute',
+                top: '100%',
+                right: 0,
+                marginTop: '10px',
+                width: '220px',
+                backgroundColor: '#ffffff',
+                borderRadius: '0.75rem',
+                boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.05)',
+                border: '1px solid var(--border-color)',
+                padding: '0.5rem 0',
+                zIndex: 1100
+              }}>
+                <div style={{ padding: '0.75rem 1rem', borderBottom: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                  {profilePic ? (
+                    <img src={profilePic} alt="Avatar" style={{ width: '36px', height: '36px', borderRadius: '50%', objectFit: 'cover' }} />
+                  ) : (
+                    <div style={{ width: '36px', height: '36px', borderRadius: '50%', backgroundColor: 'var(--primary)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '0.875rem' }}>
+                      {userName.slice(0, 2).toUpperCase()}
+                    </div>
+                  )}
+                  <div style={{ overflow: 'hidden' }}>
+                    <div style={{ fontSize: '0.875rem', fontWeight: 700, color: 'var(--text-primary)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>{userName}</div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{userRole}</div>
+                  </div>
+                </div>
+
+                <div style={{ padding: '0.25rem 0' }}>
+                  <button
+                    onClick={() => {
+                      setShowProfileMenu(false);
+                      navigate('/admin/settings');
+                    }}
+                    style={{
+                      width: '100%',
+                      padding: '0.6rem 1rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.6rem',
+                      background: 'none',
+                      border: 'none',
+                      color: 'var(--text-primary)',
+                      fontSize: '0.8125rem',
+                      cursor: 'pointer',
+                      textAlign: 'left'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8fafc'}
+                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                  >
+                    <Settings size={15} color="var(--text-secondary)" /> Settings & Profile
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setShowProfileMenu(false);
+                      localStorage.clear();
+                      navigate('/login');
+                    }}
+                    style={{
+                      width: '100%',
+                      padding: '0.6rem 1rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.6rem',
+                      background: 'none',
+                      border: 'none',
+                      color: '#dc2626',
+                      fontSize: '0.8125rem',
+                      cursor: 'pointer',
+                      textAlign: 'left'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#fef2f2'}
+                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                  >
+                    <LogOut size={15} color="#dc2626" /> Log Out
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </header>

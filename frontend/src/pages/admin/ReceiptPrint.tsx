@@ -21,10 +21,47 @@ const ReceiptPrint: React.FC = () => {
       if (stored) {
         try {
           initialData = JSON.parse(stored);
+          if (initialData.amount && !initialData.amountPaid) {
+            initialData.amountPaid = Number(initialData.amount);
+          }
+          if (initialData.customer && !initialData.customerName) {
+            initialData.customerName = initialData.customer;
+          }
+          if (initialData.applicationNo && !initialData.proposalNo) {
+            initialData.proposalNo = initialData.applicationNo;
+          }
           setReceiptData(initialData);
         } catch (e) {
           console.error(e);
         }
+      }
+
+      // Check system_receipts in localStorage if printing by receipt ID
+      if (!initialData && id) {
+        try {
+          const sysReceipts = localStorage.getItem('system_receipts');
+          if (sysReceipts) {
+            const list = JSON.parse(sysReceipts);
+            const found = list.find((r: any) => r.id === id || r.receiptId === id);
+            if (found) {
+              initialData = {
+                receiptNo: found.id,
+                proposalNo: found.applicationNo || id,
+                customerName: found.customer,
+                customerPhone: found.mobile,
+                amountPaid: Number(found.amount) || 0,
+                totalAmount: Number(found.amount) || 0,
+                paymentMethod: found.mode || 'UPI / QR Code',
+                applicationType: found.services || 'Building Plan Approval',
+                paymentDate: found.date,
+                paymentStatus: found.status || 'Paid',
+                notes: found.notes || '',
+                staffName: found.executive || 'Staff Coordinator'
+              };
+              setReceiptData(initialData);
+            }
+          }
+        } catch (e) {}
       }
 
       // Fetch live case data from backend for verified accuracy
@@ -38,25 +75,65 @@ const ReceiptPrint: React.FC = () => {
             const property = caseData.property || {};
             const assignedStaff = caseData.assigned_staff || {};
 
+            const totalFromFees = caseData.fees?.total !== undefined ? Number(caseData.fees.total) : NaN;
+            const paidFromFees = caseData.fees?.paid !== undefined ? Number(caseData.fees.paid) : NaN;
+            const chargesSum = Array.isArray(caseData.fees?.charges) 
+              ? caseData.fees.charges.reduce((sum: number, ch: any) => sum + (Number(ch.amount) || 0), 0)
+              : 0;
+
+            const resolvedTotal = 
+              (!isNaN(totalFromFees) && totalFromFees > 0 ? totalFromFees : 0) ||
+              parseFloat(full.feesAmount || full.fees?.total || '0') ||
+              parseFloat(initialData?.totalAmount || initialData?.amountPaid || initialData?.amount || '0') || 0;
+
+            const resolvedPaid = 
+              (!isNaN(paidFromFees) && paidFromFees > 0 ? paidFromFees : 0) ||
+              (chargesSum > 0 ? chargesSum : 0) ||
+              parseFloat(payment.amount || full.paidAmount || full.fees?.paid || '0') ||
+              parseFloat(initialData?.amountPaid || initialData?.amount || '0') ||
+              resolvedTotal;
+
             const verifiedData = {
-              receiptNo: payment.receiptNumber || `RCP-${(caseData.application_number || id).replace(/^APP-/, '')}`,
-              proposalNo: caseData.application_number || id,
-              customerName: property.owner_name || full.customerName || initialData?.customer || 'Customer',
-              customerPhone: property.owner_phone || full.mobile || initialData?.mobile || '—',
+              receiptNo: payment.receiptNumber || initialData?.receiptNo || initialData?.id || `RCP-${(caseData.application_number || id).replace(/^APP-/, '')}`,
+              proposalNo: caseData.application_number || initialData?.proposalNo || id,
+              customerName: property.owner_name || full.customerName || initialData?.customerName || initialData?.customer || 'Customer',
+              customerPhone: property.owner_phone || full.mobile || initialData?.customerPhone || initialData?.mobile || '—',
               customerEmail: property.owner_email || full.email || '—',
               customerAddress: property.address || full.plotAddress || 'Plot / Site Address on file',
-              staffName: assignedStaff.name || full.staff || full.createdByStaff || initialData?.executive || 'Staff Coordinator',
+              staffName: assignedStaff.name || full.staff || full.createdByStaff || initialData?.staffName || initialData?.executive || 'Staff Coordinator',
               staffId: assignedStaff.staffId || 'CB-STAFF',
-              applicationType: caseData.approval_type || 'Building Plan Approval',
-              totalAmount: parseFloat(full.feesAmount || full.fees?.total || '0') || 0,
-              amountPaid: parseFloat(payment.amount || full.paidAmount || initialData?.amount || '0') || 0,
-              paymentMethod: payment.paymentMethod || initialData?.mode || 'UPI / QR Code',
+              applicationType: caseData.approval_type || initialData?.applicationType || 'Building Plan Approval',
+              totalAmount: resolvedTotal,
+              amountPaid: resolvedPaid,
+              paymentMethod: payment.paymentMethod || initialData?.paymentMethod || initialData?.mode || 'UPI / QR Code',
               transactionId: payment.transactionId || initialData?.transactionId || 'VERIFIED-OFFICIAL',
-              paymentDate: payment.paymentDate ? new Date(payment.paymentDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : (initialData?.date || new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })),
-              paymentStatus: payment.paymentStatus || 'Paid',
-              notes: payment.notes || ''
+              paymentDate: payment.paymentDate ? new Date(payment.paymentDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : (initialData?.paymentDate || initialData?.date || new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })),
+              paymentStatus: payment.paymentStatus || initialData?.paymentStatus || 'Paid',
+              notes: payment.notes || initialData?.notes || ''
             };
             setReceiptData(verifiedData);
+          } else {
+            // Check mock_saved_cases fallback if API 404
+            const localCases = localStorage.getItem('mock_saved_cases');
+            if (localCases) {
+              const list = JSON.parse(localCases);
+              const found = list.find((c: any) => (c.application_number || c.id) === id);
+              if (found) {
+                const full = found.fullData || {};
+                const fees = found.fees || full.fees || {};
+                const total = Number(fees.total || full.feesAmount || initialData?.amount || 0);
+                const paid = Number(fees.paid || full.paidAmount || initialData?.amount || total);
+                setReceiptData((prev: any) => ({
+                  ...prev,
+                  proposalNo: found.application_number || id,
+                  customerName: found.customer || found.property?.owner_name || full.customerName || prev?.customerName || 'Customer',
+                  customerPhone: found.mobile || found.property?.owner_phone || full.mobile || prev?.customerPhone || '—',
+                  totalAmount: total,
+                  amountPaid: paid,
+                  paymentMethod: found.mode || prev?.paymentMethod || 'UPI / QR Code'
+                }));
+              }
+            }
           }
         } catch (err) {
           console.error('Failed to fetch verified case for receipt:', err);

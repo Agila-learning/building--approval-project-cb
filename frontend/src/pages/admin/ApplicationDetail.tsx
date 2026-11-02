@@ -657,16 +657,6 @@ const ApplicationDetail: React.FC = () => {
           errors.push('perm_pincode');
           toast.error('Permanent PIN code must be exactly 6 digits.');
         }
-        if (!perm.state) errors.push('perm_state');
-      }
-
-      // Mandatory Step 1 Documents: Customer Photo & Signature
-      const step1Docs = ['CUSTOMER PHOTOGRAPH', 'CUSTOMER SIGNATURE'];
-      const missingStep1Docs = step1Docs.filter(d => !uploadedFiles[d as keyof typeof uploadedFiles]);
-      if (missingStep1Docs.length > 0) {
-        toast.error(`Please upload ${missingStep1Docs.join(' & ')} on Step 1 to proceed.`);
-        setFormErrors(prev => Array.from(new Set([...prev, ...errors])));
-        return false;
       }
     }
 
@@ -852,7 +842,7 @@ const ApplicationDetail: React.FC = () => {
 
       {/* Main Section - Personal Details */}
       <div className="card" style={{ display: 'flex', gap: '3rem', flexWrap: 'wrap' }}>
-        <div style={{ flex: '1 1 500px' }}>
+        <div style={{ flex: '1 1 100%' }}>
           <h3 style={{ fontSize: '1.125rem', fontWeight: 600, color: 'var(--primary-dark)', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <User size={20} color="var(--primary)" /> Personal Information
           </h3>
@@ -890,47 +880,6 @@ const ApplicationDetail: React.FC = () => {
               <input type="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} placeholder="Email address" style={getInputStyle('email', formData.email)} />
             </div>
           </div>
-        </div>
-
-        {/* Photo & Signature Upload Area */}
-        <div style={{ flex: '0 0 160px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
-          <div style={{ width: '100%', position: 'relative', marginTop: '2rem' }}>
-            <div style={{ width: '100%', aspectRatio: '3/4', border: '1px solid var(--border-color)', borderRadius: '0.5rem', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f8fafc', overflow: 'hidden' }}>
-              {uploadedFiles['CUSTOMER PHOTOGRAPH'] ? (
-                <img src={uploadedFiles['CUSTOMER PHOTOGRAPH']} alt="Customer" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-              ) : (
-                <User size={60} color="#cbd5e1" />
-              )}
-            </div>
-            {/* Top Right Upload Icons */}
-            <div style={{ position: 'absolute', top: '0.5rem', right: '0.5rem', display: 'flex', gap: '0.25rem' }}>
-              <button 
-                onClick={(e) => { e.preventDefault(); setDocUploadType('CUSTOMER PHOTOGRAPH'); setIsUploadModalOpen(true); }}
-                title="Upload Customer Photo" 
-                style={{ background: 'white', border: '1px solid var(--border-color)', borderRadius: '0.25rem', padding: '0.4rem', color: 'var(--primary)', cursor: 'pointer', display: 'flex', boxShadow: '0 1px 2px rgba(0,0,0,0.1)' }}>
-                <Upload size={18} />
-              </button>
-            </div>
-          </div>
-          <div style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--primary-dark)' }}>Customer Photo *</div>
-
-          <div style={{ width: '100%', position: 'relative', marginTop: '0.5rem' }}>
-            <div style={{ width: '100%', aspectRatio: '2/1', border: '1px dashed var(--border-color)', borderRadius: '0.5rem', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f8fafc', overflow: 'hidden' }}>
-              {uploadedFiles['CUSTOMER SIGNATURE'] ? (
-                <img src={uploadedFiles['CUSTOMER SIGNATURE']} alt="Signature" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
-              ) : (
-                <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Signature</span>
-              )}
-            </div>
-            {/* Top Right Upload Icon */}
-            <button 
-              onClick={(e) => { e.preventDefault(); setDocUploadType('CUSTOMER SIGNATURE'); setIsUploadModalOpen(true); }}
-              title="Upload Customer Signature" 
-              style={{ position: 'absolute', top: '0.5rem', right: '0.5rem', background: 'white', border: '1px solid var(--border-color)', borderRadius: '0.25rem', padding: '0.4rem', color: 'var(--primary)', cursor: 'pointer', display: 'flex', boxShadow: '0 1px 2px rgba(0,0,0,0.1)' }}>
-              <Upload size={14} />
-            </button>
-          </div>
-          <div style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--primary-dark)' }}>Customer Signature *</div>
         </div>
       </div>
 
@@ -1306,6 +1255,15 @@ const ApplicationDetail: React.FC = () => {
         customDocs = JSON.parse(customDocsStr);
       } catch (e) {}
     }
+    // Merge backend settings requiredDocuments
+    if (companySettings?.requiredDocuments && Array.isArray(companySettings.requiredDocuments)) {
+      companySettings.requiredDocuments.forEach((sd: any) => {
+        const sKey = (sd.key || sd.id || sd.label || '').toUpperCase();
+        if (!customDocs.some((d: any) => (d.key || d.id || d.label || '').toUpperCase() === sKey)) {
+          customDocs.push(sd);
+        }
+      });
+    }
 
     const isDocMandatory = (docId: string, defaultVal: boolean) => {
       const match = customDocs.find((cd: any) => {
@@ -1315,7 +1273,39 @@ const ApplicationDetail: React.FC = () => {
       return match && match.required !== undefined ? Boolean(match.required) : defaultVal;
     };
 
-    const docItems = [
+    const docItems: any[] = [
+      {
+        id: 'CUSTOMER PHOTOGRAPH',
+        title: 'Customer Photograph',
+        category: 'Applicant Verification',
+        isMandatory: isDocMandatory('CUSTOMER PHOTOGRAPH', true),
+        description: 'Recent passport size photo of the applicant / owner.',
+        fileUrl: uploadedFiles['CUSTOMER PHOTOGRAPH'] || uploadedFiles['PHOTO']
+      },
+      {
+        id: 'CUSTOMER SIGNATURE',
+        title: 'Customer Specimen Signature',
+        category: 'Applicant Verification',
+        isMandatory: isDocMandatory('CUSTOMER SIGNATURE', true),
+        description: 'Official specimen signature of the property owner / applicant.',
+        fileUrl: uploadedFiles['CUSTOMER SIGNATURE'] || uploadedFiles['SIGNATURE']
+      },
+      {
+        id: 'AADHAR CARD',
+        title: 'Aadhaar Card',
+        category: 'Applicant Verification',
+        isMandatory: isDocMandatory('AADHAR CARD', true),
+        description: 'Government Aadhaar identity proof of owner/applicant.',
+        fileUrl: uploadedFiles['AADHAR CARD'] || uploadedFiles['AADHAAR CARD'] || uploadedFiles['AADHAR']
+      },
+      {
+        id: 'PAN CARD',
+        title: 'PAN Card',
+        category: 'Applicant Verification',
+        isMandatory: isDocMandatory('PAN CARD', true),
+        description: 'Permanent Account Number card copy.',
+        fileUrl: uploadedFiles['PAN CARD'] || uploadedFiles['PAN']
+      },
       {
         id: 'SALE DEED',
         title: 'Registered Sale Deed / Title Deed',
@@ -1374,22 +1364,22 @@ const ApplicationDetail: React.FC = () => {
       }
     ];
 
-    // Dynamically append any custom document checklist items configured in Settings (excluding Step 1 personal docs)
-    const personalKeys = ['CUSTOMER PHOTOGRAPH', 'CUSTOMER SIGNATURE', 'AADHAR CARD', 'PAN CARD', 'PHOTO', 'SIGNATURE', 'AADHAR', 'PAN'];
+    // Dynamically append any custom document checklist items configured in Settings (e.g. Birth Certificate, Fire NOC)
     if (customDocs && Array.isArray(customDocs)) {
       customDocs.forEach((cd: any) => {
-        const cleanKey = (cd.key || cd.id || cd.label || '').toUpperCase().replace(/[^A-Z0-9]/g, '_');
-        const isPersonal = personalKeys.some(pk => cleanKey === pk || cleanKey.replace(/_/g, '') === pk.replace(/_/g, ''));
-        if (isPersonal) return; // Do not repeat photo, signature, aadhaar, or pan
+        const rawKey = (cd.key || cd.id || cd.label || '').toString().trim();
+        const cleanKey = rawKey.toUpperCase().replace(/[^A-Z0-9]/g, '_');
+        if (!cleanKey) return;
 
-        if (cleanKey && !docItems.some(d => d.id === cleanKey)) {
+        const alreadyExists = docItems.some(d => d.id === cleanKey || d.id === rawKey || d.title.toLowerCase() === (cd.label || '').toLowerCase());
+        if (!alreadyExists) {
           docItems.push({
             id: cleanKey,
             title: cd.label || cd.name || cleanKey.replace(/_/g, ' '),
             category: 'Custom Configured Documents',
             isMandatory: Boolean(cd.required),
             description: cd.description || `Required official document: ${cd.label || cleanKey}`,
-            fileUrl: uploadedFiles[cleanKey]
+            fileUrl: uploadedFiles[cleanKey] || uploadedFiles[rawKey]
           });
         }
       });
@@ -1407,13 +1397,27 @@ const ApplicationDetail: React.FC = () => {
         <div className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
           <div>
             <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--primary-dark)', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <FileText size={22} color="var(--primary)" /> Application Document Uploads (One by One)
+              <FileText size={22} color="var(--primary)" /> Application Document Uploads & Review
             </h3>
             <p style={{ margin: '0.25rem 0 0', fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
-              Upload and review all mandatory property and applicant verification documents. Each document has a dedicated slot.
+              Review applicant, property, and custom verification documents. Admin can upload pending documents directly below.
             </p>
           </div>
           <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
+            {/* Direct Admin Upload Pending Document Button */}
+            <button 
+              type="button"
+              onClick={() => {
+                const pending = docItems.find(d => !d.fileUrl);
+                setDocUploadType(pending ? pending.id : docItems[0].id);
+                setModalTab('upload');
+                setIsUploadModalOpen(true);
+              }}
+              style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.55rem 1rem', backgroundColor: '#10b981', color: 'white', border: 'none', borderRadius: '0.375rem', fontWeight: 600, cursor: 'pointer', fontSize: '0.8125rem' }}
+              title="Upload any pending document directly as Admin"
+            >
+              <Upload size={16} /> Direct Document Upload
+            </button>
             <button 
               type="button"
               onClick={() => {
@@ -1572,15 +1576,26 @@ const ApplicationDetail: React.FC = () => {
   };
 
   const renderStep4 = () => {
-    const bank = companySettings || {
+    let localBank: any = {};
+    try {
+      const savedBank = localStorage.getItem('companyBankDetails');
+      if (savedBank) localBank = JSON.parse(savedBank);
+    } catch (_) {}
+
+    const bank = {
       bankName: 'State Bank of India',
       accountName: 'C.B. BUILDING APPROVALS',
       accountNumber: '40123456789',
       ifscCode: 'SBIN0001234',
       branch: 'Shoolagiri Main Branch',
       upiId: 'cbapprovals@upi',
-      qrCodeUrl: ''
+      qrCodeUrl: '',
+      ...(localBank || {}),
+      ...(companySettings || {})
     };
+    if (!bank.qrCodeUrl && localBank.qrCodeUrl) {
+      bank.qrCodeUrl = localBank.qrCodeUrl;
+    }
 
     return (
       <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
@@ -2318,28 +2333,48 @@ const ApplicationDetail: React.FC = () => {
             <div style={{ marginBottom: '2rem' }}>
               <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Doc Type</label>
               <select value={docUploadType} onChange={e => setDocUploadType(e.target.value)} style={{ width: '100%', padding: '0.75rem', border: '1px solid var(--border-color)', borderRadius: '0.25rem', outline: 'none', backgroundColor: '#f8fafc', color: 'var(--primary-dark)', fontWeight: 500 }}>
-                {currentStep === 1 ? (
-                  <>
-                    <option value="CUSTOMER PHOTOGRAPH">CUSTOMER PHOTOGRAPH</option>
-                    <option value="CUSTOMER SIGNATURE">CUSTOMER SIGNATURE</option>
-                    <option value="AADHAR CARD">AADHAR CARD</option>
-                    <option value="PAN CARD">PAN CARD</option>
-                  </>
-                ) : (
-                  <>
-                    <option value="CUSTOMER PHOTOGRAPH">CUSTOMER PHOTOGRAPH</option>
-                    <option value="CUSTOMER SIGNATURE">CUSTOMER SIGNATURE</option>
-                    <option value="AADHAR CARD">AADHAR CARD</option>
-                    <option value="PAN CARD">PAN CARD</option>
-                    <option value="LAND DOCUMENT">LAND DOCUMENT</option>
-                    <option value="SALE DEED">SALE DEED</option>
-                    <option value="PATTA">PATTA</option>
-                    <option value="BUILDING PLAN">BUILDING PLAN</option>
-                    <option value="FMB">FMB</option>
-                    <option value="RECEIPT">RECEIPT</option>
-                    <option value="FINAL_APPROVAL">FINAL APPROVAL</option>
-                  </>
-                )}
+                {(() => {
+                  const opts: { key: string; label: string }[] = [
+                    { key: 'CUSTOMER PHOTOGRAPH', label: 'Customer Photograph' },
+                    { key: 'CUSTOMER SIGNATURE', label: 'Customer Signature' },
+                    { key: 'AADHAR CARD', label: 'Aadhaar Card' },
+                    { key: 'PAN CARD', label: 'PAN Card' },
+                    { key: 'SALE DEED', label: 'Sale Deed / Land Document' },
+                    { key: 'PATTA', label: 'Patta Copy' },
+                    { key: 'BUILDING PLAN', label: 'Proposed Building Plan' },
+                    { key: 'FMB', label: 'FMB Sketch' },
+                    { key: 'RECEIPT', label: 'Encumbrance Certificate / Property Tax' },
+                    { key: 'WORKING DRAWING', label: 'Working Drawing / Blueprint' },
+                    { key: 'OTHER DOCUMENT', label: 'Other Supporting Document' }
+                  ];
+
+                  let customDocs: any[] = [];
+                  const customDocsStr = localStorage.getItem('requiredDocuments');
+                  if (customDocsStr) {
+                    try { customDocs = JSON.parse(customDocsStr); } catch (_) {}
+                  }
+                  if (companySettings?.requiredDocuments && Array.isArray(companySettings.requiredDocuments)) {
+                    companySettings.requiredDocuments.forEach((sd: any) => {
+                      const sKey = (sd.key || sd.id || sd.label || '').toUpperCase();
+                      if (!customDocs.some((d: any) => (d.key || d.id || d.label || '').toUpperCase() === sKey)) {
+                        customDocs.push(sd);
+                      }
+                    });
+                  }
+
+                  customDocs.forEach((cd: any) => {
+                    const cleanKey = (cd.key || cd.id || cd.label || '').toString().trim().toUpperCase().replace(/[^A-Z0-9]/g, '_');
+                    if (cleanKey && !opts.some(o => o.key === cleanKey)) {
+                      opts.push({ key: cleanKey, label: cd.label || cd.name || cleanKey.replace(/_/g, ' ') });
+                    }
+                  });
+
+                  opts.push({ key: 'FINAL_APPROVAL', label: 'Final Approval Certificate' });
+
+                  return opts.map(opt => (
+                    <option key={opt.key} value={opt.key}>{opt.label} ({opt.key})</option>
+                  ));
+                })()}
               </select>
             </div>
 

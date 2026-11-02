@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, Bell, ChevronDown, Menu, Clock } from 'lucide-react';
+import { Search, Bell, ChevronDown, Menu, Clock, User, Settings, LogOut } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { getApiUrl } from '../../config/api';
 
@@ -22,13 +22,22 @@ const EmployeeTopbar: React.FC<EmployeeTopbarProps> = ({ toggleSidebar }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const [employeeName, setEmployeeName] = useState('Employee');
+  const [profilePic, setProfilePic] = useState<string | null>(null);
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const notifRef = useRef<HTMLDivElement>(null);
+  const profileRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
+  const loadProfile = () => {
     const user = localStorage.getItem('loggedInUser');
     if (user && user !== 'Admin') setEmployeeName(user);
+    const pic = localStorage.getItem('profilePicture') || localStorage.getItem('employeeProfilePic') || null;
+    setProfilePic(pic);
+  };
+
+  useEffect(() => {
+    loadProfile();
   }, []);
 
   const fetchLiveNotifications = async () => {
@@ -56,13 +65,18 @@ const EmployeeTopbar: React.FC<EmployeeTopbarProps> = ({ toggleSidebar }) => {
 
   useEffect(() => {
     fetchLiveNotifications();
+    loadProfile();
     const interval = setInterval(fetchLiveNotifications, 3000);
     window.addEventListener('storage', fetchLiveNotifications);
+    window.addEventListener('storage', loadProfile);
     window.addEventListener('focus', fetchLiveNotifications);
+    window.addEventListener('focus', loadProfile);
     return () => {
       clearInterval(interval);
       window.removeEventListener('storage', fetchLiveNotifications);
+      window.removeEventListener('storage', loadProfile);
       window.removeEventListener('focus', fetchLiveNotifications);
+      window.removeEventListener('focus', loadProfile);
     };
   }, []);
 
@@ -70,6 +84,9 @@ const EmployeeTopbar: React.FC<EmployeeTopbarProps> = ({ toggleSidebar }) => {
     const handleClickOutside = (event: MouseEvent) => {
       if (notifRef.current && !notifRef.current.contains(event.target as Node)) {
         setShowNotifications(false);
+      }
+      if (profileRef.current && !profileRef.current.contains(event.target as Node)) {
+        setShowProfileMenu(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -309,19 +326,121 @@ const EmployeeTopbar: React.FC<EmployeeTopbarProps> = ({ toggleSidebar }) => {
         </div>
 
         {/* Profile Dropdown */}
-        <div 
-          onClick={() => navigate('/employee/profile')}
-          title="View & Edit Profile"
-          style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', paddingLeft: '0.75rem', borderLeft: '1px solid var(--border-color)', cursor: 'pointer' }}
-        >
-          <div style={{ width: '36px', height: '36px', borderRadius: '50%', backgroundColor: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 600, color: 'white', fontSize: '0.875rem' }}>
-            {getInitials(employeeName)}
+        <div ref={profileRef} style={{ position: 'relative' }}>
+          <div 
+            onClick={() => setShowProfileMenu(prev => !prev)}
+            role="button"
+            tabIndex={0}
+            title="Account Menu"
+            style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: '0.6rem', 
+              paddingLeft: '0.75rem', 
+              borderLeft: '1px solid var(--border-color)', 
+              cursor: 'pointer',
+              userSelect: 'none'
+            }}
+          >
+            {profilePic ? (
+              <img 
+                src={profilePic} 
+                alt="Avatar" 
+                style={{ width: '34px', height: '34px', borderRadius: '50%', objectFit: 'cover', border: '1.5px solid var(--primary-light, #dbeafe)' }} 
+              />
+            ) : (
+              <div style={{ width: '34px', height: '34px', borderRadius: '50%', backgroundColor: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 600, color: 'white', fontSize: '0.85rem' }}>
+                {getInitials(employeeName)}
+              </div>
+            )}
+            <div className="hidden-mobile">
+              <div style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--primary-dark)', lineHeight: 1.1 }}>{employeeName}</div>
+              <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', marginTop: '2px' }}>Staff Member</div>
+            </div>
+            <ChevronDown size={14} color="var(--text-secondary)" />
           </div>
-          <div>
-            <div style={{ fontWeight: 600, fontSize: '0.875rem', color: 'var(--primary-dark)' }}>{employeeName}</div>
-            <div className="hidden-mobile-xs" style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Staff Member</div>
-          </div>
-          <ChevronDown size={16} color="var(--text-secondary)" />
+
+          {/* Profile Dropdown Popover */}
+          {showProfileMenu && (
+            <div style={{
+              position: 'absolute',
+              top: '100%',
+              right: 0,
+              marginTop: '10px',
+              width: '220px',
+              backgroundColor: '#ffffff',
+              borderRadius: '0.75rem',
+              boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.05)',
+              border: '1px solid var(--border-color)',
+              padding: '0.5rem 0',
+              zIndex: 1100
+            }}>
+              <div style={{ padding: '0.75rem 1rem', borderBottom: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                {profilePic ? (
+                  <img src={profilePic} alt="Avatar" style={{ width: '36px', height: '36px', borderRadius: '50%', objectFit: 'cover' }} />
+                ) : (
+                  <div style={{ width: '36px', height: '36px', borderRadius: '50%', backgroundColor: 'var(--primary)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '0.875rem' }}>
+                    {getInitials(employeeName)}
+                  </div>
+                )}
+                <div style={{ overflow: 'hidden' }}>
+                  <div style={{ fontSize: '0.875rem', fontWeight: 700, color: 'var(--text-primary)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>{employeeName}</div>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Staff Member</div>
+                </div>
+              </div>
+
+              <div style={{ padding: '0.25rem 0' }}>
+                <button
+                  onClick={() => {
+                    setShowProfileMenu(false);
+                    navigate('/employee/profile');
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '0.6rem 1rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.6rem',
+                    background: 'none',
+                    border: 'none',
+                    color: 'var(--text-primary)',
+                    fontSize: '0.8125rem',
+                    cursor: 'pointer',
+                    textAlign: 'left'
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8fafc'}
+                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                >
+                  <User size={15} color="var(--text-secondary)" /> My Profile
+                </button>
+
+                <button
+                  onClick={() => {
+                    setShowProfileMenu(false);
+                    localStorage.clear();
+                    navigate('/login');
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '0.6rem 1rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.6rem',
+                    background: 'none',
+                    border: 'none',
+                    color: '#dc2626',
+                    fontSize: '0.8125rem',
+                    cursor: 'pointer',
+                    textAlign: 'left'
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#fef2f2'}
+                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                >
+                  <LogOut size={15} color="#dc2626" /> Log Out
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
       </div>

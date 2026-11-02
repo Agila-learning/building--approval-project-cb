@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, FileText, X, Pencil, Info, ArrowUpDown, Plus, UserCheck, Eye, Download } from 'lucide-react';
+import { Search, FileText, X, Pencil, Info, ArrowUpDown, Plus, UserCheck, Eye, Download, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getApiUrl } from '../../config/api';
 
@@ -342,6 +342,7 @@ const CustomerLeads: React.FC = () => {
                 <th style={{ padding: '0.75rem 1rem', fontSize: '0.75rem', fontWeight: 600, color: 'white' }}>Edit</th>
                 <th style={{ padding: '0.75rem 1rem', fontSize: '0.75rem', fontWeight: 600, color: 'white' }}>View</th>
                 <th style={{ padding: '0.75rem 1rem', fontSize: '0.75rem', fontWeight: 600, color: 'white' }}>Convert</th>
+                <th style={{ padding: '0.75rem 1rem', fontSize: '0.75rem', fontWeight: 600, color: 'white' }}>Delete</th>
                 <th style={{ padding: '0.75rem 1rem', fontSize: '0.75rem', fontWeight: 600, color: 'white', cursor: 'pointer' }}><div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>Proposal No <ArrowUpDown size={12} style={{ opacity: 0.7 }} /></div></th>
                 <th style={{ padding: '0.75rem 1rem', fontSize: '0.75rem', fontWeight: 600, color: 'white', cursor: 'pointer' }}><div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>Customer Name <ArrowUpDown size={12} style={{ opacity: 0.7 }} /></div></th>
                 <th style={{ padding: '0.75rem 1rem', fontSize: '0.75rem', fontWeight: 600, color: 'white', cursor: 'pointer' }}><div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>Mobile Number <ArrowUpDown size={12} style={{ opacity: 0.7 }} /></div></th>
@@ -393,6 +394,31 @@ const CustomerLeads: React.FC = () => {
                       title="Convert this lead into a formal government approval application"
                     >
                       <UserCheck size={14} /> Convert
+                    </button>
+                  </td>
+                  <td style={{ padding: '0.75rem 1rem' }}>
+                    <button
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        if (!window.confirm(`Are you sure you want to permanently delete lead ${lead.application_number || lead.displayId} (${lead.name})?`)) return;
+                        try {
+                          const apiUrl = getApiUrl();
+                          await fetch(`${apiUrl}/leads/${lead.id}`, { method: 'DELETE' });
+                          const localLeadsStr = localStorage.getItem('mock_leads');
+                          if (localLeadsStr) {
+                            const localLeads = JSON.parse(localLeadsStr).filter((l: any) => l.id !== lead.id && l.leadId !== lead.displayId);
+                            localStorage.setItem('mock_leads', JSON.stringify(localLeads));
+                          }
+                          setLeads(prev => prev.filter(l => l.id !== lead.id));
+                          toast.success(`Lead ${lead.application_number || lead.displayId} deleted successfully.`);
+                        } catch (err) {
+                          toast.error('Failed to delete lead.');
+                        }
+                      }}
+                      style={{ padding: '0.4rem', borderRadius: '0.25rem', backgroundColor: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer' }}
+                      title="Delete Lead"
+                    >
+                      <Trash2 size={16} />
                     </button>
                   </td>
                   <td style={{ padding: '0.75rem 1rem', fontSize: '0.875rem', fontWeight: 600, color: 'var(--primary)' }}>{lead.application_number || lead.displayId}</td>

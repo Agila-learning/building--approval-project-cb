@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, Search, Phone, Mail, FileText, CheckCircle, FilePlus, XCircle, X, ExternalLink, Loader2, UserPlus, UserCheck, Edit } from 'lucide-react';
+import { Users, Search, Phone, Mail, FileText, CheckCircle, FilePlus, XCircle, X, ExternalLink, Loader2, UserPlus, UserCheck, Edit, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getApiUrl } from '../../config/api';
 
@@ -13,6 +13,18 @@ const EnquiriesList: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'APPLICATION_CREATED' | 'REJECTED'>('ALL');
   const [isCreatingId, setIsCreatingId] = useState<string | null>(null);
+
+  const handleDeleteEnquiry = async (lead: any) => {
+    if (!window.confirm(`Are you sure you want to permanently delete enquiry ${lead.displayId || lead.name}?`)) return;
+    try {
+      const apiUrl = getApiUrl();
+      await fetch(`${apiUrl}/leads/${lead.id}`, { method: 'DELETE' });
+      setLeads(prev => prev.filter(l => l.id !== lead.id));
+      toast.success(`Enquiry ${lead.displayId || lead.name} deleted successfully.`);
+    } catch (err) {
+      toast.error('Failed to delete enquiry.');
+    }
+  };
 
   // Assignment states
   const [staffList, setStaffList] = useState<any[]>([]);
@@ -497,16 +509,18 @@ const EnquiriesList: React.FC = () => {
                   <td style={{ padding: '1rem 1.5rem', fontSize: '0.875rem', color: 'var(--text-secondary)' }}>{lead.date}</td>
                   <td style={{ padding: '1rem 1.5rem' }}>
                     <span style={{ 
-                      padding: '0.25rem 0.75rem', 
+                      padding: '0.3rem 0.85rem', 
                       borderRadius: '1rem', 
-                      backgroundColor: lead.status === 'New' ? '#fee2e2' : lead.status === 'Rejected' ? '#f3f4f6' : lead.status === 'Application Created' ? '#e0e7ff' : 'rgba(34, 160, 107, 0.1)', 
-                      color: lead.status === 'New' ? 'var(--error-red)' : lead.status === 'Rejected' ? '#6b7280' : lead.status === 'Application Created' ? '#4f46e5' : 'var(--success-green)', 
+                      backgroundColor: lead.status === 'New' ? '#eff6ff' : lead.status === 'Rejected' ? '#fef2f2' : lead.status === 'Application Created' ? '#ecfdf5' : '#fef3c7', 
+                      color: lead.status === 'New' ? '#1d4ed8' : lead.status === 'Rejected' ? '#b91c1c' : lead.status === 'Application Created' ? '#047857' : '#b45309', 
+                      border: `1px solid ${lead.status === 'New' ? '#bfdbfe' : lead.status === 'Rejected' ? '#fecaca' : lead.status === 'Application Created' ? '#a7f3d0' : '#fde68a'}`,
                       fontSize: '0.75rem', 
-                      fontWeight: 600,
+                      fontWeight: 700,
                       display: 'inline-flex',
                       alignItems: 'center',
-                      gap: '0.25rem'
+                      gap: '0.3rem'
                     }}>
+                      <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: lead.status === 'New' ? '#2563eb' : lead.status === 'Rejected' ? '#dc2626' : lead.status === 'Application Created' ? '#10b981' : '#f59e0b' }}></span>
                       {lead.status === 'Application Created' ? 'Moved to Application' : lead.status}
                     </span>
                     {lead.rejectionRemarks && (
@@ -523,10 +537,11 @@ const EnquiriesList: React.FC = () => {
                         <span style={{ 
                           padding: '0.25rem 0.65rem', 
                           borderRadius: '1rem', 
-                          backgroundColor: 'rgba(30, 58, 138, 0.08)', 
+                          backgroundColor: '#f1f5f9', 
                           color: 'var(--primary)', 
                           fontSize: '0.75rem', 
                           fontWeight: 600,
+                          border: '1px solid #e2e8f0',
                           display: 'inline-flex',
                           alignItems: 'center',
                           gap: '0.35rem'
@@ -547,7 +562,7 @@ const EnquiriesList: React.FC = () => {
                         style={{
                           padding: '0.3rem 0.65rem',
                           borderRadius: '0.375rem',
-                          backgroundColor: 'var(--bg-secondary)',
+                          backgroundColor: '#f8fafc',
                           border: '1px dashed var(--border-color)',
                           color: 'var(--text-secondary)',
                           cursor: 'pointer',
@@ -567,7 +582,7 @@ const EnquiriesList: React.FC = () => {
 
                   <td style={{ padding: '1rem 1.5rem' }}>
                     {lead.status === 'New' && (
-                      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
                         <button 
                           onClick={() => markAsContacted(lead.id)}
                           style={{ padding: '0.45rem 0.85rem', borderRadius: '0.375rem', backgroundColor: 'var(--primary)', color: 'white', border: 'none', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.35rem' }}
@@ -576,31 +591,38 @@ const EnquiriesList: React.FC = () => {
                         </button>
                         <button 
                           onClick={() => openAssignModal(lead)}
-                          style={{ padding: '0.45rem 0.75rem', borderRadius: '0.375rem', backgroundColor: 'var(--bg-secondary)', color: 'var(--primary-dark)', border: '1px solid var(--border-color)', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.25rem' }}
+                          style={{ padding: '0.45rem 0.75rem', borderRadius: '0.375rem', backgroundColor: '#f8fafc', color: 'var(--primary-dark)', border: '1px solid var(--border-color)', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.25rem' }}
                           title={lead.assignedTo ? `Reassign (Current: ${lead.assignedTo})` : 'Assign staff'}
                         >
                           <UserPlus size={14} /> {lead.assignedTo ? 'Reassign' : 'Assign'}
                         </button>
                         <button 
                           onClick={() => setViewingLead(lead)}
-                          style={{ padding: '0.45rem 0.75rem', borderRadius: '0.375rem', backgroundColor: 'var(--bg-secondary)', color: 'var(--primary-dark)', border: '1px solid var(--border-color)', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.25rem' }}
+                          style={{ padding: '0.45rem 0.75rem', borderRadius: '0.375rem', backgroundColor: '#f8fafc', color: 'var(--primary-dark)', border: '1px solid var(--border-color)', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.25rem' }}
                         >
                           <FileText size={14} /> Details
+                        </button>
+                        <button 
+                          onClick={() => handleDeleteEnquiry(lead)}
+                          style={{ padding: '0.45rem 0.65rem', borderRadius: '0.375rem', backgroundColor: '#fee2e2', color: '#b91c1c', border: '1px solid #fecaca', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}
+                          title="Delete Enquiry"
+                        >
+                          <Trash2 size={13} /> Delete
                         </button>
                       </div>
                     )}
                     {lead.status === 'Contacted' && (
-                      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
                         <button 
                           onClick={() => openAssignModal(lead)}
-                          style={{ padding: '0.45rem 0.75rem', borderRadius: '0.375rem', backgroundColor: 'var(--bg-secondary)', color: 'var(--primary-dark)', border: '1px solid var(--border-color)', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.25rem' }}
+                          style={{ padding: '0.45rem 0.75rem', borderRadius: '0.375rem', backgroundColor: '#f8fafc', color: 'var(--primary-dark)', border: '1px solid var(--border-color)', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.25rem' }}
                           title={lead.assignedTo ? `Reassign (Current: ${lead.assignedTo})` : 'Assign staff'}
                         >
                           <UserPlus size={14} /> {lead.assignedTo ? 'Reassign' : 'Assign'}
                         </button>
                         <button 
                           onClick={() => setViewingLead(lead)}
-                          style={{ padding: '0.45rem 0.75rem', borderRadius: '0.375rem', backgroundColor: 'var(--bg-secondary)', color: 'var(--primary-dark)', border: '1px solid var(--border-color)', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.25rem' }}
+                          style={{ padding: '0.45rem 0.75rem', borderRadius: '0.375rem', backgroundColor: '#f8fafc', color: 'var(--primary-dark)', border: '1px solid var(--border-color)', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.25rem' }}
                         >
                           <FileText size={14} /> Details
                         </button>
@@ -618,6 +640,13 @@ const EnquiriesList: React.FC = () => {
                         >
                           <XCircle size={14} /> Reject
                         </button>
+                        <button 
+                          onClick={() => handleDeleteEnquiry(lead)}
+                          style={{ padding: '0.45rem 0.65rem', borderRadius: '0.375rem', backgroundColor: '#fee2e2', color: '#b91c1c', border: '1px solid #fecaca', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}
+                          title="Delete Enquiry"
+                        >
+                          <Trash2 size={13} /> Delete
+                        </button>
                       </div>
                     )}
                     {lead.status === 'Application Created' && (
@@ -630,31 +659,45 @@ const EnquiriesList: React.FC = () => {
                         </button>
                         <button 
                           onClick={() => openAssignModal(lead)}
-                          style={{ padding: '0.45rem 0.75rem', borderRadius: '0.375rem', backgroundColor: 'var(--bg-secondary)', color: 'var(--primary-dark)', border: '1px solid var(--border-color)', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.25rem' }}
+                          style={{ padding: '0.45rem 0.75rem', borderRadius: '0.375rem', backgroundColor: '#f8fafc', color: 'var(--primary-dark)', border: '1px solid var(--border-color)', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.25rem' }}
                         >
                           <UserPlus size={14} /> {lead.assignedTo ? 'Reassign' : 'Assign'}
                         </button>
                         <button 
                           onClick={() => setViewingLead(lead)}
-                          style={{ padding: '0.45rem 0.75rem', borderRadius: '0.375rem', backgroundColor: 'var(--bg-secondary)', color: 'var(--primary-dark)', border: '1px solid var(--border-color)', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.25rem' }}
+                          style={{ padding: '0.45rem 0.75rem', borderRadius: '0.375rem', backgroundColor: '#f8fafc', color: 'var(--primary-dark)', border: '1px solid var(--border-color)', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.25rem' }}
                         >
                           <FileText size={14} /> Details
+                        </button>
+                        <button 
+                          onClick={() => handleDeleteEnquiry(lead)}
+                          style={{ padding: '0.45rem 0.65rem', borderRadius: '0.375rem', backgroundColor: '#fee2e2', color: '#b91c1c', border: '1px solid #fecaca', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}
+                          title="Delete Enquiry"
+                        >
+                          <Trash2 size={13} /> Delete
                         </button>
                       </div>
                     )}
                     {lead.status === 'Rejected' && (
-                      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
                         <button 
                           onClick={() => openAssignModal(lead)}
-                          style={{ padding: '0.45rem 0.75rem', borderRadius: '0.375rem', backgroundColor: 'var(--bg-secondary)', color: 'var(--primary-dark)', border: '1px solid var(--border-color)', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.25rem' }}
+                          style={{ padding: '0.45rem 0.75rem', borderRadius: '0.375rem', backgroundColor: '#f8fafc', color: 'var(--primary-dark)', border: '1px solid var(--border-color)', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.25rem' }}
                         >
                           <UserPlus size={14} /> Assign
                         </button>
                         <button 
                           onClick={() => setViewingLead(lead)}
-                          style={{ padding: '0.45rem 0.75rem', borderRadius: '0.375rem', backgroundColor: 'var(--bg-secondary)', color: 'var(--text-secondary)', border: '1px solid var(--border-color)', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.25rem' }}
+                          style={{ padding: '0.45rem 0.75rem', borderRadius: '0.375rem', backgroundColor: '#f8fafc', color: 'var(--text-secondary)', border: '1px solid var(--border-color)', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.25rem' }}
                         >
                           <FileText size={14} /> View Details
+                        </button>
+                        <button 
+                          onClick={() => handleDeleteEnquiry(lead)}
+                          style={{ padding: '0.45rem 0.65rem', borderRadius: '0.375rem', backgroundColor: '#fee2e2', color: '#b91c1c', border: '1px solid #fecaca', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}
+                          title="Delete Enquiry"
+                        >
+                          <Trash2 size={13} /> Delete
                         </button>
                       </div>
                     )}

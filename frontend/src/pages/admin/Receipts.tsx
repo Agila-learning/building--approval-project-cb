@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Search, Calendar, Plus, Eye, Printer, RotateCcw, 
-  CheckCircle2, DollarSign, User, Phone, FileText, ArrowRight
+  CheckCircle2, DollarSign, User, Phone, FileText, ArrowRight, Trash2
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getApiUrl } from '../../config/api';
@@ -785,25 +785,52 @@ const Receipts: React.FC = () => {
                           </span>
                         </td>
                         <td style={{ padding: '0.85rem 1rem', textAlign: 'center' }}>
-                          <button
-                            onClick={() => handlePrintReceipt(rec)}
-                            title="Print / View Receipt"
-                            style={{
-                              padding: '0.4rem 0.75rem',
-                              backgroundColor: 'var(--primary)',
-                              color: '#fff',
-                              border: 'none',
-                              borderRadius: '4px',
-                              cursor: 'pointer',
-                              fontSize: '0.75rem',
-                              fontWeight: 600,
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '0.35rem'
-                            }}
-                          >
-                            <Printer size={14} /> Print Receipt
-                          </button>
+                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+                            <button
+                              onClick={() => handlePrintReceipt(rec)}
+                              title="Print / View Receipt"
+                              style={{
+                                padding: '0.4rem 0.75rem',
+                                backgroundColor: 'var(--primary)',
+                                color: '#fff',
+                                border: 'none',
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                                fontSize: '0.75rem',
+                                fontWeight: 600,
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '0.35rem'
+                              }}
+                            >
+                              <Printer size={14} /> Print Receipt
+                            </button>
+                            <button
+                              onClick={() => {
+                                if (!window.confirm(`Are you sure you want to delete receipt ${rec.id}?`)) return;
+                                const updated = receipts.filter(r => r.id !== rec.id);
+                                setReceipts(updated);
+                                localStorage.setItem('system_receipts', JSON.stringify(updated));
+                                toast.success(`Receipt ${rec.id} deleted successfully.`);
+                              }}
+                              title="Delete Receipt"
+                              style={{
+                                padding: '0.4rem 0.75rem',
+                                backgroundColor: '#fee2e2',
+                                color: '#b91c1c',
+                                border: '1px solid #fecaca',
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                                fontSize: '0.75rem',
+                                fontWeight: 600,
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '0.35rem'
+                              }}
+                            >
+                              <Trash2 size={14} /> Delete
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))

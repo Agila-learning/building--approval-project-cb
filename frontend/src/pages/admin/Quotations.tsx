@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Printer, FileText, User, History, Check, X, ShieldAlert, CheckCircle2 } from 'lucide-react';
+import { Printer, FileText, User, History, Check, X, ShieldAlert, CheckCircle2, Trash2 } from 'lucide-react';
 import html2pdf from 'html2pdf.js';
 import toast from 'react-hot-toast';
 
@@ -341,6 +341,34 @@ const Quotations: React.FC = () => {
                                 <X size={14} /> Reject
                               </button>
                             </>
+                          )}
+
+                          {!isStaff && (
+                            <button
+                              onClick={() => {
+                                if (!window.confirm(`Are you sure you want to delete quotation ${q.qtNo}?`)) return;
+                                const updated = savedQuotations.filter(item => item.qtNo !== q.qtNo);
+                                setSavedQuotations(updated);
+                                localStorage.setItem('savedQuotations', JSON.stringify(updated));
+                                toast.success(`Quotation ${q.qtNo} deleted successfully.`);
+                              }}
+                              style={{
+                                padding: '0.4rem 0.65rem',
+                                fontSize: '0.75rem',
+                                fontWeight: 600,
+                                backgroundColor: '#fee2e2',
+                                color: '#b91c1c',
+                                border: '1px solid #fecaca',
+                                borderRadius: '0.25rem',
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '0.25rem'
+                              }}
+                              title="Delete quotation"
+                            >
+                              <Trash2 size={13} /> Delete
+                            </button>
                           )}
                         </div>
                       </td>

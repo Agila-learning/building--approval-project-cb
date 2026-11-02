@@ -196,3 +196,24 @@ export const updateLeadStatus = async (req: Request, res: Response) => {
     res.status(500).json({ error: 'Failed to update lead' });
   }
 };
+
+export const deleteLead = async (req: Request, res: Response) => {
+  try {
+    const id = req.params.id as string;
+    const isObjectId = /^[0-9a-fA-F]{24}$/.test(id);
+
+    const found = await prisma.lead.findFirst({
+      where: isObjectId ? { OR: [{ id }, { leadId: id }] } : { leadId: id }
+    });
+
+    if (!found) {
+      return res.status(404).json({ error: 'Lead not found' });
+    }
+
+    await prisma.lead.delete({ where: { id: found.id } });
+    res.json({ message: 'Lead deleted successfully', id: found.id });
+  } catch (error: any) {
+    console.error('Error deleting lead:', error);
+    res.status(500).json({ error: error.message || 'Failed to delete lead' });
+  }
+};

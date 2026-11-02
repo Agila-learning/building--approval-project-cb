@@ -68,13 +68,32 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
   React.useEffect(() => {
     const fetchSettings = async () => {
       try {
+        let mergedDocs: any[] = [];
+        const local = localStorage.getItem('requiredDocuments');
+        if (local) {
+          try {
+            mergedDocs = JSON.parse(local);
+          } catch (e) {}
+        }
         const res = await fetch(`${getApiUrl()}/settings`);
         if (res.ok) {
           const data = await res.json();
           if (Array.isArray(data.requiredDocuments) && data.requiredDocuments.length > 0) {
-            setSettingsDocs(data.requiredDocuments);
-            localStorage.setItem('requiredDocuments', JSON.stringify(data.requiredDocuments));
+            data.requiredDocuments.forEach((bd: any) => {
+              const bKey = (bd.key || bd.id || bd.label || '').toUpperCase().replace(/[^A-Z0-9]/g, '_');
+              const exists = mergedDocs.some((ld: any) => {
+                const lKey = (ld.key || ld.id || ld.label || '').toUpperCase().replace(/[^A-Z0-9]/g, '_');
+                return lKey === bKey;
+              });
+              if (!exists) {
+                mergedDocs.push(bd);
+              }
+            });
           }
+        }
+        if (mergedDocs.length > 0) {
+          setSettingsDocs(mergedDocs);
+          localStorage.setItem('requiredDocuments', JSON.stringify(mergedDocs));
         }
       } catch (e) {
         console.warn('Could not fetch settings documents in NewApplication:', e);
@@ -87,10 +106,10 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
     const personalKeys = ['CUSTOMER PHOTOGRAPH', 'CUSTOMER SIGNATURE', 'AADHAR CARD', 'PAN CARD', 'PHOTO', 'SIGNATURE', 'AADHAR', 'PAN'];
 
     const personalDocs = [
-      { key: 'CUSTOMER PHOTOGRAPH', label: 'Customer Photograph', step: 1, required: true, desc: 'Passport size photograph of the applicant' },
-      { key: 'CUSTOMER SIGNATURE', label: 'Customer Signature', step: 1, required: true, desc: 'Official customer specimen signature' },
-      { key: 'AADHAR CARD', label: 'Aadhaar Card', step: 1, required: true, desc: 'Government Aadhaar identity proof of applicant' },
-      { key: 'PAN CARD', label: 'PAN Card', step: 1, required: true, desc: 'Permanent Account Number (PAN) Card' },
+      { key: 'CUSTOMER PHOTOGRAPH', label: 'Customer Photograph', step: 2, required: true, desc: 'Passport size photograph of the applicant' },
+      { key: 'CUSTOMER SIGNATURE', label: 'Customer Signature', step: 2, required: true, desc: 'Official customer specimen signature' },
+      { key: 'AADHAR CARD', label: 'Aadhaar Card', step: 2, required: true, desc: 'Government Aadhaar identity proof of applicant' },
+      { key: 'PAN CARD', label: 'PAN Card', step: 2, required: true, desc: 'Permanent Account Number (PAN) Card' },
     ];
 
     // Sync personal docs required status from settings if configured
@@ -126,12 +145,12 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
       }
     });
 
-    // Add custom checklist items configured in Admin Settings (strictly exclude Step 1 personal items)
+    // Add custom checklist items configured in Admin Settings (e.g. Birth Certificate)
     if (settingsDocs && settingsDocs.length > 0) {
       settingsDocs.forEach((sd: any) => {
         const cleanKey = (sd.key || sd.id || sd.label || '').toUpperCase().replace(/[^A-Z0-9]/g, '_');
         const isPersonal = personalKeys.some(pk => cleanKey === pk || cleanKey.replace(/_/g, '') === pk.replace(/_/g, ''));
-        if (isPersonal) return; // Do not repeat personal docs in Step 2!
+        if (isPersonal) return;
 
         const exists = propertyDocs.some(b => b.key === cleanKey || (b as any).altKey === cleanKey);
         if (!exists && cleanKey) {
@@ -587,22 +606,9 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
         }
         if (!perm.state) errors.push('perm_state');
       }
-
-      // Strictly validate Step 1 Mandatory Documents before moving to Step 2
-      const step1MissingDocs: string[] = [];
-      if (!uploadedFiles['CUSTOMER PHOTOGRAPH']) step1MissingDocs.push('CUSTOMER PHOTOGRAPH');
-      if (!uploadedFiles['CUSTOMER SIGNATURE']) step1MissingDocs.push('CUSTOMER SIGNATURE');
-      if (!uploadedFiles['AADHAR CARD'] && !formData.aadhar) step1MissingDocs.push('AADHAR CARD');
-      if (!uploadedFiles['PAN CARD'] && !formData.pan) step1MissingDocs.push('PAN CARD');
-
-      if (step1MissingDocs.length > 0) {
-        setMissingDocErrors(prev => Array.from(new Set([...prev, ...step1MissingDocs])));
-        toast.error("Please upload Customer Photo, Signature, Aadhaar & PAN on Step 1 before proceeding.");
-        return;
-      }
     }
     
-    // Validation for Step 2
+    // Validation for Step 2 (Property & Consolidated Documents)
     if (currentStep === 2) {
       if (!formData.propertyDetails?.surveyNo) errors.push('prop_surveyNo');
       if (!formData.propertyDetails?.pattaNo) errors.push('prop_pattaNo');
@@ -612,6 +618,19 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
           errors.push('prop_pincode');
           toast.error('Property PIN code must be exactly 6 digits.');
         }
+      }
+
+      // Check required Step 2 documents
+      const step2MissingDocs: string[] = [];
+      allApplicationDocs.filter(d => d.step === 2 && d.required).forEach(doc => {
+        const hasUpload = Boolean(uploadedFiles[doc.key as keyof typeof uploadedFiles] || (doc.altKey && uploadedFiles[doc.altKey as keyof typeof uploadedFiles]));
+        if (!hasUpload) {
+          step2MissingDocs.push(doc.key);
+        }
+      });
+
+      if (step2MissingDocs.length > 0) {
+        setMissingDocErrors(prev => Array.from(new Set([...prev, ...step2MissingDocs])));
       }
     }
 
@@ -925,28 +944,7 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
               />
             </div>
             <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                <label style={{ fontSize: '0.875rem', fontWeight: 500, color: 'var(--primary-dark)', margin: 0 }}>Aadhar Number * (12 digits)</label>
-                <button
-                  type="button"
-                  onClick={() => { setDocUploadType('AADHAR CARD'); setIsUploadModalOpen(true); }}
-                  style={{
-                    fontSize: '0.75rem',
-                    padding: '0.2rem 0.5rem',
-                    borderRadius: '0.25rem',
-                    border: missingDocErrors.includes('AADHAR CARD') ? '1px solid #ef4444' : '1px solid var(--border-color)',
-                    backgroundColor: uploadedFiles['AADHAR CARD'] ? '#ecfdf5' : missingDocErrors.includes('AADHAR CARD') ? '#fee2e2' : 'var(--bg-secondary)',
-                    color: uploadedFiles['AADHAR CARD'] ? '#059669' : missingDocErrors.includes('AADHAR CARD') ? '#dc2626' : 'var(--primary)',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.3rem',
-                    fontWeight: 600
-                  }}
-                >
-                  <Upload size={12} /> {uploadedFiles['AADHAR CARD'] ? 'Aadhaar Attached ✓' : 'Upload Aadhaar Doc *'}
-                </button>
-              </div>
+              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: 'var(--primary-dark)', marginBottom: '0.5rem' }}>Aadhar Number * (12 digits)</label>
               <input 
                 type="text" 
                 maxLength={12}
@@ -955,33 +953,9 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
                 placeholder="12-digit UID" 
                 style={getInputStyle('aadhar', formData.aadhar)} 
               />
-              {missingDocErrors.includes('AADHAR CARD') && !uploadedFiles['AADHAR CARD'] && (
-                <div style={{ color: '#ef4444', fontSize: '0.75rem', marginTop: '0.25rem' }}>Aadhaar document upload is required.</div>
-              )}
             </div>
             <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                <label style={{ fontSize: '0.875rem', fontWeight: 500, color: 'var(--primary-dark)', margin: 0 }}>PAN Number * (e.g. ABCDE1234F)</label>
-                <button
-                  type="button"
-                  onClick={() => { setDocUploadType('PAN CARD'); setIsUploadModalOpen(true); }}
-                  style={{
-                    fontSize: '0.75rem',
-                    padding: '0.2rem 0.5rem',
-                    borderRadius: '0.25rem',
-                    border: missingDocErrors.includes('PAN CARD') ? '1px solid #ef4444' : '1px solid var(--border-color)',
-                    backgroundColor: uploadedFiles['PAN CARD'] ? '#ecfdf5' : missingDocErrors.includes('PAN CARD') ? '#fee2e2' : 'var(--bg-secondary)',
-                    color: uploadedFiles['PAN CARD'] ? '#059669' : missingDocErrors.includes('PAN CARD') ? '#dc2626' : 'var(--primary)',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.3rem',
-                    fontWeight: 600
-                  }}
-                >
-                  <Upload size={12} /> {uploadedFiles['PAN CARD'] ? 'PAN Attached ✓' : 'Upload PAN Doc *'}
-                </button>
-              </div>
+              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: 'var(--primary-dark)', marginBottom: '0.5rem' }}>PAN Number * (e.g. ABCDE1234F)</label>
               <input 
                 type="text" 
                 maxLength={10}
@@ -990,9 +964,6 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
                 placeholder="ABCDE1234F" 
                 style={getInputStyle('pan', formData.pan)} 
               />
-              {missingDocErrors.includes('PAN CARD') && !uploadedFiles['PAN CARD'] && (
-                <div style={{ color: '#ef4444', fontSize: '0.75rem', marginTop: '0.25rem' }}>PAN document upload is required.</div>
-              )}
             </div>
             <div>
               <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: 'var(--primary-dark)', marginBottom: '0.5rem' }}>Email ID *</label>
@@ -1004,79 +975,6 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
                 style={getInputStyle('email', formData.email)} 
               />
             </div>
-          </div>
-        </div>
-
-        {/* Photo & Signature Upload Area */}
-        <div style={{ flex: '0 0 160px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
-          <div style={{ width: '100%', position: 'relative', marginTop: '2rem' }}>
-            <div style={{ 
-              width: '100%', 
-              aspectRatio: '3/4', 
-              border: missingDocErrors.includes('CUSTOMER PHOTOGRAPH') && !uploadedFiles['CUSTOMER PHOTOGRAPH'] ? '2px solid #ef4444' : '1px solid var(--border-color)', 
-              borderRadius: '0.5rem', 
-              display: 'flex', 
-              flexDirection: 'column', 
-              alignItems: 'center', 
-              justifyContent: 'center', 
-              backgroundColor: missingDocErrors.includes('CUSTOMER PHOTOGRAPH') && !uploadedFiles['CUSTOMER PHOTOGRAPH'] ? '#fef2f2' : '#f8fafc', 
-              overflow: 'hidden' 
-            }}>
-              {uploadedFiles['CUSTOMER PHOTOGRAPH'] ? (
-                <img src={uploadedFiles['CUSTOMER PHOTOGRAPH']} alt="Customer" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-              ) : (
-                <User size={60} color={missingDocErrors.includes('CUSTOMER PHOTOGRAPH') ? '#f87171' : '#cbd5e1'} />
-              )}
-            </div>
-            {/* Top Right Upload Icons */}
-            <div style={{ position: 'absolute', top: '0.5rem', right: '0.5rem', display: 'flex', gap: '0.25rem' }}>
-              <button 
-                onClick={(e) => { e.preventDefault(); setDocUploadType('CUSTOMER PHOTOGRAPH'); setIsUploadModalOpen(true); }}
-                title="Upload Customer Photo" 
-                style={{ background: 'white', border: '1px solid var(--border-color)', borderRadius: '0.25rem', padding: '0.4rem', color: 'var(--primary)', cursor: 'pointer', display: 'flex', boxShadow: '0 1px 2px rgba(0,0,0,0.1)' }}>
-                <Upload size={18} />
-              </button>
-            </div>
-          </div>
-          <div style={{ fontSize: '0.875rem', fontWeight: 600, color: missingDocErrors.includes('CUSTOMER PHOTOGRAPH') && !uploadedFiles['CUSTOMER PHOTOGRAPH'] ? '#ef4444' : 'var(--primary-dark)', textAlign: 'center' }}>
-            Customer Photo *
-            {missingDocErrors.includes('CUSTOMER PHOTOGRAPH') && !uploadedFiles['CUSTOMER PHOTOGRAPH'] && (
-              <div style={{ fontSize: '0.7rem', color: '#ef4444', fontWeight: 500 }}>Upload Required</div>
-            )}
-          </div>
-
-          <div style={{ width: '100%', position: 'relative', marginTop: '0.5rem' }}>
-            <div style={{ 
-              width: '100%', 
-              aspectRatio: '2/1', 
-              border: missingDocErrors.includes('CUSTOMER SIGNATURE') && !uploadedFiles['CUSTOMER SIGNATURE'] ? '2px dashed #ef4444' : '1px dashed var(--border-color)', 
-              borderRadius: '0.5rem', 
-              display: 'flex', 
-              flexDirection: 'column', 
-              alignItems: 'center', 
-              justifyContent: 'center', 
-              backgroundColor: missingDocErrors.includes('CUSTOMER SIGNATURE') && !uploadedFiles['CUSTOMER SIGNATURE'] ? '#fef2f2' : '#f8fafc', 
-              overflow: 'hidden' 
-            }}>
-              {uploadedFiles['CUSTOMER SIGNATURE'] ? (
-                <img src={uploadedFiles['CUSTOMER SIGNATURE']} alt="Signature" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
-              ) : (
-                <span style={{ fontSize: '0.75rem', color: missingDocErrors.includes('CUSTOMER SIGNATURE') ? '#ef4444' : 'var(--text-secondary)' }}>Signature</span>
-              )}
-            </div>
-            {/* Top Right Upload Icon */}
-            <button 
-              onClick={(e) => { e.preventDefault(); setDocUploadType('CUSTOMER SIGNATURE'); setIsUploadModalOpen(true); }}
-              title="Upload Customer Signature" 
-              style={{ position: 'absolute', top: '0.5rem', right: '0.5rem', background: 'white', border: '1px solid var(--border-color)', borderRadius: '0.25rem', padding: '0.4rem', color: 'var(--primary)', cursor: 'pointer', display: 'flex', boxShadow: '0 1px 2px rgba(0,0,0,0.1)' }}>
-              <Upload size={14} />
-            </button>
-          </div>
-          <div style={{ fontSize: '0.875rem', fontWeight: 600, color: missingDocErrors.includes('CUSTOMER SIGNATURE') && !uploadedFiles['CUSTOMER SIGNATURE'] ? '#ef4444' : 'var(--primary-dark)', textAlign: 'center' }}>
-            Customer Signature *
-            {missingDocErrors.includes('CUSTOMER SIGNATURE') && !uploadedFiles['CUSTOMER SIGNATURE'] && (
-              <div style={{ fontSize: '0.7rem', color: '#ef4444', fontWeight: 500 }}>Upload Required</div>
-            )}
           </div>
         </div>
       </div>

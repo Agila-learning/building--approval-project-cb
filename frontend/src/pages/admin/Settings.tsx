@@ -37,7 +37,16 @@ const Settings: React.FC = () => {
   const [newExpenseCategory, setNewExpenseCategory] = useState('');
 
   // Required Documents Configuration
-  const [requiredDocuments, setRequiredDocuments] = useState<DocumentChecklistItem[]>(defaultRequiredDocuments);
+  const [requiredDocuments, setRequiredDocuments] = useState<DocumentChecklistItem[]>(() => {
+    try {
+      const saved = localStorage.getItem('requiredDocuments');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (_) {}
+    return defaultRequiredDocuments;
+  });
   const [newDocLabel, setNewDocLabel] = useState('');
   const [newDocDesc, setNewDocDesc] = useState('');
   const [newDocRequired, setNewDocRequired] = useState(true);
@@ -67,22 +76,97 @@ const Settings: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const qrInputRef = useRef<HTMLInputElement>(null);
 
+  const syncToBackend = async (partialData: Record<string, any> = {}) => {
+    try {
+      const apiUrl = getApiUrl();
+      const userRole = localStorage.getItem('userRole') || 'ADMIN';
+      const userName = localStorage.getItem('loggedInUser') || 'Admin';
+
+      const payload = {
+        ...bankDetails,
+        profilePic,
+        adminSignature,
+        adminName,
+        adminDesignation,
+        requiredDocuments,
+        adminRole: 'ADMIN',
+        ...partialData
+      };
+
+      await fetch(`${apiUrl}/settings`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-user-role': userRole,
+          'x-user-name': userName
+        },
+        body: JSON.stringify(payload)
+      });
+    } catch (e) {
+      console.warn('Backend auto-sync background error:', e);
+    }
+  };
+
   const loadBackendSettings = async () => {
     try {
       const apiUrl = getApiUrl();
       const res = await fetch(`${apiUrl}/settings`);
       if (res.ok) {
         const data = await res.json();
-        if (data.adminSignature) setAdminSignature(data.adminSignature);
+        if (data.profilePic) {
+          setProfilePic(data.profilePic);
+          localStorage.setItem('profilePicture', data.profilePic);
+          window.dispatchEvent(new Event('profileUpdated'));
+        }
+        if (data.adminSignature) {
+          setAdminSignature(data.adminSignature);
+          localStorage.setItem('adminSignature', data.adminSignature);
+        }
         if (data.adminName) setAdminName(data.adminName);
         if (data.adminDesignation) setAdminDesignation(data.adminDesignation);
+        
+        // Merge backend documents with any local documents so newly added items like "Birth Certificate" are never lost
         if (data.requiredDocuments && Array.isArray(data.requiredDocuments) && data.requiredDocuments.length > 0) {
-          setRequiredDocuments(data.requiredDocuments);
+          const localDocsStr = localStorage.getItem('requiredDocuments');
+          let localDocs: DocumentChecklistItem[] = [];
+          try {
+            if (localDocsStr) localDocs = JSON.parse(localDocsStr);
+          } catch (_) {}
+
+          const mergedMap = new Map<string, DocumentChecklistItem>();
+          // Add default/backend first
+          data.requiredDocuments.forEach((d: DocumentChecklistItem) => {
+            if (d && d.key) mergedMap.set(d.key.toUpperCase(), d);
+          });
+          // Preserve any custom items from localStorage
+          localDocs.forEach((d: DocumentChecklistItem) => {
+            if (d && d.key && !mergedMap.has(d.key.toUpperCase())) {
+              mergedMap.set(d.key.toUpperCase(), d);
+            }
+          });
+          const merged = Array.from(mergedMap.values());
+          setRequiredDocuments(merged);
+          localStorage.setItem('requiredDocuments', JSON.stringify(merged));
         }
-        setBankDetails(prev => ({
-          ...prev,
-          ...data
-        }));
+
+        setBankDetails(prev => {
+          const updated = {
+            ...prev,
+            ...data
+          };
+          // Preserve local QR code if backend was empty
+          const savedBank = localStorage.getItem('companyBankDetails');
+          if (savedBank) {
+            try {
+              const pb = JSON.parse(savedBank);
+              if (pb.qrCodeUrl && !updated.qrCodeUrl) {
+                updated.qrCodeUrl = pb.qrCodeUrl;
+              }
+            } catch (_) {}
+          }
+          localStorage.setItem('companyBankDetails', JSON.stringify(updated));
+          return updated;
+        });
       }
     } catch (e) {
       console.warn('Could not fetch backend settings, falling back to localStorage:', e);
@@ -124,7 +208,12 @@ const Settings: React.FC = () => {
     if (file) {
       const reader = new FileReader();
       reader.onloadend = () => {
-        setProfilePic(reader.result as string);
+        const result = reader.result as string;
+        setProfilePic(result);
+        localStorage.setItem('profilePicture', result);
+        window.dispatchEvent(new Event('profileUpdated'));
+        syncToBackend({ profilePic: result });
+        toast.success('Profile picture saved successfully!');
       };
       reader.readAsDataURL(file);
     }
@@ -137,8 +226,11 @@ const Settings: React.FC = () => {
       try {
         const cloudUrl = await uploadFileToCloudinary(file);
         if (cloudUrl) {
-          setBankDetails(prev => ({ ...prev, qrCodeUrl: cloudUrl }));
-          toast.success('Company QR Code uploaded successfully!', { id: toastId });
+          const updatedBank = { ...bankDetails, qrCodeUrl: cloudUrl };
+          setBankDetails(updatedBank);
+          localStorage.setItem('companyBankDetails', JSON.stringify(updatedBank));
+          syncToBackend({ ...updatedBank });
+          toast.success('Company QR Code uploaded and saved permanently!', { id: toastId });
           return;
         }
       } catch (err) {
@@ -147,8 +239,12 @@ const Settings: React.FC = () => {
 
       const reader = new FileReader();
       reader.onloadend = () => {
-        setBankDetails(prev => ({ ...prev, qrCodeUrl: reader.result as string }));
-        toast.success('Company QR Code attached!', { id: toastId });
+        const dataUrl = reader.result as string;
+        const updatedBank = { ...bankDetails, qrCodeUrl: dataUrl };
+        setBankDetails(updatedBank);
+        localStorage.setItem('companyBankDetails', JSON.stringify(updatedBank));
+        syncToBackend({ ...updatedBank });
+        toast.success('Company QR Code attached and saved!', { id: toastId });
       };
       reader.readAsDataURL(file);
     }
@@ -159,8 +255,11 @@ const Settings: React.FC = () => {
     if (file) {
       const reader = new FileReader();
       reader.onloadend = () => {
-        setAdminSignature(reader.result as string);
-        toast.success('Signature image uploaded!');
+        const res = reader.result as string;
+        setAdminSignature(res);
+        localStorage.setItem('adminSignature', res);
+        syncToBackend({ adminSignature: res });
+        toast.success('Signature image uploaded and saved permanently!');
       };
       reader.readAsDataURL(file);
     }
@@ -201,7 +300,10 @@ const Settings: React.FC = () => {
     setIsDrawing(false);
     const canvas = canvasRef.current;
     if (canvas) {
-      setAdminSignature(canvas.toDataURL('image/png'));
+      const sigData = canvas.toDataURL('image/png');
+      setAdminSignature(sigData);
+      localStorage.setItem('adminSignature', sigData);
+      syncToBackend({ adminSignature: sigData });
     }
   };
 
@@ -212,6 +314,8 @@ const Settings: React.FC = () => {
       if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
     }
     setAdminSignature('');
+    localStorage.removeItem('adminSignature');
+    syncToBackend({ adminSignature: '' });
   };
 
   const saveSettings = async () => {
@@ -239,6 +343,7 @@ const Settings: React.FC = () => {
         },
         body: JSON.stringify({
           ...bankDetails,
+          profilePic,
           adminSignature,
           adminName,
           adminDesignation,

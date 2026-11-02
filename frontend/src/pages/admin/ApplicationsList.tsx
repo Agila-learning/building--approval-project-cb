@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Plus, Info, Pencil, ArrowUpDown, Search, FileText, ArrowRight, X, Filter, Building } from 'lucide-react';
+import { Plus, Info, Pencil, ArrowUpDown, Search, FileText, ArrowRight, X, Filter, Building, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import StatusBadge from '../../components/admin/StatusBadge';
 import { recentApplications } from '../../data/mockData';
@@ -840,18 +840,46 @@ const ApplicationsList: React.FC = () => {
                       {app.days !== undefined ? (app.days === 0 ? 'Today' : `${app.days} ${app.days === 1 ? 'day' : 'days'}`) : '—'}
                     </td>
                     <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          navigate(`/admin/applications/${app.id}`);
-                        }}
-                        title="Open Application"
-                        style={{ background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer', padding: '0.35rem', borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', transition: 'background-color 0.2s' }}
-                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-secondary)'}
-                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                      >
-                        <ArrowRight size={16} />
-                      </button>
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/admin/applications/${app.id}`);
+                          }}
+                          title="Open Application"
+                          style={{ background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer', padding: '0.35rem', borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', transition: 'background-color 0.2s' }}
+                          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-secondary)'}
+                          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                        >
+                          <ArrowRight size={16} />
+                        </button>
+                        <button
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            if (!window.confirm(`Are you sure you want to permanently delete application ${app.id} (${app.customer})?`)) return;
+                            try {
+                              const apiUrl = getApiUrl();
+                              const targetId = app.mongoId || app.id;
+                              await fetch(`${apiUrl}/cases/${targetId}`, { method: 'DELETE' });
+                              const localCasesStr = localStorage.getItem('mock_saved_cases');
+                              if (localCasesStr) {
+                                const localCases = JSON.parse(localCasesStr).filter((c: any) => c.id !== app.id && c.application_number !== app.id && c.id !== app.mongoId);
+                                localStorage.setItem('mock_saved_cases', JSON.stringify(localCases));
+                              }
+                              setApplications(prev => prev.filter(a => a.id !== app.id && a.mongoId !== app.mongoId));
+                              toast.success(`Application ${app.id} deleted successfully.`);
+                            } catch (err) {
+                              toast.error('Failed to delete application.');
+                            }
+                          }}
+                          title="Delete Application"
+                          style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '0.35rem', borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', transition: 'background-color 0.2s' }}
+                          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#fee2e2'}
+                          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))

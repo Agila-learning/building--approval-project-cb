@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { 
   Search, Calendar, Plus, Eye, ShieldAlert, Check, X, 
-  Printer, DollarSign, Clock, CheckCircle2, XCircle, RotateCcw, Filter
+  Printer, DollarSign, Clock, CheckCircle2, XCircle, RotateCcw, Filter, Trash2
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -953,6 +953,34 @@ const Expenses: React.FC = () => {
                                   <X size={14} />
                                 </button>
                               </>
+                            )}
+
+                            {!isStaff && (
+                              <button
+                                onClick={() => {
+                                  if (!window.confirm(`Are you sure you want to delete expense voucher ${exp.id}?`)) return;
+                                  const updated = expenses.filter(e => e.id !== exp.id);
+                                  setExpenses(updated);
+                                  localStorage.setItem('system_expenses', JSON.stringify(updated));
+                                  toast.success(`Expense voucher ${exp.id} deleted successfully.`);
+                                }}
+                                title="Delete Expense"
+                                style={{
+                                  padding: '0.4rem 0.65rem',
+                                  backgroundColor: '#fee2e2',
+                                  color: '#b91c1c',
+                                  border: '1px solid #fecaca',
+                                  borderRadius: '4px',
+                                  cursor: 'pointer',
+                                  fontSize: '0.75rem',
+                                  fontWeight: 600,
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '0.3rem'
+                                }}
+                              >
+                                <Trash2 size={14} /> Delete
+                              </button>
                             )}
                           </div>
                         </td>
