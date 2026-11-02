@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, Calendar, Plus, Eye } from 'lucide-react';
+import { Search, Calendar, Plus, Eye, ShieldAlert, Check, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 const DenseField = ({ label, type = 'text', value, onChange, icon, options, readOnly, disabled, extraIcon, onIconClick, placeholder, required }: any) => {
@@ -32,6 +32,10 @@ const DenseField = ({ label, type = 'text', value, onChange, icon, options, read
 };
 
 const Expenses: React.FC = () => {
+  const userRole = localStorage.getItem('userRole') || '';
+  const loggedInUser = localStorage.getItem('loggedInUser') || '';
+  const isStaff = userRole.toUpperCase() === 'STAFF' || (loggedInUser !== 'Admin' && loggedInUser !== '');
+
   const [view, setView] = useState<'view' | 'add' | 'disabled'>('disabled');
   const [isExpenseSearchModalOpen, setIsExpenseSearchModalOpen] = useState(false);
 
@@ -39,8 +43,8 @@ const Expenses: React.FC = () => {
     category: '<Select>',
     referenceNo: '',
     description: '',
-    status: 'Pending',
-    executive: 'Admin User',
+    status: isStaff ? 'Pending Admin Approval' : 'Approved',
+    executive: isStaff ? (loggedInUser || 'Staff Member') : 'Admin User',
     expenseMode: 'Select',
     expenseDate: new Date().toISOString().split('T')[0],
     expenseAmt: '',
@@ -317,6 +321,20 @@ const Expenses: React.FC = () => {
     `;
   };
 
+  const handleApproveExpense = (expId: string) => {
+    const updated = expenses.map(e => e.id === expId ? { ...e, status: 'Approved' } : e);
+    setExpenses(updated);
+    localStorage.setItem('system_expenses', JSON.stringify(updated));
+    toast.success(`Expense ${expId} approved!`);
+  };
+
+  const handleRejectExpense = (expId: string) => {
+    const updated = expenses.map(e => e.id === expId ? { ...e, status: 'Rejected' } : e);
+    setExpenses(updated);
+    localStorage.setItem('system_expenses', JSON.stringify(updated));
+    toast.error(`Expense ${expId} rejected.`);
+  };
+
   const handleConfirm = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.category || formData.category === '<Select>') {
@@ -340,7 +358,9 @@ const Expenses: React.FC = () => {
       description: finalDescription,
       amount: Number(formData.expenseAmt),
       mode: formData.expenseMode === 'Select' ? 'Cash' : formData.expenseMode,
-      status: 'Pending'
+      status: isStaff ? 'Pending Admin Approval' : 'Approved',
+      executive: isStaff ? (loggedInUser || 'Staff Member') : 'Admin User',
+      createdByStaff: isStaff
     };
 
     const updatedExpenses = [newExpense, ...expenses];
@@ -351,7 +371,11 @@ const Expenses: React.FC = () => {
       console.error(err);
     }
 
-    toast.success('Expense recorded successfully!');
+    if (isStaff) {
+      toast.success('Expense recorded and submitted for Admin Approval!');
+    } else {
+      toast.success('Expense recorded successfully!');
+    }
     setView('disabled');
     setFormData(initialFormState);
 
@@ -404,6 +428,76 @@ const Expenses: React.FC = () => {
 
   return (
     <div>
+      {isStaff && (
+        <div style={{
+          backgroundColor: '#eff6ff',
+          border: '1px solid #bfdbfe',
+          borderLeft: '4px solid #2563eb',
+          borderRadius: '0.5rem',
+          padding: '0.85rem 1.25rem',
+          marginBottom: '1.25rem',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.75rem',
+          color: '#1e3a8a',
+          fontSize: '0.875rem'
+        }}>
+          <ShieldAlert size={20} color="#2563eb" style={{ flexShrink: 0 }} />
+          <div>
+            <strong>Staff Expense Portal:</strong> Expenses recorded here will enter <em>Pending Admin Approval</em> and will only be calculated in company accounts after Admin approval.
+          </div>
+        </div>
+      )}
+
+      {!isStaff && expenses.some(e => e.status === 'Pending Admin Approval') && (
+        <div className="card" style={{ padding: '1.25rem', marginBottom: '1.5rem', backgroundColor: '#fffbeb', border: '1px solid #fde68a' }}>
+          <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#92400e', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <ShieldAlert size={18} color="#d97706" /> Staff Expenses Awaiting Your Approval ({expenses.filter(e => e.status === 'Pending Admin Approval').length})
+          </h3>
+          <div className="table-responsive">
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid #fcd34d', color: '#78350f' }}>
+                  <th style={{ padding: '0.5rem 0.75rem' }}>Voucher No</th>
+                  <th style={{ padding: '0.5rem 0.75rem' }}>Date</th>
+                  <th style={{ padding: '0.5rem 0.75rem' }}>Category</th>
+                  <th style={{ padding: '0.5rem 0.75rem' }}>Submitted By</th>
+                  <th style={{ padding: '0.5rem 0.75rem' }}>Amount</th>
+                  <th style={{ padding: '0.5rem 0.75rem', textAlign: 'right' }}>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {expenses.filter(e => e.status === 'Pending Admin Approval').map(exp => (
+                  <tr key={exp.id} style={{ borderBottom: '1px solid #fef3c7' }}>
+                    <td style={{ padding: '0.5rem 0.75rem', fontWeight: 600 }}>{exp.id}</td>
+                    <td style={{ padding: '0.5rem 0.75rem' }}>{exp.date}</td>
+                    <td style={{ padding: '0.5rem 0.75rem' }}>{exp.category}</td>
+                    <td style={{ padding: '0.5rem 0.75rem' }}>{exp.executive || 'Staff Member'}</td>
+                    <td style={{ padding: '0.5rem 0.75rem', fontWeight: 700 }}>₹{exp.amount.toLocaleString()}</td>
+                    <td style={{ padding: '0.5rem 0.75rem', textAlign: 'right' }}>
+                      <div style={{ display: 'inline-flex', gap: '0.4rem' }}>
+                        <button
+                          onClick={() => handleApproveExpense(exp.id)}
+                          style={{ padding: '0.3rem 0.6rem', backgroundColor: '#16a34a', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}
+                        >
+                          <Check size={12} /> Approve
+                        </button>
+                        <button
+                          onClick={() => handleRejectExpense(exp.id)}
+                          style={{ padding: '0.3rem 0.6rem', backgroundColor: '#dc2626', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}
+                        >
+                          <X size={12} /> Reject
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
         <h1 style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--primary-dark)', margin: 0 }}>
           {view === 'view' ? 'View/Reprint Expense' : 'Record an Expense'}

@@ -3,7 +3,7 @@ import { Search, Calendar, Plus, Eye } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getApiUrl } from '../../config/api';
 
-const DenseField = ({ label, type = 'text', value, onChange, icon, options, readOnly, disabled, extraIcon, onIconClick }: any) => {
+const DenseField = ({ label, type = 'text', value, onChange, icon, options, readOnly, disabled, extraIcon, onIconClick, list, placeholder }: any) => {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.875rem', color: 'var(--text-primary)', marginBottom: '8px' }}>
       <div style={{ width: '160px', flexShrink: 0, fontWeight: 500, color: 'var(--text-secondary)' }}>{label}</div>
@@ -13,7 +13,7 @@ const DenseField = ({ label, type = 'text', value, onChange, icon, options, read
             {options.map((o: string) => <option key={o} value={o}>{o}</option>)}
           </select>
         ) : (
-          <input type={type} value={value} onChange={onChange} readOnly={readOnly} disabled={disabled} style={{ width: '100%', border: 'none', background: 'transparent', outline: 'none', fontSize: '0.875rem', padding: '0 8px', height: '100%', color: 'inherit' }} />
+          <input list={list} placeholder={placeholder} type={type} value={value} onChange={onChange} readOnly={readOnly} disabled={disabled} style={{ width: '100%', border: 'none', background: 'transparent', outline: 'none', fontSize: '0.875rem', padding: '0 8px', height: '100%', color: 'inherit' }} />
         )}
         {icon && (
           <div onClick={onIconClick} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 8px', cursor: onIconClick ? 'pointer' : 'default', borderLeft: '1px solid var(--border-color)', height: '100%', color: 'var(--primary)' }}>
@@ -36,6 +36,7 @@ const Receipts: React.FC = () => {
   const [isReceiptSearchModalOpen, setIsReceiptSearchModalOpen] = useState(false);
   const [loadingCases, setLoadingCases] = useState(false);
   const [pendingApplications, setPendingApplications] = useState<any[]>([]);
+  const [allApplications, setAllApplications] = useState<any[]>([]);
   const [selectedCaseRaw, setSelectedCaseRaw] = useState<any>(null);
 
   const initialFormState = {
@@ -61,37 +62,54 @@ const Receipts: React.FC = () => {
   
   const [formData, setFormData] = useState(initialFormState);
 
-  // Fetch real cases from backend API
+  // Fetch real cases from backend API & local storage
   const fetchPendingCases = async () => {
     setLoadingCases(true);
     try {
       const apiUrl = getApiUrl();
       const res = await fetch(`${apiUrl}/cases`);
+      let cases: any[] = [];
       if (res.ok) {
-        const cases = await res.json();
-        const pendingList: any[] = [];
-        cases.forEach((c: any) => {
-          const total = Number(c.fees?.total ?? c.fullData?.fees?.total ?? (c.fullData?.feesAmount ? parseFloat(c.fullData.feesAmount) : 0)) || 0;
-          const paid = Number(c.fees?.paid ?? c.fullData?.fees?.paid ?? (c.fullData?.paidAmount ? parseFloat(c.fullData.paidAmount) : 0)) || 0;
-          const pending = c.fees?.pending !== undefined && c.fees?.pending !== null ? Number(c.fees.pending) : Math.max(0, total - paid);
-
-          // Only show cases that have a pending balance
-          if (pending > 0) {
-            pendingList.push({
-              rawCase: c,
-              mongoId: c.id,
-              appNo: c.application_number || c.id,
-              customer: c.property?.owner_name || c.fullData?.customerName || c.clientName || 'Customer',
-              mobile: c.property?.owner_phone || c.fullData?.mobile || c.mobile || '',
-              service: c.approval_type || c.type || 'Building Plan Approval',
-              totalAmount: total,
-              paidAmount: paid,
-              pendingAmount: pending
-            });
-          }
-        });
-        setPendingApplications(pendingList);
+        cases = await res.json();
       }
+
+      const localStr = localStorage.getItem('mock_saved_cases');
+      if (localStr) {
+        try {
+          const locals = JSON.parse(localStr);
+          cases = [...cases, ...locals];
+        } catch (e) {}
+      }
+
+      const allList: any[] = [];
+      const pendingList: any[] = [];
+
+      cases.forEach((c: any) => {
+        const total = Number(c.fees?.total ?? c.fullData?.fees?.total ?? (c.fullData?.feesAmount ? parseFloat(c.fullData.feesAmount) : 0)) || 0;
+        const paid = Number(c.fees?.paid ?? c.fullData?.fees?.paid ?? (c.fullData?.paidAmount ? parseFloat(c.fullData.paidAmount) : 0)) || 0;
+        const pending = c.fees?.pending !== undefined && c.fees?.pending !== null ? Number(c.fees.pending) : Math.max(0, total - paid);
+
+        const item = {
+          rawCase: c,
+          mongoId: c.id,
+          appNo: c.application_number || c.id,
+          customer: c.property?.owner_name || c.fullData?.customerName || c.clientName || 'Customer',
+          mobile: c.property?.owner_phone || c.fullData?.mobile || c.mobile || '',
+          service: c.approval_type || c.type || 'Building Plan Approval',
+          totalAmount: total,
+          paidAmount: paid,
+          pendingAmount: pending,
+          executive: c.assigned_staff?.name || c.fullData?.staff || 'Admin User'
+        };
+
+        allList.push(item);
+        if (pending > 0) {
+          pendingList.push(item);
+        }
+      });
+
+      setAllApplications(allList);
+      setPendingApplications(pendingList);
     } catch (err) {
       console.error("Failed to fetch pending applications:", err);
     } finally {
@@ -102,6 +120,65 @@ const Receipts: React.FC = () => {
   React.useEffect(() => {
     fetchPendingCases();
   }, []);
+
+  const autoFillFromApplication = (app: any) => {
+    if (!app) return;
+    const raw = app.rawCase || app;
+    setSelectedCaseRaw(raw);
+
+    const pendingAmt = app.pendingAmount !== undefined ? app.pendingAmount : Math.max(0, (app.totalAmount || 0) - (app.paidAmount || 0));
+
+    setFormData(prev => ({
+      ...prev,
+      type: 'Existing',
+      applicationNo: app.appNo,
+      customerName: app.customer,
+      mobileNumber: app.mobile,
+      services: app.service || prev.services,
+      balance: pendingAmt > 0 ? `₹${pendingAmt.toLocaleString()}` : '₹0',
+      receiptAmt: pendingAmt > 0 ? pendingAmt.toString() : prev.receiptAmt,
+      executive: app.executive || prev.executive || 'Admin User'
+    }));
+
+    toast.success(`Auto-fetched details for ${app.customer} (${app.appNo})`, { id: 'autofill-toast' });
+  };
+
+  const handleAppNoChange = (val: string) => {
+    setFormData(prev => ({ ...prev, applicationNo: val }));
+    const trimmed = val.trim();
+    if (!trimmed) return;
+    const match = allApplications.find(a => 
+      a.appNo.toLowerCase() === trimmed.toLowerCase() ||
+      a.appNo.toLowerCase().replace(/[^a-z0-9]/gi, '') === trimmed.toLowerCase().replace(/[^a-z0-9]/gi, '')
+    );
+    if (match) {
+      autoFillFromApplication(match);
+    }
+  };
+
+  const handleCustomerChange = (val: string) => {
+    setFormData(prev => ({ ...prev, customerName: val }));
+    const trimmed = val.trim();
+    if (trimmed.length < 2) return;
+    const match = allApplications.find(a => 
+      a.customer.toLowerCase() === trimmed.toLowerCase()
+    );
+    if (match) {
+      autoFillFromApplication(match);
+    }
+  };
+
+  const handleMobileChange = (val: string) => {
+    setFormData(prev => ({ ...prev, mobileNumber: val }));
+    const clean = val.replace(/\D/g, '');
+    if (clean.length < 10) return;
+    const match = allApplications.find(a => 
+      (a.mobile || '').replace(/\D/g, '').endsWith(clean)
+    );
+    if (match) {
+      autoFillFromApplication(match);
+    }
+  };
 
   const handleConfirm = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -226,12 +303,31 @@ const Receipts: React.FC = () => {
 
   // Form disable logic
   const isFormDisabled = view === 'disabled' || view === 'view';
-  const isAppNoDisabled = view === 'disabled' || (view === 'add' && formData.type === 'Fresh') || view === 'view';
+  const isAppNoDisabled = view === 'disabled' || view === 'view';
   const isBottomHalfDisabled = isFormDisabled || formData.receiptMode === 'Cash';
   const isRefNoSearchEnabled = view === 'view'; // Only enable reference search in view mode
 
   return (
     <div>
+      {/* HTML5 Datalists for instant auto-complete suggestions */}
+      <datalist id="appsDatalist">
+        {allApplications.map((a, i) => (
+          <option key={`app-${i}`} value={a.appNo}>{a.customer} - ₹{a.pendingAmount} Pending</option>
+        ))}
+      </datalist>
+
+      <datalist id="customersDatalist">
+        {allApplications.map((a, i) => (
+          <option key={`cust-${i}`} value={a.customer}>{a.appNo} ({a.mobile})</option>
+        ))}
+      </datalist>
+
+      <datalist id="mobilesDatalist">
+        {allApplications.map((a, i) => (
+          <option key={`mob-${i}`} value={a.mobile}>{a.customer} ({a.appNo})</option>
+        ))}
+      </datalist>
+
       <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
         <h1 style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--primary-dark)', margin: 0 }}>
           {view === 'view' ? 'View/Reprint Receipt' : 'Raise a Receipt'}
@@ -254,17 +350,35 @@ const Receipts: React.FC = () => {
         </div>
       </div>
 
+      {view === 'add' && (
+        <div style={{
+          backgroundColor: '#eff6ff',
+          border: '1px solid #bfdbfe',
+          borderLeft: '4px solid #2563eb',
+          borderRadius: '0.5rem',
+          padding: '0.75rem 1.25rem',
+          marginBottom: '1rem',
+          fontSize: '0.85rem',
+          color: '#1e3a8a',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.5rem'
+        }}>
+          <span>💡 <strong>Smart Auto-Fill:</strong> Enter or select an <em>Application Number</em>, <em>Customer Name</em>, or <em>Mobile Number</em> below — all remaining details, services, balance, and fees will auto-populate automatically!</span>
+        </div>
+      )}
+
       <div className="card" style={{ padding: '1.5rem', marginBottom: '1.5rem' }}>
         <div style={{ marginBottom: '1.5rem' }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.5rem 1rem' }}>
             
             <DenseField label="Type" value={formData.type} onChange={(e:any) => setFormData({...formData, type: e.target.value})} options={['Fresh', 'Existing']} disabled={isFormDisabled} />
             <DenseField label="Services" value={formData.services} onChange={(e:any) => setFormData({...formData, services: e.target.value})} options={['<Select>', 'Building Approval', 'Layout Approval', 'Other']} disabled={isFormDisabled} />
-            <DenseField label="Application Number" value={formData.applicationNo} onChange={(e:any) => setFormData({...formData, applicationNo: e.target.value})} icon={<Search size={14}/>} disabled={isAppNoDisabled} onIconClick={() => !isAppNoDisabled && setIsAppSearchModalOpen(true)} />
+            <DenseField label="Application Number" value={formData.applicationNo} onChange={(e:any) => handleAppNoChange(e.target.value)} list="appsDatalist" placeholder="Type or select App No..." icon={<Search size={14}/>} disabled={isAppNoDisabled} onIconClick={() => !isAppNoDisabled && setIsAppSearchModalOpen(true)} />
             <DenseField label="Reference No." value={formData.referenceNo} readOnly={true} disabled={!isRefNoSearchEnabled} icon={isRefNoSearchEnabled ? <Search size={14}/> : null} onIconClick={() => isRefNoSearchEnabled && setIsReceiptSearchModalOpen(true)} />
 
-            <DenseField label="Customer Name" value={formData.customerName} onChange={(e:any) => setFormData({...formData, customerName: e.target.value})} disabled={isFormDisabled} />
-            <DenseField label="Mobile Number" value={formData.mobileNumber} onChange={(e:any) => setFormData({...formData, mobileNumber: e.target.value})} disabled={isFormDisabled} />
+            <DenseField label="Customer Name" value={formData.customerName} onChange={(e:any) => handleCustomerChange(e.target.value)} list="customersDatalist" placeholder="Type or select name..." disabled={isFormDisabled} />
+            <DenseField label="Mobile Number" value={formData.mobileNumber} onChange={(e:any) => handleMobileChange(e.target.value)} list="mobilesDatalist" placeholder="Type or select mobile..." disabled={isFormDisabled} />
             <DenseField label="Executive" value={formData.executive} readOnly={true} disabled={true} />
             
             {formData.type === 'Existing' ? (
@@ -275,7 +389,7 @@ const Receipts: React.FC = () => {
 
             <DenseField label="Receipt Mode" value={formData.receiptMode} onChange={(e:any) => setFormData({...formData, receiptMode: e.target.value})} options={['Select', 'Cash', 'Bank', 'UPI']} disabled={isFormDisabled} />
             <DenseField label="Receipt Date" value={formData.receiptDate} readOnly={true} disabled={true} icon={<Calendar size={14}/>} />
-            <DenseField label="Receipt Amt." value={formData.receiptAmt} onChange={(e:any) => setFormData({...formData, receiptAmt: e.target.value})} disabled={isFormDisabled} />
+            <DenseField label="Receipt Amt." value={formData.receiptAmt} onChange={(e:any) => setFormData({...formData, receiptAmt: e.target.value})} disabled={isFormDisabled} placeholder="Enter receipt amount..." />
             <div></div>
             
           </div>

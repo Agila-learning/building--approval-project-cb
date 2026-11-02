@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, User, Building, FileText, Upload, CheckCircle, X, Save, Send, Download, AlertTriangle, RotateCcw, Eye, Archive, MessageCircle, CreditCard, QrCode, Copy, Printer } from 'lucide-react';
+import { ArrowLeft, ArrowRight, User, Building, FileText, Upload, CheckCircle, X, Save, Send, Download, AlertTriangle, RotateCcw, Eye, Archive, MessageCircle, CreditCard, QrCode, Copy, Printer, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import JSZip from 'jszip';
 import { uploadFileToCloudinary, getApiUrl } from '../../config/api';
@@ -431,16 +431,15 @@ const ApplicationDetail: React.FC = () => {
   }, [formData, id]);
 
   const checkAllDocumentsUploaded = () => {
-    return uploadedFiles['CUSTOMER PHOTOGRAPH'] && 
-           uploadedFiles['CUSTOMER SIGNATURE'] &&
-           uploadedFiles['AADHAR CARD'] && 
-           uploadedFiles['PAN CARD'] && 
-           uploadedFiles['LAND DOCUMENT'] &&
-           uploadedFiles['SALE DEED'] &&
-           uploadedFiles['PATTA'] &&
-           uploadedFiles['FMB'] &&
-           uploadedFiles['PROPERTY SIGNATURE'] &&
-           uploadedFiles['BUILDING PLAN'];
+    return Boolean(
+      uploadedFiles['CUSTOMER PHOTOGRAPH'] && 
+      uploadedFiles['CUSTOMER SIGNATURE'] &&
+      uploadedFiles['AADHAR CARD'] && 
+      uploadedFiles['PAN CARD'] && 
+      (uploadedFiles['LAND DOCUMENT'] || uploadedFiles['SALE DEED']) &&
+      uploadedFiles['PATTA'] &&
+      uploadedFiles['BUILDING PLAN']
+    );
   };
 
   const saveApplicationData = async (isPartial: boolean, reason?: string) => {
@@ -593,7 +592,32 @@ const ApplicationDetail: React.FC = () => {
       const cleanMobile = (formData.mobile || '').replace(/\D/g, '');
       if (!cleanMobile || !/^[6-9]\d{9}$/.test(cleanMobile)) {
         errors.push('mobile');
-        toast.error('Mobile number must be a valid 10-digit number.');
+        toast.error('Mobile number must be exactly 10 digits starting with 6, 7, 8, or 9.');
+      } else {
+        // Prevent duplicate lead / application with same mobile number
+        const localCasesStr = localStorage.getItem('mock_saved_cases');
+        const localCases = localCasesStr ? JSON.parse(localCasesStr) : [];
+        const isDuplicate = localCases.some((c: any) => {
+          const cMobile = (c.property?.owner_phone || c.fullData?.mobile || '').replace(/\D/g, '').slice(-10);
+          const cId = c.application_number || c.id;
+          return cMobile === cleanMobile && cId !== id;
+        });
+        if (isDuplicate) {
+          errors.push('mobile');
+          toast.error('An application or lead already exists for this mobile number. If registering for another building, please provide a different contact mobile number.');
+        }
+      }
+
+      // Alternate Mobile: if entered, strictly 10 digits starting with 6,7,8,9 AND not same as primary
+      if (formData.altMobile) {
+        const cleanAlt = formData.altMobile.replace(/\D/g, '');
+        if (!/^[6-9]\d{9}$/.test(cleanAlt)) {
+          errors.push('altMobile');
+          toast.error('Alternate mobile number must be exactly 10 digits starting with 6, 7, 8, or 9.');
+        } else if (cleanAlt === cleanMobile) {
+          errors.push('altMobile');
+          toast.error('Mobile number and alternate mobile number should not be same.');
+        }
       }
       
       if (!formData.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) {
@@ -609,7 +633,7 @@ const ApplicationDetail: React.FC = () => {
       const cleanPan = (formData.pan || '').trim().toUpperCase();
       if (!cleanPan || !/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(cleanPan)) {
         errors.push('pan');
-        toast.error('PAN number must be 10 characters (e.g. ABCDE1234F).');
+        toast.error('PAN number must be 10 characters in the format ABCDE1234F.');
       }
 
       if (!formData.residentialAddress?.houseNo) errors.push('res_houseNo');
@@ -636,7 +660,7 @@ const ApplicationDetail: React.FC = () => {
         if (!perm.state) errors.push('perm_state');
       }
 
-      // Mandatory Step 1 Documents
+      // Mandatory Step 1 Documents: Customer Photo & Signature
       const step1Docs = ['CUSTOMER PHOTOGRAPH', 'CUSTOMER SIGNATURE'];
       const missingStep1Docs = step1Docs.filter(d => !uploadedFiles[d as keyof typeof uploadedFiles]);
       if (missingStep1Docs.length > 0) {
@@ -646,7 +670,7 @@ const ApplicationDetail: React.FC = () => {
       }
     }
 
-    // Validation for Step 2
+    // Validation for Step 2: Property Details
     if (stepToCheck === 2) {
       if (!formData.propertyDetails?.surveyNo) errors.push('prop_surveyNo');
       if (!formData.propertyDetails?.pattaNo) errors.push('prop_pattaNo');
@@ -659,9 +683,28 @@ const ApplicationDetail: React.FC = () => {
       }
     }
 
-    // Validation for Step 3
+    // Validation for Step 3: Document Uploads One-by-One
     if (stepToCheck === 3) {
-      if (!formData.feesAmount) errors.push('feesAmount');
+      const hasSaleDeed = Boolean(uploadedFiles['SALE DEED'] || uploadedFiles['LAND DOCUMENT']);
+      const hasPatta = Boolean(uploadedFiles['PATTA']);
+      const hasPlan = Boolean(uploadedFiles['BUILDING PLAN']);
+      if (!hasSaleDeed || !hasPatta || !hasPlan) {
+        const missing = [];
+        if (!hasSaleDeed) missing.push('Sale Deed / Land Document');
+        if (!hasPatta) missing.push('Patta Copy');
+        if (!hasPlan) missing.push('Building Plan');
+        toast.error(`Please upload required property documents (${missing.join(', ')}) on Step 3 to proceed.`);
+        return false;
+      }
+    }
+
+    // Validation for Step 4: Fees Details & Payment
+    if (stepToCheck === 4) {
+      if (!formData.feesAmount || Number(formData.feesAmount) <= 0) {
+        errors.push('feesAmount');
+        toast.error('Please enter Estimated Total Amount (₹) on Step 4.');
+        return false;
+      }
     }
 
     if (errors.length > 0) {
@@ -692,8 +735,8 @@ const ApplicationDetail: React.FC = () => {
     const steps = [
       { num: 1, label: 'Personal Details' },
       { num: 2, label: 'Property Details' },
-      { num: 3, label: 'Fees Details' },
-      { num: 4, label: 'Uploaded Documents' },
+      { num: 3, label: 'Document Uploads' },
+      { num: 4, label: 'Fees & Payment' },
     ];
 
     return (
@@ -1182,6 +1225,373 @@ const ApplicationDetail: React.FC = () => {
   };
 
   const renderStep3 = () => {
+    const handleDownload = (url: string, filename: string) => {
+      if (url.includes('cloudinary.com') && url.endsWith('.pdf')) {
+        const downloadUrl = url.replace('/upload/', '/upload/fl_attachment/');
+        const link = document.createElement('a');
+        link.href = downloadUrl;
+        link.setAttribute('download', filename);
+        document.body.appendChild(link);
+        link.click();
+        link.parentNode?.removeChild(link);
+        return;
+      }
+      
+      fetch(url)
+        .then(response => response.blob())
+        .then(blob => {
+          const blobUrl = window.URL.createObjectURL(new Blob([blob]));
+          const link = document.createElement('a');
+          link.href = blobUrl;
+          link.setAttribute('download', filename);
+          document.body.appendChild(link);
+          link.click();
+          link.parentNode?.removeChild(link);
+        })
+        .catch(err => console.error("Error downloading file", err));
+    };
+
+    const handleDownloadAllAsZip = async () => {
+      const validEntries = Object.entries(uploadedFiles).filter(([_, url]) => url && typeof url === 'string' && (url.startsWith('http') || url.startsWith('data:')));
+      if (validEntries.length === 0) {
+        toast.error("No uploaded documents to download.");
+        return;
+      }
+
+      const toastId = toast.loading("Creating ZIP archive of all documents...");
+      try {
+        const zip = new JSZip();
+        const appFolder = zip.folder(id || 'Application_Documents');
+
+        for (const [key, url] of validEntries) {
+          const isPdf = (url as string).endsWith('.pdf');
+          const ext = isPdf ? '.pdf' : '.jpg';
+          const cleanName = `${key.replace(/[^a-zA-Z0-9_-]/g, '_')}${ext}`;
+
+          try {
+            if ((url as string).startsWith('data:')) {
+              const base64Data = (url as string).split(',')[1];
+              appFolder?.file(cleanName, base64Data, { base64: true });
+            } else {
+              const res = await fetch(url as string);
+              const blob = await res.blob();
+              appFolder?.file(cleanName, blob);
+            }
+          } catch (fileErr) {
+            console.error(`Failed to add ${key} to ZIP:`, fileErr);
+          }
+        }
+
+        const zipBlob = await zip.generateAsync({ type: 'blob' });
+        const downloadUrl = window.URL.createObjectURL(zipBlob);
+        const link = document.createElement('a');
+        link.href = downloadUrl;
+        link.download = `${id || 'Application'}_All_Documents.zip`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(downloadUrl);
+
+        toast.success("All documents downloaded as ZIP successfully!", { id: toastId });
+      } catch (err: any) {
+        console.error("Failed to generate ZIP:", err);
+        toast.error("Failed to generate ZIP. Downloading files individually...", { id: toastId });
+      }
+    };
+
+    const docItems = [
+      {
+        id: 'CUSTOMER PHOTOGRAPH',
+        title: 'Customer Photograph',
+        category: 'Applicant Identification',
+        isMandatory: true,
+        description: 'Applicant passport photograph (uploaded in Step 1).',
+        fileUrl: uploadedFiles['CUSTOMER PHOTOGRAPH'],
+        fromStep1: true
+      },
+      {
+        id: 'CUSTOMER SIGNATURE',
+        title: 'Customer Specimen Signature',
+        category: 'Applicant Identification',
+        isMandatory: true,
+        description: 'Applicant official specimen signature (uploaded in Step 1).',
+        fileUrl: uploadedFiles['CUSTOMER SIGNATURE'],
+        fromStep1: true
+      },
+      {
+        id: 'AADHAR CARD',
+        title: 'Aadhaar Card Copy',
+        category: 'Applicant Identification',
+        isMandatory: true,
+        description: 'Government issued 12-digit Aadhaar card copy (front & back).',
+        fileUrl: uploadedFiles['AADHAR CARD']
+      },
+      {
+        id: 'PAN CARD',
+        title: 'PAN Card Copy',
+        category: 'Applicant Identification',
+        isMandatory: true,
+        description: 'Income Tax Department PAN card copy.',
+        fileUrl: uploadedFiles['PAN CARD']
+      },
+      {
+        id: 'SALE DEED',
+        title: 'Registered Sale Deed / Title Deed',
+        category: 'Property Documents',
+        isMandatory: true,
+        description: 'Registered title deed or sale deed proving clear ownership.',
+        fileUrl: uploadedFiles['SALE DEED'] || uploadedFiles['LAND DOCUMENT']
+      },
+      {
+        id: 'PATTA',
+        title: 'Patta Copy / Revenue Record',
+        category: 'Property Documents',
+        isMandatory: true,
+        description: 'Computerized Patta extract or revenue record for the survey number.',
+        fileUrl: uploadedFiles['PATTA']
+      },
+      {
+        id: 'BUILDING PLAN',
+        title: 'Proposed Building Plan Blueprint',
+        category: 'Property Documents',
+        isMandatory: true,
+        description: 'Blueprint drawing prepared by licensed surveyor/architect.',
+        fileUrl: uploadedFiles['BUILDING PLAN']
+      },
+      {
+        id: 'FMB',
+        title: 'FMB Sketch (Field Measurement Book)',
+        category: 'Property Documents',
+        isMandatory: false,
+        description: 'Field Measurement Book sketch copy showing property boundaries.',
+        fileUrl: uploadedFiles['FMB']
+      },
+      {
+        id: 'RECEIPT',
+        title: 'Encumbrance Certificate (EC) / Property Tax',
+        category: 'Property Documents',
+        isMandatory: false,
+        description: 'Recent EC or municipal/panchayat property tax receipt.',
+        fileUrl: uploadedFiles['RECEIPT']
+      },
+      {
+        id: 'WORKING DRAWING',
+        title: 'Working Drawing / Structural Blueprint (Optional)',
+        category: 'Technical Drawings & Engineering',
+        isMandatory: false,
+        description: 'Detailed architectural working drawings, structural details, layout plan, or CAD elevation (PDF / Image).',
+        fileUrl: uploadedFiles['WORKING DRAWING'] || uploadedFiles['STRUCTURAL BLUEPRINT'] || uploadedFiles['DRAWING']
+      },
+      {
+        id: 'OTHER DOCUMENT',
+        title: 'Other / Additional Supporting Document (Optional)',
+        category: 'Additional Attachments',
+        isMandatory: false,
+        description: 'Any additional NOC, revenue certificate, site photograph, or municipal sanction document (PDF / Image).',
+        fileUrl: uploadedFiles['OTHER DOCUMENT'] || uploadedFiles['ADDITIONAL DOCUMENT']
+      }
+    ];
+
+    // Dynamically append any custom document checklist items configured in Settings
+    const customDocsStr = localStorage.getItem('requiredDocuments');
+    if (customDocsStr) {
+      try {
+        const customDocs = JSON.parse(customDocsStr);
+        if (Array.isArray(customDocs)) {
+          customDocs.forEach((cd: any) => {
+            const cleanKey = (cd.key || cd.id || cd.label || '').toUpperCase().replace(/[^A-Z0-9]/g, '_');
+            if (cleanKey && !docItems.some(d => d.id === cleanKey)) {
+              docItems.push({
+                id: cleanKey,
+                title: cd.label || cd.name || cleanKey.replace(/_/g, ' '),
+                category: 'Custom Configured Documents',
+                isMandatory: Boolean(cd.required),
+                description: cd.description || `Required official document: ${cd.label || cleanKey}`,
+                fileUrl: uploadedFiles[cleanKey]
+              });
+            }
+          });
+        }
+      } catch (e) {}
+    }
+
+    const openUploadModalFor = (docType: string, tab: 'upload' | 'view' = 'upload') => {
+      setDocUploadType(docType);
+      setModalTab(tab);
+      setIsUploadModalOpen(true);
+    };
+
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+        {/* Step 3 Header with Actions */}
+        <div className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+          <div>
+            <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--primary-dark)', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <FileText size={22} color="var(--primary)" /> Application Document Uploads (One by One)
+            </h3>
+            <p style={{ margin: '0.25rem 0 0', fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
+              Upload and review all mandatory property and applicant verification documents. Each document has a dedicated slot.
+            </p>
+          </div>
+          <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
+            <button 
+              type="button"
+              onClick={() => {
+                const cleanMobile = (formData.mobile || '').replace(/\D/g, '').slice(-10);
+                const uploadUrl = `${window.location.origin}/upload/${id || 'NEW'}`;
+                navigator.clipboard.writeText(uploadUrl);
+                toast.success('Document upload link copied to clipboard!');
+                if (cleanMobile) {
+                  const text = `Dear ${formData.customerName || 'Customer'},\n\nGreetings from C.B. Building Approvals.\nYour building approval application (${id || 'NEW'}) is in progress. Please use the secure link below to upload your documents:\n\n${uploadUrl}\n\nRequired documents:\n1. Aadhar Card & PAN Card\n2. Land Document / Sale Deed\n3. Patta Copy\n4. Proposed Building Plan\n\nThank you!\nCB Building Approvals`;
+                  window.open(`https://wa.me/91${cleanMobile}?text=${encodeURIComponent(text)}`, '_blank');
+                }
+              }}
+              style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.55rem 1rem', backgroundColor: '#25D366', color: 'white', border: 'none', borderRadius: '0.375rem', fontWeight: 600, cursor: 'pointer', fontSize: '0.8125rem' }}
+              title="Send Document Upload Link via WhatsApp"
+            >
+              <MessageCircle size={16} /> WhatsApp Link
+            </button>
+            <button 
+              type="button"
+              onClick={() => setIsReuploadModalOpen(true)}
+              style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.55rem 1rem', backgroundColor: '#f59e0b', color: 'white', border: 'none', borderRadius: '0.375rem', fontWeight: 600, fontSize: '0.8125rem', cursor: 'pointer' }}
+            >
+              <Upload size={16} /> Request Reupload
+            </button>
+            <button 
+              type="button"
+              onClick={handleDownloadAllAsZip}
+              className="btn-primary" 
+              style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.55rem 1rem', backgroundColor: '#1044C4', fontSize: '0.8125rem' }}
+              title="Download all uploaded documents bundled in a single ZIP file"
+            >
+              <Archive size={16} /> Download All as ZIP
+            </button>
+          </div>
+        </div>
+
+        {/* Dedicated Slots One by One */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.25rem' }}>
+          {docItems.map((doc) => {
+            const isUploaded = Boolean(doc.fileUrl && typeof doc.fileUrl === 'string');
+            const isPdf = isUploaded && (doc.fileUrl.endsWith('.pdf') || doc.fileUrl.startsWith('data:application/pdf'));
+
+            return (
+              <div 
+                key={doc.id} 
+                className="card"
+                style={{ 
+                  display: 'flex', 
+                  flexDirection: 'column', 
+                  justifyContent: 'space-between',
+                  border: isUploaded ? '1px solid #bbf7d0' : doc.isMandatory ? '1px solid #fed7aa' : '1px solid var(--border-color)',
+                  backgroundColor: isUploaded ? '#f0fdf4' : '#ffffff',
+                  padding: '1.25rem',
+                  gap: '1rem',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+                }}
+              >
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                    <div style={{ fontWeight: 700, fontSize: '0.9375rem', color: 'var(--primary-dark)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <FileText size={18} color="var(--primary)" />
+                      {doc.title} {doc.isMandatory && <span style={{ color: '#ef4444' }}>*</span>}
+                    </div>
+                    {isUploaded ? (
+                      <span style={{ backgroundColor: '#dcfce7', color: '#15803d', padding: '0.2rem 0.55rem', borderRadius: '1rem', fontSize: '0.72rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.25rem', whiteSpace: 'nowrap' }}>
+                        <CheckCircle size={13} /> {doc.fromStep1 ? 'Uploaded (Step 1)' : 'UPLOADED ✓'}
+                      </span>
+                    ) : (
+                      <span style={{ backgroundColor: doc.isMandatory ? '#fef3c7' : '#f1f5f9', color: doc.isMandatory ? '#b45309' : '#64748b', padding: '0.2rem 0.55rem', borderRadius: '1rem', fontSize: '0.72rem', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                        {doc.isMandatory ? 'PENDING *' : 'OPTIONAL'}
+                      </span>
+                    )}
+                  </div>
+
+                  <p style={{ fontSize: '0.78125rem', color: 'var(--text-secondary)', margin: '0 0 0.75rem', lineHeight: '1.4' }}>
+                    {doc.description}
+                  </p>
+
+                  {/* Thumbnail / Status Visual */}
+                  <div style={{ width: '100%', height: '120px', backgroundColor: isUploaded ? '#ffffff' : '#f8fafc', border: '1px dashed var(--border-color)', borderRadius: '0.375rem', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                    {isUploaded ? (
+                      isPdf ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.25rem', color: '#ef4444' }}>
+                          <FileText size={36} />
+                          <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)' }}>PDF Document</span>
+                        </div>
+                      ) : (
+                        <img src={doc.fileUrl} alt={doc.title} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                      )
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.25rem', color: '#94a3b8' }}>
+                        <Upload size={28} />
+                        <span style={{ fontSize: '0.75rem', fontWeight: 500 }}>No document attached</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Actions Row */}
+                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', paddingTop: '0.5rem', borderTop: '1px solid #e2e8f0' }}>
+                  {isUploaded ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => openUploadModalFor(doc.id, 'view')}
+                        style={{ flex: 1, minWidth: '70px', padding: '0.45rem 0.6rem', backgroundColor: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '0.25rem', color: 'var(--primary-dark)', fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.3rem' }}
+                      >
+                        <Eye size={14} /> View
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => openUploadModalFor(doc.id, 'upload')}
+                        style={{ flex: 1, minWidth: '75px', padding: '0.45rem 0.6rem', backgroundColor: '#eff6ff', border: '1px solid #93c5fd', borderRadius: '0.25rem', color: '#1d4ed8', fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.3rem' }}
+                      >
+                        <Upload size={14} /> Replace
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDownload(doc.fileUrl, `${doc.title}${isPdf ? '.pdf' : '.jpg'}`)}
+                        style={{ padding: '0.45rem 0.65rem', backgroundColor: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '0.25rem', color: 'var(--text-secondary)', fontSize: '0.78rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                        title="Download Document"
+                      >
+                        <Download size={14} />
+                      </button>
+                      {!doc.fromStep1 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setUploadedFiles(prev => ({ ...prev, [doc.id]: undefined }));
+                            toast.success(`${doc.title} removed.`);
+                          }}
+                          style={{ padding: '0.45rem 0.65rem', backgroundColor: '#fef2f2', border: '1px solid #fecaca', borderRadius: '0.25rem', color: '#dc2626', fontSize: '0.78rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                          title="Delete Document"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => openUploadModalFor(doc.id, 'upload')}
+                      className="btn-primary"
+                      style={{ width: '100%', padding: '0.55rem 1rem', fontSize: '0.8125rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem' }}
+                    >
+                      <Upload size={16} /> Upload Document
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
+  const renderStep4 = () => {
     const bank = companySettings || {
       bankName: 'State Bank of India',
       accountName: 'C.B. BUILDING APPROVALS',
@@ -1197,20 +1607,20 @@ const ApplicationDetail: React.FC = () => {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '1rem' }}>
           <div>
             <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--primary-dark)', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <CreditCard size={22} color="var(--primary)" /> Fees Details & Payment
+              <CreditCard size={22} color="var(--primary)" /> Fees Details & Payment Verification
             </h3>
             <p style={{ margin: '0.25rem 0 0', fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
-              Configure estimated charges, select payment mode, and verify transactions.
+              Configure estimated charges, scan admin UPI QR code, and verify transaction approval. Both Admin and Staff can verify fee payments.
             </p>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             {paymentStatus === 'PAID' ? (
               <span style={{ backgroundColor: '#dcfce7', color: '#15803d', padding: '0.4rem 0.85rem', borderRadius: '2rem', fontSize: '0.8125rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                <CheckCircle size={16} /> Payment Status: PAID
+                <CheckCircle size={16} /> Payment Status: PAID & VERIFIED
               </span>
             ) : (
               <span style={{ backgroundColor: '#fef3c7', color: '#b45309', padding: '0.4rem 0.85rem', borderRadius: '2rem', fontSize: '0.8125rem', fontWeight: 700 }}>
-                Payment Status: PENDING
+                Payment Status: PENDING VERIFICATION
               </span>
             )}
           </div>
@@ -1292,22 +1702,22 @@ const ApplicationDetail: React.FC = () => {
             ))}
           </div>
 
-          {/* Payment Details Box */}
+          {/* Payment Details Box with Admin QR Code */}
           {paymentMethod === 'UPI / QR Code' && (
             <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center', flexWrap: 'wrap', backgroundColor: '#ffffff', padding: '1.25rem', borderRadius: '0.5rem', border: '1px solid #e2e8f0' }}>
-              <div style={{ width: '130px', height: '130px', border: '1px solid #e2e8f0', borderRadius: '0.375rem', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f8fafc', overflow: 'hidden' }}>
+              <div style={{ width: '140px', height: '140px', border: '1px solid #cbd5e1', borderRadius: '0.375rem', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f8fafc', overflow: 'hidden' }}>
                 {bank.qrCodeUrl ? (
-                  <img src={bank.qrCodeUrl} alt="UPI QR Code" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                  <img src={bank.qrCodeUrl} alt="Admin UPI QR Code" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
                 ) : (
-                  <img src={`https://api.qrserver.com/v1/create-qr-code/?size=130x130&data=${encodeURIComponent(`upi://pay?pa=${bank.upiId || 'cbapprovals@upi'}&pn=CB%20Building%20Approvals&am=${formData.feesAmount || '0'}&cu=INR`)}`} alt="Dynamic UPI QR" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                  <img src={`https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(`upi://pay?pa=${bank.upiId || 'cbapprovals@upi'}&pn=CB%20Building%20Approvals&am=${formData.feesAmount || '0'}&cu=INR`)}`} alt="Dynamic UPI QR" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
                 )}
               </div>
               <div style={{ flex: 1, minWidth: '220px' }}>
                 <div style={{ fontWeight: 700, color: 'var(--primary-dark)', fontSize: '1rem', marginBottom: '0.35rem' }}>
-                  Scan & Pay via Google Pay / PhonePe / Paytm
+                  Scan & Pay via Google Pay / PhonePe / Paytm / BHIM
                 </div>
-                <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '0.75rem' }}>
-                  Official Company UPI ID: <strong>{bank.upiId || 'cbapprovals@upi'}</strong>
+                <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>
+                  Official Company UPI ID: <strong style={{ color: 'var(--primary)' }}>{bank.upiId || 'cbapprovals@upi'}</strong>
                 </div>
                 <button
                   type="button"
@@ -1421,181 +1831,6 @@ const ApplicationDetail: React.FC = () => {
           >
             <FileText size={18} /> Download Application
           </button>
-        </div>
-      </div>
-    );
-  };
-
-  const renderStep4 = () => {
-    const handleDownload = (url: string, filename: string) => {
-      if (url.includes('cloudinary.com') && url.endsWith('.pdf')) {
-        const downloadUrl = url.replace('/upload/', '/upload/fl_attachment/');
-        const link = document.createElement('a');
-        link.href = downloadUrl;
-        link.setAttribute('download', filename);
-        document.body.appendChild(link);
-        link.click();
-        link.parentNode?.removeChild(link);
-        return;
-      }
-      
-      fetch(url)
-        .then(response => response.blob())
-        .then(blob => {
-          const blobUrl = window.URL.createObjectURL(new Blob([blob]));
-          const link = document.createElement('a');
-          link.href = blobUrl;
-          link.setAttribute('download', filename);
-          document.body.appendChild(link);
-          link.click();
-          link.parentNode?.removeChild(link);
-        })
-        .catch(err => console.error("Error downloading file", err));
-    };
-
-    const handleDownloadAllAsZip = async () => {
-      const validEntries = Object.entries(uploadedFiles).filter(([_, url]) => url && typeof url === 'string' && (url.startsWith('http') || url.startsWith('data:')));
-      if (validEntries.length === 0) {
-        toast.error("No uploaded documents to download.");
-        return;
-      }
-
-      const toastId = toast.loading("Creating ZIP archive of all documents...");
-      try {
-        const zip = new JSZip();
-        const appFolder = zip.folder(id || 'Application_Documents');
-
-        for (const [key, url] of validEntries) {
-          const isPdf = (url as string).endsWith('.pdf');
-          const ext = isPdf ? '.pdf' : '.jpg';
-          const cleanName = `${key.replace(/[^a-zA-Z0-9_-]/g, '_')}${ext}`;
-
-          try {
-            if ((url as string).startsWith('data:')) {
-              const base64Data = (url as string).split(',')[1];
-              appFolder?.file(cleanName, base64Data, { base64: true });
-            } else {
-              const res = await fetch(url as string);
-              const blob = await res.blob();
-              appFolder?.file(cleanName, blob);
-            }
-          } catch (fileErr) {
-            console.error(`Failed to add ${key} to ZIP:`, fileErr);
-          }
-        }
-
-        const zipBlob = await zip.generateAsync({ type: 'blob' });
-        const downloadUrl = window.URL.createObjectURL(zipBlob);
-        const link = document.createElement('a');
-        link.href = downloadUrl;
-        link.download = `${id || 'Application'}_All_Documents.zip`;
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-        window.URL.revokeObjectURL(downloadUrl);
-
-        toast.success("All documents downloaded as ZIP successfully!", { id: toastId });
-      } catch (err: any) {
-        console.error("Failed to generate ZIP:", err);
-        toast.error("Failed to generate ZIP. Downloading files individually...", { id: toastId });
-        handleBulkDownload();
-      }
-    };
-
-    const handleBulkDownload = () => {
-      let delay = 0;
-      Object.entries(uploadedFiles).forEach(([key, url]) => {
-        if (url && typeof url === 'string' && (url.startsWith('http') || url.startsWith('data:'))) {
-          const isPdf = url.endsWith('.pdf');
-          setTimeout(() => handleDownload(url, `${key}${isPdf ? '.pdf' : '.jpg'}`), delay);
-          delay += 500;
-        }
-      });
-      toast.success("Downloading all documents...");
-    };
-
-    return (
-      <div className="card">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
-          <h3 style={{ fontSize: '1.125rem', fontWeight: 600, color: 'var(--primary-dark)', display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0 }}>
-            <FileText size={20} color="var(--primary)" /> Uploaded Documents
-          </h3>
-          <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-            {id && (
-              <button 
-                onClick={() => {
-                  const cleanMobile = (formData.mobile || '').replace(/\D/g, '').slice(-10);
-                  if (!cleanMobile) {
-                    toast.error("Customer mobile number not found.");
-                    return;
-                  }
-                  const uploadUrl = `${window.location.origin}/upload/${id}`;
-                  const text = `Dear ${formData.customerName || 'Customer'},\n\nGreetings from C.B. Building Approvals.\nYour building approval application (${id}) is in progress. Please use the secure link below to upload your documents:\n\n${uploadUrl}\n\nRequired documents:\n1. Customer Photo & Signature\n2. Aadhar Card & PAN Card\n3. Land Document / Sale Deed\n4. Patta & FMB Copy\n5. Proposed Building Plan\n\nThank you!\nCB Building Approvals`;
-                  window.open(`https://wa.me/91${cleanMobile}?text=${encodeURIComponent(text)}`, '_blank');
-                }}
-                style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem', backgroundColor: '#25D366', color: 'white', border: 'none', borderRadius: '0.375rem', fontWeight: 600, cursor: 'pointer', fontSize: '0.875rem' }}
-                title="Send Document Upload Link via WhatsApp"
-              >
-                <MessageCircle size={16} /> WhatsApp Link
-              </button>
-            )}
-            <button 
-              onClick={() => setIsReuploadModalOpen(true)}
-              className="btn-primary" 
-              style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem', backgroundColor: '#f59e0b', borderColor: '#f59e0b', fontSize: '0.875rem' }}
-            >
-              <Upload size={16} /> Request Reupload
-            </button>
-            <button 
-              onClick={handleDownloadAllAsZip}
-              className="btn-primary" 
-              style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem', backgroundColor: '#1044C4', fontSize: '0.875rem' }}
-              title="Download all uploaded documents bundled in a single ZIP file"
-            >
-              <Archive size={16} /> Download All as ZIP
-            </button>
-          </div>
-        </div>
-        
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1.5rem' }}>
-          {Object.entries(uploadedFiles).filter(([_,v]) => v && typeof v === 'string' && (v.startsWith('http') || v.startsWith('data:'))).map(([key, value]) => (
-            <div key={key} style={{ border: '1px solid var(--border-color)', borderRadius: '0.5rem', padding: '1rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem', backgroundColor: '#f8fafc' }}>
-              <div style={{ fontWeight: 600, fontSize: '0.875rem', color: 'var(--primary-dark)', textAlign: 'center', minHeight: '40px', display: 'flex', alignItems: 'center' }}>
-                {key}
-              </div>
-              
-              <div style={{ width: '100%', height: '150px', backgroundColor: '#e2e8f0', borderRadius: '0.25rem', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                {(value as string).endsWith('.pdf') ? (
-                  <FileText size={48} color="var(--text-secondary)" />
-                ) : (
-                  <img src={value as string} alt={key} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                )}
-              </div>
-              
-              <div style={{ display: 'flex', gap: '0.5rem', width: '100%' }}>
-                <a 
-                  href={(value as string).endsWith('.pdf') ? (value as string).replace('.pdf', '.jpg') : (value as string)} 
-                  target="_blank" 
-                  rel="noreferrer"
-                  style={{ flex: 1, padding: '0.5rem', backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-color)', borderRadius: '0.25rem', textAlign: 'center', color: 'var(--primary-dark)', fontSize: '0.75rem', fontWeight: 600, textDecoration: 'none' }}
-                >
-                  View
-                </a>
-                <button 
-                  onClick={(e) => { e.preventDefault(); handleDownload(value as string, `${key}${(value as string).endsWith('.pdf') ? '.pdf' : '.jpg'}`); }}
-                  style={{ flex: 1, padding: '0.5rem', backgroundColor: 'var(--primary)', border: 'none', borderRadius: '0.25rem', color: 'white', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.25rem' }}
-                >
-                  <Download size={14} /> Download
-                </button>
-              </div>
-            </div>
-          ))}
-          
-          {Object.entries(uploadedFiles).filter(([_,v]) => v && typeof v === 'string' && (v.startsWith('http') || v.startsWith('data:'))).length === 0 && (
-            <div style={{ gridColumn: '1 / -1', padding: '3rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
-              No documents uploaded yet.
-            </div>
-          )}
         </div>
       </div>
     );
@@ -2078,7 +2313,7 @@ const ApplicationDetail: React.FC = () => {
         <div style={{ width: '500px', backgroundColor: 'white', borderRadius: '0.5rem', overflow: 'hidden', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)' }}>
           {/* Header */}
           <div style={{ backgroundColor: '#1e3a8a', padding: '1rem 1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: 'white' }}>
-            <h3 style={{ fontSize: '1rem', fontWeight: 600, margin: 0 }}>IDProof</h3>
+            <h3 style={{ fontSize: '1rem', fontWeight: 600, margin: 0 }}>{docUploadType.replace(/_/g, ' ')}</h3>
             <button onClick={() => setIsUploadModalOpen(false)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}>
               <X size={20} />
             </button>
@@ -2119,9 +2354,8 @@ const ApplicationDetail: React.FC = () => {
                     <option value="LAND DOCUMENT">LAND DOCUMENT</option>
                     <option value="SALE DEED">SALE DEED</option>
                     <option value="PATTA">PATTA</option>
-                    <option value="FMB">FMB</option>
-                    <option value="PROPERTY SIGNATURE">SIGNATURE</option>
                     <option value="BUILDING PLAN">BUILDING PLAN</option>
+                    <option value="FMB">FMB</option>
                     <option value="RECEIPT">RECEIPT</option>
                     <option value="FINAL_APPROVAL">FINAL APPROVAL</option>
                   </>
@@ -2324,10 +2558,10 @@ const ApplicationDetail: React.FC = () => {
                   </div>
                 </div>
                 <button 
-                  onClick={() => setCurrentStep(4)} 
+                  onClick={() => setCurrentStep(3)} 
                   style={{ padding: '0.5rem 1rem', borderRadius: '0.375rem', backgroundColor: '#7e22ce', color: 'white', border: 'none', fontWeight: 600, fontSize: '0.8125rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
                 >
-                  <FileText size={16} /> View Documents (Step 4)
+                  <FileText size={16} /> View Documents (Step 3)
                 </button>
               </div>
             )}
@@ -2359,9 +2593,24 @@ const ApplicationDetail: React.FC = () => {
               </div>
             )}
             {currentStep === 4 && (
-              <div style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', padding: '1rem', backgroundColor: 'transparent' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem', backgroundColor: 'white', borderRadius: '0.5rem', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
                 <button onClick={handlePrev} style={{ padding: '0.75rem 1.5rem', borderRadius: '0.5rem', backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-color)', color: 'var(--primary-dark)', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <ArrowLeft size={18} /> Back to Fees Details
+                  <ArrowLeft size={18} /> Back to Document Uploads
+                </button>
+                <button 
+                  onClick={async () => {
+                    if (!validateStep(4)) return;
+                    const success = await saveApplicationData(false);
+                    if (success) {
+                      toast.success('Application submitted and saved successfully!');
+                      if (isEmployee) navigate('/employee/applications');
+                      else navigate('/admin/applications');
+                    }
+                  }} 
+                  className="btn-primary" 
+                  style={{ padding: '0.75rem 2rem', borderRadius: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem', backgroundColor: '#16a34a', borderColor: '#16a34a' }}
+                >
+                  <CheckCircle size={18} /> Submit & Finalize Application
                 </button>
               </div>
             )}

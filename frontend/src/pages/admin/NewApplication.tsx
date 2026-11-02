@@ -56,15 +56,86 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
   const [formErrors, setFormErrors] = useState<string[]>([]);
   const [missingDocErrors, setMissingDocErrors] = useState<string[]>([]);
 
-  const MANDATORY_DOCUMENTS = React.useMemo(() => [
-    { key: 'CUSTOMER PHOTOGRAPH', label: 'Customer Photograph', step: 1 },
-    { key: 'CUSTOMER SIGNATURE', label: 'Customer Signature', step: 1 },
-    { key: 'AADHAR CARD', label: 'Aadhaar Card', step: 1 },
-    { key: 'PAN CARD', label: 'PAN Card', step: 1 },
-    { key: 'SALE DEED', altKey: 'LAND DOCUMENT', label: 'Sale Deed / Land Document', step: 2 },
-    { key: 'PATTA', label: 'Patta', step: 2 },
-    { key: 'BUILDING PLAN', label: 'Building Plan', step: 2 }
-  ], []);
+  // Dynamic Document Checklist from Settings & LocalStorage
+  const [settingsDocs, setSettingsDocs] = useState<any[]>(() => {
+    try {
+      const local = localStorage.getItem('requiredDocuments');
+      if (local) return JSON.parse(local);
+    } catch (e) {}
+    return [];
+  });
+
+  React.useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        const res = await fetch(`${getApiUrl()}/settings`);
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data.requiredDocuments) && data.requiredDocuments.length > 0) {
+            setSettingsDocs(data.requiredDocuments);
+            localStorage.setItem('requiredDocuments', JSON.stringify(data.requiredDocuments));
+          }
+        }
+      } catch (e) {
+        console.warn('Could not fetch settings documents in NewApplication:', e);
+      }
+    };
+    fetchSettings();
+  }, []);
+
+  const allApplicationDocs = React.useMemo(() => {
+    const baseDocs = [
+      { key: 'CUSTOMER PHOTOGRAPH', label: 'Customer Photograph', step: 1, required: true, desc: 'Passport size photograph of the applicant' },
+      { key: 'CUSTOMER SIGNATURE', label: 'Customer Signature', step: 1, required: true, desc: 'Official customer specimen signature' },
+      { key: 'AADHAR CARD', label: 'Aadhaar Card', step: 1, required: true, desc: 'Government Aadhaar identity proof of applicant' },
+      { key: 'PAN CARD', label: 'PAN Card', step: 1, required: true, desc: 'Permanent Account Number (PAN) Card' },
+      { key: 'SALE DEED', altKey: 'LAND DOCUMENT', label: 'Sale Deed / Land Document', step: 2, required: true, desc: 'Registered document of property ownership' },
+      { key: 'PATTA', label: 'Patta Copy', step: 2, required: true, desc: 'Official revenue document / Patta copy' },
+      { key: 'BUILDING PLAN', label: 'Proposed Building Plan', step: 2, required: true, desc: 'Approved or proposed architectural plan' },
+    ];
+
+    if (settingsDocs && settingsDocs.length > 0) {
+      settingsDocs.forEach((sd: any) => {
+        const cleanKey = (sd.key || sd.id || sd.label || '').toUpperCase().replace(/[^A-Z0-9]/g, '_');
+        const exists = baseDocs.some(b => b.key === cleanKey || (b as any).altKey === cleanKey);
+        if (!exists && cleanKey) {
+          baseDocs.push({
+            key: cleanKey,
+            label: sd.label || sd.name || cleanKey.replace(/_/g, ' '),
+            step: 2,
+            required: Boolean(sd.required),
+            desc: sd.description || `Required document: ${sd.label || cleanKey}`
+          });
+        }
+      });
+    }
+
+    // Always include optional Drawing & Other Document slots for admin/staff/customer
+    if (!baseDocs.some(b => b.key === 'WORKING DRAWING')) {
+      baseDocs.push({
+        key: 'WORKING DRAWING',
+        label: 'Working Drawing / Blueprint (Optional)',
+        step: 2,
+        required: false,
+        desc: 'Detailed architectural drawings, structural layouts or CAD drawings (Optional)'
+      });
+    }
+    if (!baseDocs.some(b => b.key === 'OTHER DOCUMENT')) {
+      baseDocs.push({
+        key: 'OTHER DOCUMENT',
+        label: 'Other Supporting Document (Optional)',
+        step: 2,
+        required: false,
+        desc: 'Any other supporting certificate, NOC or document (Optional)'
+      });
+    }
+
+    return baseDocs;
+  }, [settingsDocs]);
+
+  const MANDATORY_DOCUMENTS = React.useMemo(() => {
+    return allApplicationDocs.filter(d => d.required);
+  }, [allApplicationDocs]);
   const [uploadedFiles, setUploadedFiles] = useState<{
     'CUSTOMER PHOTOGRAPH'?: string;
     'CUSTOMER SIGNATURE'?: string;
@@ -732,7 +803,8 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
                   onChange={e => setFormData({
                     ...formData,
                     referenceDetails: {
-                      ...(formData.referenceDetails || { source: formData.reference || '' }),
+                      source: formData.referenceDetails?.source || formData.reference || '',
+                      mobile: formData.referenceDetails?.mobile || '',
                       name: e.target.value
                     }
                   })}
@@ -755,7 +827,8 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
                   onChange={e => setFormData({
                     ...formData,
                     referenceDetails: {
-                      ...(formData.referenceDetails || { source: formData.reference || '' }),
+                      source: formData.referenceDetails?.source || formData.reference || '',
+                      name: formData.referenceDetails?.name || '',
                       mobile: e.target.value.replace(/\D/g, '').slice(0, 10)
                     }
                   })}
@@ -1165,24 +1238,22 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
 
       {/* Mandatory Property Documents Section */}
       <div style={{ marginTop: '2rem', borderTop: '1px solid var(--border-color)', paddingTop: '1.5rem' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem', flexWrap: 'wrap', gap: '0.5rem' }}>
           <h4 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--primary-dark)', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <FileText size={18} color="var(--primary)" /> Required Property Documents *
+            <FileText size={18} color="var(--primary)" /> Property & Supporting Documents
           </h4>
-          <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>All 3 documents mandatory</span>
+          <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+            Mandatory documents marked with *
+          </span>
         </div>
         <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginBottom: '1.25rem' }}>
-          Upload clear scanned copies or images. Missing documents will block application submission.
+          Upload clear scanned copies or images. Missing mandatory documents will block submission. Optional drawings or other documents can be attached anytime.
         </p>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1rem' }}>
-          {[
-            { key: 'SALE DEED', altKey: 'LAND DOCUMENT', title: 'Sale Deed / Land Document', desc: 'Registered document of property ownership' },
-            { key: 'PATTA', altKey: '', title: 'Patta Copy', desc: 'Official revenue document / Patta copy' },
-            { key: 'BUILDING PLAN', altKey: '', title: 'Proposed Building Plan', desc: 'Approved or proposed architectural plan' },
-          ].map(doc => {
+          {allApplicationDocs.filter(d => d.step === 2).map(doc => {
             const isUploaded = Boolean(uploadedFiles[doc.key as keyof typeof uploadedFiles] || (doc.altKey && uploadedFiles[doc.altKey as keyof typeof uploadedFiles]));
-            const isMissing = missingDocErrors.includes(doc.key) && !isUploaded;
+            const isMissing = doc.required && missingDocErrors.includes(doc.key) && !isUploaded;
 
             return (
               <div 
@@ -1200,16 +1271,18 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
               >
                 <div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.5rem' }}>
-                    <h5 style={{ margin: 0, fontSize: '0.875rem', fontWeight: 700, color: 'var(--primary-dark)' }}>{doc.title} *</h5>
+                    <h5 style={{ margin: 0, fontSize: '0.875rem', fontWeight: 700, color: 'var(--primary-dark)' }}>
+                      {doc.label} {doc.required && <span style={{ color: '#ef4444' }}>*</span>}
+                    </h5>
                     <span style={{
                       fontSize: '0.6875rem',
                       fontWeight: 700,
                       padding: '0.2rem 0.5rem',
                       borderRadius: '1rem',
-                      backgroundColor: isUploaded ? '#dcfce7' : isMissing ? '#fee2e2' : '#f1f5f9',
-                      color: isUploaded ? '#166534' : isMissing ? '#991b1b' : '#64748b'
+                      backgroundColor: isUploaded ? '#dcfce7' : isMissing ? '#fee2e2' : doc.required ? '#fef3c7' : '#f1f5f9',
+                      color: isUploaded ? '#166534' : isMissing ? '#991b1b' : doc.required ? '#b45309' : '#64748b'
                     }}>
-                      {isUploaded ? 'UPLOADED ✓' : isMissing ? 'MISSING *' : 'REQUIRED'}
+                      {isUploaded ? 'UPLOADED ✓' : isMissing ? 'MISSING *' : doc.required ? 'REQUIRED' : 'OPTIONAL'}
                     </span>
                   </div>
                   <p style={{ margin: '0.35rem 0 0 0', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{doc.desc}</p>
@@ -1218,7 +1291,7 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
                 <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginTop: '0.5rem' }}>
                   <button
                     type="button"
-                    onClick={() => { setDocUploadType(doc.key); setIsUploadModalOpen(true); }}
+                    onClick={() => { setDocUploadType(doc.key); setModalTab('upload'); setIsUploadModalOpen(true); }}
                     style={{
                       flex: 1,
                       padding: '0.5rem 0.75rem',
@@ -1288,96 +1361,147 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
 
   const renderUploadModal = () => {
     if (!isUploadModalOpen) return null;
+    const currentFile = uploadedFiles[docUploadType as keyof typeof uploadedFiles] as string | undefined;
+
     return (
-      <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <div style={{ width: '500px', backgroundColor: 'white', borderRadius: '0.5rem', overflow: 'hidden', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)' }}>
-          {/* Header */}
+      <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem', backdropFilter: 'blur(3px)' }}>
+        <div style={{ width: '100%', maxWidth: '540px', backgroundColor: 'white', borderRadius: '0.5rem', overflow: 'hidden', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2)' }}>
+          {/* Header with dynamic title */}
           <div style={{ backgroundColor: '#1e3a8a', padding: '1rem 1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: 'white' }}>
-            <h3 style={{ fontSize: '1rem', fontWeight: 600, margin: 0 }}>IDProof</h3>
-            <button onClick={() => setIsUploadModalOpen(false)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}>
+            <h3 style={{ fontSize: '1rem', fontWeight: 700, margin: 0, textTransform: 'capitalize' }}>
+              {docUploadType.replace(/_/g, ' ')}
+            </h3>
+            <button onClick={() => setIsUploadModalOpen(false)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', padding: '0.2rem' }}>
               <X size={20} />
             </button>
           </div>
           
           {/* Tabs */}
           <div style={{ display: 'flex', borderBottom: '1px solid var(--border-color)', backgroundColor: '#f8fafc' }}>
-            <div 
+            <button 
+              type="button"
               onClick={() => setModalTab('upload')}
-              style={{ flex: 1, padding: '0.75rem', textAlign: 'center', borderRight: '1px solid var(--border-color)', color: modalTab === 'upload' ? 'var(--primary)' : 'var(--text-secondary)', fontWeight: modalTab === 'upload' ? 600 : 500, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', cursor: 'pointer', backgroundColor: modalTab === 'upload' ? 'white' : 'transparent' }}>
-              <Upload size={18} /> Upload File
-            </div>
-            <div 
+              style={{ flex: 1, padding: '0.75rem', border: 'none', borderRight: '1px solid var(--border-color)', color: modalTab === 'upload' ? 'var(--primary)' : 'var(--text-secondary)', fontWeight: modalTab === 'upload' ? 700 : 500, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', cursor: 'pointer', backgroundColor: modalTab === 'upload' ? 'white' : 'transparent' }}>
+              <Upload size={16} /> {currentFile ? 'Replace Document' : 'Upload Document'}
+            </button>
+            <button 
+              type="button"
               onClick={() => setModalTab('view')}
-              style={{ flex: 1, padding: '0.75rem', textAlign: 'center', color: modalTab === 'view' ? 'var(--primary)' : 'var(--text-secondary)', fontWeight: modalTab === 'view' ? 600 : 500, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', cursor: 'pointer', backgroundColor: modalTab === 'view' ? 'white' : 'transparent' }}>
-              <FileText size={18} /> View File
-            </div>
+              style={{ flex: 1, padding: '0.75rem', border: 'none', color: modalTab === 'view' ? 'var(--primary)' : 'var(--text-secondary)', fontWeight: modalTab === 'view' ? 700 : 500, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', cursor: 'pointer', backgroundColor: modalTab === 'view' ? 'white' : 'transparent' }}>
+              <FileText size={16} /> View Document
+            </button>
           </div>
 
           <div style={{ padding: '1.5rem' }}>
-            {/* Doc Type Dropdown */}
-            <div style={{ marginBottom: '2rem' }}>
-              <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Doc Type</label>
-              <select value={docUploadType} onChange={e => setDocUploadType(e.target.value)} style={{ width: '100%', padding: '0.75rem', border: '1px solid var(--border-color)', borderRadius: '0.25rem', outline: 'none', backgroundColor: '#f8fafc', color: 'var(--primary-dark)', fontWeight: 500 }}>
-                {currentStep === 1 && (
-                  <>
-                    <option value="CUSTOMER PHOTOGRAPH">CUSTOMER PHOTOGRAPH</option>
-                    <option value="CUSTOMER SIGNATURE">CUSTOMER SIGNATURE</option>
-                    <option value="AADHAR CARD">AADHAR CARD</option>
-                    <option value="PAN CARD">PAN CARD</option>
-                  </>
-                )}
-                {currentStep === 2 && (
-                  <>
-                    <option value="LAND DOCUMENT">LAND DOCUMENT</option>
-                    <option value="SALE DEED">SALE DEED</option>
-                    <option value="PATTA">PATTA</option>
-                    <option value="FMB">FMB</option>
-                    <option value="PROPERTY SIGNATURE">SIGNATURE</option>
-                    <option value="BUILDING PLAN">BUILDING PLAN</option>
-                  </>
-                )}
-              </select>
-            </div>
-
             {/* Dynamic Area: Upload or View */}
             {modalTab === 'upload' ? (
-              <div style={{ padding: '2rem 1rem', border: '1px dashed var(--border-color)', borderRadius: '0.25rem', backgroundColor: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '2rem' }}>
-                <span style={{ fontSize: '0.875rem', color: 'var(--primary)', fontWeight: 500 }}>
-                  {uploadedFiles[docUploadType as keyof typeof uploadedFiles] ? 'File Selected' : `${docUploadType}_1`}
-                </span>
-                <div style={{ display: 'flex', gap: '1rem' }}>
-                  <input type="file" ref={fileInputRef} onChange={handleFileUpload} style={{ display: 'none' }} accept={docUploadType === 'CUSTOMER PHOTOGRAPH' ? 'image/*' : '*/*'} disabled={isUploading} />
-                  <button onClick={() => !isUploading && fileInputRef.current?.click()} title="Browse" style={{ background: 'none', border: 'none', color: isUploading ? 'var(--text-secondary)' : 'var(--primary)', cursor: isUploading ? 'not-allowed' : 'pointer' }} disabled={isUploading}><Upload size={24} /></button>
+              <div style={{ padding: '2rem 1.5rem', border: '2px dashed var(--border-color)', borderRadius: '0.5rem', backgroundColor: '#f8fafc', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '1rem', marginBottom: '1.5rem', textAlign: 'center' }}>
+                <div style={{ width: '56px', height: '56px', borderRadius: '50%', backgroundColor: 'rgba(30, 58, 138, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)' }}>
+                  <Upload size={28} />
                 </div>
+                <div>
+                  <div style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--primary-dark)' }}>
+                    {currentFile ? 'Replace Current Document' : `Upload ${docUploadType.replace(/_/g, ' ')}`}
+                  </div>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
+                    Supported: JPG, PNG, WEBP, PDF (Max 15MB)
+                  </div>
+                </div>
+
+                {currentFile && (
+                  <div style={{ fontSize: '0.8125rem', color: '#16a34a', fontWeight: 600, backgroundColor: '#dcfce7', padding: '0.35rem 0.75rem', borderRadius: '0.25rem' }}>
+                    ✓ Current document attached. Click below to replace it.
+                  </div>
+                )}
+
+                <input 
+                  type="file" 
+                  ref={fileInputRef} 
+                  onChange={handleFileUpload} 
+                  style={{ display: 'none' }} 
+                  accept={docUploadType === 'CUSTOMER PHOTOGRAPH' ? 'image/*' : 'image/*,.pdf,application/pdf'} 
+                  disabled={isUploading} 
+                />
+                
+                <button 
+                  type="button"
+                  onClick={() => !isUploading && fileInputRef.current?.click()} 
+                  className="btn-primary"
+                  style={{ padding: '0.6rem 1.25rem', fontSize: '0.875rem', display: 'inline-flex', alignItems: 'center', gap: '0.5rem', cursor: isUploading ? 'not-allowed' : 'pointer' }} 
+                  disabled={isUploading}
+                >
+                  <Upload size={16} /> {isUploading ? 'Uploading file...' : currentFile ? 'Choose New File to Replace' : 'Select File from Device'}
+                </button>
               </div>
             ) : (
-              <div style={{ padding: '2rem 1rem', border: '1px solid var(--border-color)', borderRadius: '0.25rem', backgroundColor: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '2rem', minHeight: '150px' }}>
-                {uploadedFiles[docUploadType as keyof typeof uploadedFiles] ? (
+              <div style={{ padding: '1rem', border: '1px solid var(--border-color)', borderRadius: '0.5rem', backgroundColor: '#f8fafc', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', marginBottom: '1.5rem', minHeight: '220px' }}>
+                {currentFile ? (
                   (() => {
-                    const fileData = uploadedFiles[docUploadType as keyof typeof uploadedFiles] as string;
-                    if (fileData.startsWith('data:image/')) {
-                      return <img src={fileData} alt="Uploaded" style={{ maxHeight: '250px', maxWidth: '100%', objectFit: 'contain' }} />;
-                    } else if (fileData.startsWith('data:application/pdf')) {
-                      return <iframe src={fileData} title="PDF Preview" style={{ width: '100%', height: '350px', border: 'none' }} />;
+                    const isPdf = currentFile.startsWith('data:application/pdf') || currentFile.endsWith('.pdf');
+                    const isImg = currentFile.startsWith('data:image/') || currentFile.match(/\.(jpeg|jpg|gif|png|webp)($|\?)/i) || (currentFile.includes('cloudinary.com') && !isPdf);
+
+                    if (isImg) {
+                      return (
+                        <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem' }}>
+                          <img src={currentFile} alt="Uploaded Document" style={{ maxHeight: '250px', maxWidth: '100%', objectFit: 'contain', borderRadius: '0.25rem' }} />
+                          <a href={currentFile} target="_blank" rel="noreferrer" style={{ fontSize: '0.8125rem', color: 'var(--primary)', fontWeight: 600, textDecoration: 'none' }}>
+                            Open Full Image in New Tab ↗
+                          </a>
+                        </div>
+                      );
+                    } else if (isPdf) {
+                      return (
+                        <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                          <iframe src={currentFile} title="PDF Preview" style={{ width: '100%', height: '300px', border: 'none', borderRadius: '0.25rem' }} />
+                          <a href={currentFile} target="_blank" rel="noreferrer" style={{ textAlign: 'center', fontSize: '0.8125rem', color: 'var(--primary)', fontWeight: 600, textDecoration: 'none' }}>
+                            Open Full PDF in New Tab ↗
+                          </a>
+                        </div>
+                      );
                     } else {
                       return (
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', color: 'var(--primary)' }}>
-                           <FileText size={48} style={{ marginBottom: '1rem' }} />
-                           <span style={{ fontWeight: 500 }}>Document Uploaded</span>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', color: 'var(--primary)', padding: '1.5rem' }}>
+                          <FileText size={48} style={{ marginBottom: '0.75rem' }} />
+                          <span style={{ fontWeight: 600, marginBottom: '0.5rem' }}>Document Attached</span>
+                          <a href={currentFile} target="_blank" rel="noreferrer" className="btn-primary" style={{ padding: '0.4rem 1rem', fontSize: '0.8125rem', textDecoration: 'none' }}>
+                            Open / Download File ↗
+                          </a>
                         </div>
                       );
                     }
                   })()
                 ) : (
-                  <span style={{ color: 'var(--text-secondary)' }}>No file uploaded yet for {docUploadType}</span>
+                  <div style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: '2rem' }}>
+                    <FileText size={40} color="#cbd5e1" style={{ margin: '0 auto 0.5rem' }} />
+                    <p style={{ margin: 0, fontWeight: 500 }}>No document uploaded yet for {docUploadType.replace(/_/g, ' ')}</p>
+                    <button 
+                      type="button" 
+                      onClick={() => setModalTab('upload')} 
+                      style={{ marginTop: '0.75rem', background: 'none', border: 'none', color: 'var(--primary)', fontWeight: 600, cursor: 'pointer', fontSize: '0.8125rem' }}
+                    >
+                      Click here to upload
+                    </button>
+                  </div>
                 )}
               </div>
             )}
 
             {/* Action Buttons */}
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <button onClick={() => { setUploadedFiles(prev => ({ ...prev, [docUploadType]: undefined })); toast.success('File deleted'); }} style={{ padding: '0.5rem 1.5rem', backgroundColor: '#e2e8f0', color: '#64748b', border: 'none', borderRadius: '0.25rem', fontWeight: 600, cursor: 'pointer' }}>DELETE</button>
-              <button onClick={() => {toast.success(`${docUploadType} saved`); setIsUploadModalOpen(false);}} style={{ padding: '0.5rem 1.5rem', backgroundColor: '#0284c7', color: 'white', border: 'none', borderRadius: '0.25rem', fontWeight: 600, cursor: 'pointer' }}>SAVE</button>
+              <button 
+                type="button"
+                onClick={() => { setUploadedFiles(prev => ({ ...prev, [docUploadType]: undefined })); toast.success('File deleted'); }} 
+                style={{ padding: '0.5rem 1.25rem', backgroundColor: '#fee2e2', color: '#b91c1c', border: 'none', borderRadius: '0.25rem', fontWeight: 600, cursor: 'pointer', fontSize: '0.8125rem' }}
+              >
+                Delete
+              </button>
+              <button 
+                type="button"
+                onClick={() => { toast.success(`${docUploadType.replace(/_/g, ' ')} saved`); setIsUploadModalOpen(false); }} 
+                style={{ padding: '0.5rem 1.5rem', backgroundColor: 'var(--primary)', color: 'white', border: 'none', borderRadius: '0.25rem', fontWeight: 600, cursor: 'pointer', fontSize: '0.8125rem' }}
+              >
+                Done
+              </button>
             </div>
           </div>
         </div>

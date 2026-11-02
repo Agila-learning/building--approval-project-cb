@@ -108,18 +108,20 @@ const CashBook: React.FC = () => {
       const savedExpenses = localStorage.getItem('system_expenses');
       if (savedExpenses) {
         const parsed = JSON.parse(savedExpenses);
-        parsed.forEach((exp: any) => {
-          const dt = exp.date ? new Date(exp.date) : new Date();
-          const dateIso = !isNaN(dt.getTime()) ? dt.toISOString().split('T')[0] : todayStr;
-          combined.push({
-            id: exp.id,
-            date: dateIso,
-            rawDate: dateIso,
-            particulars: `${exp.category} - ${exp.description || 'Expense'} (${exp.mode || 'Cash'})`,
-            type: 'Expense',
-            amount: Number(exp.amount) || 0
+        parsed
+          .filter((exp: any) => exp.status !== 'Pending Admin Approval' && exp.status !== 'Rejected')
+          .forEach((exp: any) => {
+            const dt = exp.date ? new Date(exp.date) : new Date();
+            const dateIso = !isNaN(dt.getTime()) ? dt.toISOString().split('T')[0] : todayStr;
+            combined.push({
+              id: exp.id,
+              date: dateIso,
+              rawDate: dateIso,
+              particulars: `${exp.category} - ${exp.description || 'Expense'} (${exp.mode || 'Cash'})`,
+              type: 'Expense',
+              amount: Number(exp.amount) || 0
+            });
           });
-        });
       }
     } catch (e) {
       console.error("Error loading expenses for cashbook:", e);

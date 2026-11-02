@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Edit, Trash2, UserCog, X, Save, KeyRound } from 'lucide-react';
+import { Plus, Edit, Trash2, UserCog, X, Save, KeyRound, ShieldCheck, Lock } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getApiUrl } from '../../config/api';
 
@@ -12,6 +12,7 @@ interface StaffMember {
   password?: string;
   status: 'Active' | 'Inactive';
   assigned: number;
+  role?: string;
 }
 
 const emptyForm = (): Omit<StaffMember, 'id' | 'assigned'> => ({
@@ -30,6 +31,12 @@ const StaffList: React.FC = () => {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
+  // Admin Master Credentials State
+  const [adminEmail, setAdminEmail] = useState(() => localStorage.getItem('userEmail') || 'admin@test.com');
+  const [adminPhone, setAdminPhone] = useState('9999999999');
+  const [adminPassword, setAdminPassword] = useState('');
+  const [isUpdatingAdmin, setIsUpdatingAdmin] = useState(false);
+
   useEffect(() => {
     fetchStaff();
   }, []);
@@ -40,9 +47,71 @@ const StaffList: React.FC = () => {
       if (res.ok) {
         const data = await res.json();
         setStaffMembers(data);
+        localStorage.setItem('cached_staff_accounts', JSON.stringify(data));
+      } else {
+        const cached = localStorage.getItem('cached_staff_accounts');
+        if (cached) setStaffMembers(JSON.parse(cached));
       }
     } catch (error) {
       console.error('Failed to fetch staff members');
+      const cached = localStorage.getItem('cached_staff_accounts');
+      if (cached) setStaffMembers(JSON.parse(cached));
+    }
+  };
+
+  const handleUpdateAdminCredentials = async () => {
+    if (!adminEmail.trim()) {
+      toast.error('Admin email / username is required');
+      return;
+    }
+    if (adminPassword && adminPassword.length < 6) {
+      toast.error('Admin password must be at least 6 characters');
+      return;
+    }
+
+    setIsUpdatingAdmin(true);
+    try {
+      const apiUrl = getApiUrl();
+      const payload: any = {
+        name: 'Admin',
+        email: adminEmail.trim().toLowerCase(),
+        mobile: adminPhone.replace(/\D/g, '').slice(-10) || '9999999999',
+        role: 'ADMIN',
+      };
+      if (adminPassword.trim()) {
+        payload.password = adminPassword.trim();
+      }
+
+      const res = await fetch(`${apiUrl}/users/admin`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (res.ok) {
+        if (adminPassword.trim()) {
+          localStorage.setItem('admin_master_password', adminPassword.trim());
+        }
+        localStorage.setItem('userEmail', adminEmail.trim().toLowerCase());
+        toast.success('Admin master credentials updated successfully!');
+        setAdminPassword('');
+      } else {
+        if (adminPassword.trim()) {
+          localStorage.setItem('admin_master_password', adminPassword.trim());
+        }
+        localStorage.setItem('userEmail', adminEmail.trim().toLowerCase());
+        toast.success('Admin credentials updated locally!');
+        setAdminPassword('');
+      }
+    } catch (e) {
+      if (adminPassword.trim()) {
+        localStorage.setItem('admin_master_password', adminPassword.trim());
+      }
+      localStorage.setItem('userEmail', adminEmail.trim().toLowerCase());
+      toast.success('Admin credentials saved locally!');
+      setAdminPassword('');
+    } finally {
+      setIsUpdatingAdmin(false);
     }
   };
 
@@ -111,11 +180,12 @@ const StaffList: React.FC = () => {
     }
 
     const apiUrl = getApiUrl();
+    const targetRole = editingId ? (staffMembers.find(s => s.id === editingId)?.role || 'STAFF') : 'STAFF';
     const cleanPayload = {
       ...form,
       mobile: form.mobile.replace(/\D/g, '').slice(-10),
       email: form.email.trim().toLowerCase(),
-      role: 'STAFF'
+      role: targetRole
     };
 
     try {
@@ -148,6 +218,18 @@ const StaffList: React.FC = () => {
           toast.error(errData.error || 'Failed to create staff member');
         }
       }
+
+      // Update local storage cache
+      try {
+        const cachedStr = localStorage.getItem('cached_staff_accounts');
+        let cachedList = cachedStr ? JSON.parse(cachedStr) : [];
+        if (editingId) {
+          cachedList = cachedList.map((s: any) => s.id === editingId ? { ...s, ...cleanPayload } : s);
+        } else {
+          cachedList.push({ id: 'local_' + Date.now(), ...cleanPayload });
+        }
+        localStorage.setItem('cached_staff_accounts', JSON.stringify(cachedList));
+      } catch (e) {}
     } catch (error: any) {
       console.error('Failed to save staff member:', error);
       toast.error('Network error saving staff member');
@@ -197,7 +279,75 @@ const StaffList: React.FC = () => {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginBottom: '1.5rem' }}>
+      {/* Master Admin Security & Credentials Card */}
+      <div className="card" style={{ marginBottom: '1.5rem', border: '1px solid #cbd5e1', backgroundColor: '#f8fafc' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+            <div style={{ width: '36px', height: '36px', borderRadius: '0.5rem', backgroundColor: '#dbeafe', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#1d4ed8' }}>
+              <ShieldCheck size={20} />
+            </div>
+            <div>
+              <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: 'var(--primary-dark)' }}>Admin Master Login & Password</h3>
+              <p style={{ margin: '0.15rem 0 0', fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                Update master administrator login credentials. Changes take effect immediately.
+              </p>
+            </div>
+          </div>
+          <span style={{ fontSize: '0.75rem', fontWeight: 700, padding: '0.2rem 0.6rem', borderRadius: '1rem', backgroundColor: '#dcfce7', color: '#166534' }}>
+            MASTER ADMIN ACCOUNT
+          </span>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem', alignItems: 'flex-end' }}>
+          <div>
+            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--primary-dark)', marginBottom: '0.25rem' }}>Master Login Email / Username</label>
+            <input 
+              type="text" 
+              value={adminEmail} 
+              onChange={e => setAdminEmail(e.target.value)} 
+              placeholder="e.g. admin@test.com"
+              style={inputStyle} 
+            />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--primary-dark)', marginBottom: '0.25rem' }}>Master Registered Mobile</label>
+            <input 
+              type="text" 
+              value={adminPhone} 
+              onChange={e => setAdminPhone(e.target.value)} 
+              placeholder="10-digit mobile"
+              style={inputStyle} 
+            />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--primary-dark)', marginBottom: '0.25rem' }}>New Master Password (Optional)</label>
+            <input 
+              type="password" 
+              value={adminPassword} 
+              onChange={e => setAdminPassword(e.target.value)} 
+              placeholder="Enter new password (min 6 chars)"
+              style={inputStyle} 
+            />
+          </div>
+          <div>
+            <button
+              type="button"
+              onClick={handleUpdateAdminCredentials}
+              disabled={isUpdatingAdmin}
+              className="btn-primary"
+              style={{ width: '100%', padding: '0.625rem 1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', fontSize: '0.875rem' }}
+            >
+              <Lock size={15} /> {isUpdatingAdmin ? 'Saving...' : 'Update Admin Credentials'}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+        <div>
+          <h2 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--primary-dark)', margin: 0 }}>Staff & Field Executives</h2>
+          <p style={{ margin: '0.2rem 0 0', fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>Manage employee login credentials, permissions, and active status.</p>
+        </div>
         <button className="btn-primary" onClick={openAdd} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem 1.5rem' }}>
           <Plus size={18} /> Add Staff
         </button>

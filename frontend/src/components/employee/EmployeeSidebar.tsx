@@ -3,14 +3,17 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { 
   LayoutDashboard, FileText, 
   PhoneCall, CreditCard,
-  User, LogOut, Building, CalendarClock,
-  X, ChevronLeft, ChevronRight, ClipboardList
+  User, LogOut, CalendarClock,
+  X, ChevronLeft, ChevronRight, ClipboardList,
+  FileSpreadsheet, Receipt
 } from 'lucide-react';
 
 const menuItems = [
   { title: 'Dashboard', icon: <LayoutDashboard size={20} strokeWidth={1.5} />, path: '/employee' },
   { title: 'My Applications', icon: <FileText size={20} strokeWidth={1.5} />, path: '/employee/applications' },
   { title: 'Documents', icon: <ClipboardList size={20} strokeWidth={1.5} />, path: '/employee/documents' },
+  { title: 'Quotations', icon: <FileSpreadsheet size={20} strokeWidth={1.5} />, path: '/employee/quotations' },
+  { title: 'Expenses', icon: <Receipt size={20} strokeWidth={1.5} />, path: '/employee/expenses' },
   { title: 'Payments', icon: <CreditCard size={20} strokeWidth={1.5} />, path: '/employee/payments' },
   { title: 'Attendance', icon: <CalendarClock size={20} strokeWidth={1.5} />, path: '/employee/attendance' },
   { title: 'Enquiries', icon: <PhoneCall size={20} strokeWidth={1.5} />, path: '/employee/followups' },
@@ -74,8 +77,8 @@ const EmployeeSidebar: React.FC<EmployeeSidebarProps> = ({
         gap: isCollapsed ? '0.75rem' : '0.5rem'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', justifyContent: isCollapsed ? 'center' : 'flex-start' }}>
-          <div style={{ backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: '6px', padding: '6px', display: 'flex', flexShrink: 0 }}>
-            <Building color="var(--primary)" size={24} />
+          <div style={{ backgroundColor: '#fff', borderRadius: '4px', padding: '2px', display: 'flex', flexShrink: 0 }}>
+            <img src="/assets/logo.jpeg" alt="C.B. Building Approvals Logo" style={{ width: '36px', height: '36px', objectFit: 'contain' }} />
           </div>
           <div className="sidebar-logo-text">
             <div style={{ fontWeight: 700, fontSize: '0.95rem', letterSpacing: '0.04em', color: '#fff', lineHeight: 1.1 }}>CB APPROVALS</div>

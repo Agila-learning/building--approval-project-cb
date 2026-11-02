@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { CheckCircle, RefreshCcw, Camera, FileText, Plus, X, PenTool, QrCode, Building, CreditCard, Upload, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { getApiUrl } from '../../config/api';
+import { getApiUrl, uploadFileToCloudinary } from '../../config/api';
 
 export interface DocumentChecklistItem {
   key: string;
@@ -26,7 +26,6 @@ export const defaultRequiredDocuments: DocumentChecklistItem[] = [
 const Settings: React.FC = () => {
   const [profilePic, setProfilePic] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
   
   // File types & expenses
   const defaultFileTypes = ['Building Plan Approval', 'Layout Approval', 'Completion Certificate', 'Patta Transfer'];
@@ -87,8 +86,6 @@ const Settings: React.FC = () => {
       }
     } catch (e) {
       console.warn('Could not fetch backend settings, falling back to localStorage:', e);
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -133,12 +130,25 @@ const Settings: React.FC = () => {
     }
   };
 
-  const handleQrUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleQrUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      const toastId = toast.loading('Processing QR code image...');
+      try {
+        const cloudUrl = await uploadFileToCloudinary(file);
+        if (cloudUrl) {
+          setBankDetails(prev => ({ ...prev, qrCodeUrl: cloudUrl }));
+          toast.success('Company QR Code uploaded successfully!', { id: toastId });
+          return;
+        }
+      } catch (err) {
+        console.warn('Cloudinary upload fallback to data URL:', err);
+      }
+
       const reader = new FileReader();
       reader.onloadend = () => {
         setBankDetails(prev => ({ ...prev, qrCodeUrl: reader.result as string }));
+        toast.success('Company QR Code attached!', { id: toastId });
       };
       reader.readAsDataURL(file);
     }
@@ -217,15 +227,23 @@ const Settings: React.FC = () => {
     // Persist to backend settings API
     try {
       const apiUrl = getApiUrl();
+      const userRole = localStorage.getItem('userRole') || 'ADMIN';
+      const userName = localStorage.getItem('loggedInUser') || 'Admin';
+
       await fetch(`${apiUrl}/settings`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-user-role': userRole,
+          'x-user-name': userName
+        },
         body: JSON.stringify({
           ...bankDetails,
           adminSignature,
           adminName,
           adminDesignation,
-          requiredDocuments
+          requiredDocuments,
+          adminRole: 'ADMIN'
         })
       });
       toast.success('Settings, Required Documents & Official Signature saved permanently!');

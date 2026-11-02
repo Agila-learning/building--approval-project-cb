@@ -192,7 +192,17 @@ const ApplicationPDF: React.FC = () => {
       {/* Action Control Bar - Hidden during Print */}
       <div className="no-print" style={{ maxWidth: '850px', margin: '0 auto 1.25rem auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem', backgroundColor: '#ffffff', padding: '0.85rem 1.25rem', borderRadius: '0.5rem', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
         <button
-          onClick={() => navigate(-1)}
+          onClick={() => {
+            const userRole = localStorage.getItem('userRole') || '';
+            const isEmployee = userRole.toUpperCase() === 'STAFF' || localStorage.getItem('loggedInUser') !== 'Admin';
+            const targetUrl = isEmployee ? (id ? `/employee/applications/${id}` : '/employee/applications') : (id ? `/admin/applications/${id}` : '/admin/applications');
+
+            try {
+              window.close();
+            } catch (e) {}
+
+            navigate(targetUrl);
+          }}
           style={{
             display: 'inline-flex',
             alignItems: 'center',

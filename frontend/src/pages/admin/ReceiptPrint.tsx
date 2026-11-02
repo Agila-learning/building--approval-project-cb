@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { Phone, Mail, Globe, CheckCircle2, Printer, ArrowLeft, Download, ShieldCheck, MapPin } from 'lucide-react';
 import { getApiUrl } from '../../config/api';
 
 const ReceiptPrint: React.FC = () => {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const [receiptData, setReceiptData] = useState<any>(null);
   const [settings, setSettings] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -130,7 +131,17 @@ const ReceiptPrint: React.FC = () => {
       {/* Top Controls Bar */}
       <div className="no-print" style={{ maxWidth: '210mm', width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
         <button
-          onClick={() => window.history.back()}
+          onClick={() => {
+            const userRole = localStorage.getItem('userRole') || '';
+            const isEmployee = userRole.toUpperCase() === 'STAFF' || localStorage.getItem('loggedInUser') !== 'Admin';
+            const targetUrl = isEmployee ? (id ? `/employee/applications/${id}` : '/employee/applications') : (id ? `/admin/applications/${id}` : '/admin/applications');
+
+            try {
+              window.close();
+            } catch (e) {}
+
+            navigate(targetUrl);
+          }}
           style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', padding: '0.5rem 0.85rem', borderRadius: '0.375rem', border: '1px solid #cbd5e1', backgroundColor: '#ffffff', color: '#334155', fontSize: '0.875rem', fontWeight: 600, cursor: 'pointer' }}
         >
           <ArrowLeft size={16} /> Back

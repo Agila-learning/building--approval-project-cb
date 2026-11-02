@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { Upload, CheckCircle2, FileText, ShieldCheck, AlertCircle, X, HelpCircle, Lock, Clock } from 'lucide-react';
+import { useParams } from 'react-router-dom';
+import { Upload, CheckCircle2, FileText, ShieldCheck, AlertCircle, X, HelpCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { uploadFileToCloudinary, getApiUrl } from '../../config/api';
 import { validateUploadFile } from '../../utils/imageValidation';
@@ -8,10 +8,10 @@ import { validateUploadFile } from '../../utils/imageValidation';
 const CustomerUpload: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const [isSubmitted, setIsSubmitted] = useState(false);
-  const [isPaymentVerified, setIsPaymentVerified] = useState<boolean | null>(null);
   const [requestedDocIds, setRequestedDocIds] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
+  // Default documents fallback
   // Default documents fallback
   const DEFAULT_DOCS = [
     { id: 'sale_deed', name: 'Land Document / Sale Deed', required: true, fileName: null, status: 'Missing' },
@@ -21,7 +21,9 @@ const CustomerUpload: React.FC = () => {
     { id: 'aadhar', name: 'Aadhaar Card', required: true, fileName: null, status: 'Missing' },
     { id: 'photo', name: 'Passport Size Photograph', required: true, fileName: null, status: 'Missing' },
     { id: 'signature', name: 'Customer Signature', required: true, fileName: null, status: 'Missing' },
-    { id: 'building_plan', name: 'Proposed Building Plan', required: false, fileName: null, status: 'Missing' }
+    { id: 'building_plan', name: 'Proposed Building Plan', required: false, fileName: null, status: 'Missing' },
+    { id: 'working_drawing', name: 'Working Drawing / Blueprint (Optional)', required: false, fileName: null, status: 'Missing' },
+    { id: 'other_document', name: 'Other Supporting Document (Optional)', required: false, fileName: null, status: 'Missing' }
   ];
 
   // Track uploaded documents
@@ -29,62 +31,86 @@ const CustomerUpload: React.FC = () => {
 
   useEffect(() => {
     const docMapping: any = {
+      'sale_deed': 'SALE DEED',
       'SALE DEED': 'sale_deed',
       'LAND DOCUMENT': 'sale_deed',
+      'patta': 'PATTA',
       'PATTA': 'patta',
+      'fmb': 'FMB',
       'FMB': 'fmb',
+      'pan': 'PAN CARD',
       'PAN CARD': 'pan',
+      'aadhar': 'AADHAR CARD',
       'AADHAR CARD': 'aadhar',
       'AADHAAR CARD': 'aadhar',
+      'photo': 'CUSTOMER PHOTOGRAPH',
       'CUSTOMER PHOTOGRAPH': 'photo',
+      'signature': 'CUSTOMER SIGNATURE',
       'CUSTOMER SIGNATURE': 'signature',
       'PROPERTY SIGNATURE': 'signature',
-      'BUILDING PLAN': 'building_plan'
+      'building_plan': 'BUILDING PLAN',
+      'BUILDING PLAN': 'building_plan',
+      'working_drawing': 'WORKING DRAWING',
+      'WORKING DRAWING': 'working_drawing',
+      'STRUCTURAL BLUEPRINT': 'working_drawing',
+      'other_document': 'OTHER DOCUMENT',
+      'OTHER DOCUMENT': 'other_document',
+      'ADDITIONAL DOCUMENT': 'other_document'
     };
 
     const loadDocs = async () => {
-      // 1. Fetch dynamic document checklist from backend settings if available
+      // 1. Fetch dynamic document checklist from backend settings or localStorage
       let configuredList = DEFAULT_DOCS;
       try {
         const apiUrl = getApiUrl();
         const settingsRes = await fetch(`${apiUrl}/settings`);
+        let reqDocs: any[] = [];
         if (settingsRes.ok) {
           const settingsData = await settingsRes.json();
           if (Array.isArray(settingsData.requiredDocuments) && settingsData.requiredDocuments.length > 0) {
-            configuredList = settingsData.requiredDocuments.map((item: any) => ({
-              id: item.id,
-              name: item.name,
-              required: Boolean(item.required),
+            reqDocs = settingsData.requiredDocuments;
+          }
+        }
+        if (reqDocs.length === 0) {
+          const savedChecklist = localStorage.getItem('requiredDocuments') || localStorage.getItem('admin_required_documents');
+          if (savedChecklist) {
+            try {
+              const parsed = JSON.parse(savedChecklist);
+              if (Array.isArray(parsed) && parsed.length > 0) {
+                reqDocs = parsed;
+              }
+            } catch (e) {}
+          }
+        }
+
+        if (reqDocs.length > 0) {
+          configuredList = reqDocs.map((item: any) => {
+            const rawKey = (item.key || item.id || item.label || 'doc').toString();
+            const docId = rawKey.toLowerCase().replace(/[^a-z0-9]+/g, '_');
+            const docName = item.label || item.name || item.key || 'Custom Document';
+            docMapping[docId] = rawKey.toUpperCase();
+            docMapping[rawKey.toUpperCase()] = docId;
+            return {
+              id: docId,
+              name: docName,
+              required: item.required !== undefined ? Boolean(item.required) : false,
+              description: item.description || '',
               fileName: null,
               status: 'Missing'
-            }));
+            };
+          });
+
+          // Ensure optional slots for drawings & other docs
+          if (!configuredList.some(d => d.id === 'working_drawing' || d.id.includes('drawing'))) {
+            configuredList.push({ id: 'working_drawing', name: 'Working Drawing / Blueprint (Optional)', required: false, fileName: null, status: 'Missing' });
+          }
+          if (!configuredList.some(d => d.id === 'other_document' || d.id.includes('other'))) {
+            configuredList.push({ id: 'other_document', name: 'Other Supporting Document (Optional)', required: false, fileName: null, status: 'Missing' });
           }
         }
       } catch (err) {
-        // Check localStorage fallback
-        const savedChecklist = localStorage.getItem('admin_required_documents');
-        if (savedChecklist) {
-          try {
-            const parsed = JSON.parse(savedChecklist);
-            if (Array.isArray(parsed) && parsed.length > 0) {
-              configuredList = parsed.map((item: any) => ({
-                id: item.id,
-                name: item.name,
-                required: Boolean(item.required),
-                fileName: null,
-                status: 'Missing'
-              }));
-            }
-          } catch (e) {}
-        }
+        console.warn('Could not load dynamic settings checklist, using defaults:', err);
       }
-
-      // Populate mappings for custom items
-      configuredList.forEach(item => {
-        if (!docMapping[item.name.toUpperCase()]) {
-          docMapping[item.name.toUpperCase()] = item.id;
-        }
-      });
 
       const savedDocs = localStorage.getItem(`customerDocs_${id}`);
       let currentDocs = configuredList;
@@ -117,12 +143,6 @@ const CustomerUpload: React.FC = () => {
           const res = await fetch(`${apiUrl}/cases/${id}`);
           if (res.ok) {
             const apiCase = await res.json();
-
-            // Phase 6 & 7: Check that fee payment has been verified before enabling upload
-            const pStatus = (apiCase.fullData?.payment?.paymentStatus || '').toUpperCase();
-            const pAmount = parseFloat(apiCase.fullData?.payment?.amount || apiCase.fullData?.paidAmount || '0');
-            const isPaid = pStatus === 'PAID' || apiCase.status === 'PAYMENT_COMPLETED' || pAmount > 0;
-            setIsPaymentVerified(isPaid);
 
             if (apiCase.requestedReuploads && apiCase.requestedReuploads.length > 0) {
               reqList = apiCase.requestedReuploads;
@@ -402,7 +422,7 @@ const CustomerUpload: React.FC = () => {
 
 
   const handleView = (doc: any) => {
-    setViewingDoc({ name: doc.name, fileData: doc.fileData });
+    setViewingDoc({ name: doc.name, fileData: doc.fileData || doc.url || doc.file });
   };
 
   return (
@@ -474,33 +494,48 @@ const CustomerUpload: React.FC = () => {
                 </div>
               </div>
               
-              <div>
-                {isSubmitted && doc.status !== 'Needs Reupload' ? (
-                  doc.fileName || doc.file ? (
-                    <button onClick={() => handleView(doc)} style={{ padding: '0.5rem 1rem', borderRadius: '0.5rem', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-surface)', color: 'var(--primary-dark)', fontSize: '0.875rem', fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <FileText size={16} /> View
-                    </button>
-                  ) : (
-                    <span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>Not Provided</span>
-                  )
-                ) : (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                {(doc.fileName || doc.file || doc.fileData) && (
                   <button 
+                    type="button"
+                    onClick={() => handleView(doc)} 
+                    style={{ 
+                      padding: '0.5rem 0.85rem', 
+                      borderRadius: '0.5rem', 
+                      border: '1px solid var(--border-color)', 
+                      backgroundColor: 'var(--bg-surface)', 
+                      color: 'var(--primary-dark)', 
+                      fontSize: '0.85rem', 
+                      fontWeight: 600, 
+                      cursor: 'pointer', 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: '0.35rem' 
+                    }}
+                  >
+                    <FileText size={15} /> View
+                  </button>
+                )}
+
+                {(!isSubmitted || doc.status === 'Needs Reupload') && (
+                  <button 
+                    type="button"
                     onClick={() => triggerUpload(doc.id)}
                     style={{ 
                       padding: '0.5rem 1rem', 
                       borderRadius: '0.5rem', 
-                      border: doc.fileName || doc.file ? '1px solid var(--border-color)' : 'none', 
-                      backgroundColor: doc.fileName || doc.file ? 'var(--bg-surface)' : 'var(--primary)', 
-                      color: doc.fileName || doc.file ? 'var(--primary-dark)' : 'var(--bg-surface)', 
-                      fontSize: '0.875rem', 
-                      fontWeight: 500, 
-                      cursor: 'pointer',
+                      border: (doc.fileName || doc.file || doc.fileData) ? '1px solid var(--border-color)' : 'none', 
+                      backgroundColor: (doc.fileName || doc.file || doc.fileData) ? 'white' : 'var(--primary)', 
+                      color: (doc.fileName || doc.file || doc.fileData) ? 'var(--primary-dark)' : 'white', 
+                      fontSize: '0.85rem', 
+                      fontWeight: 600, 
+                      cursor: 'pointer', 
                       display: 'flex', 
                       alignItems: 'center', 
-                      gap: '0.5rem' 
+                      gap: '0.35rem' 
                     }}
                   >
-                    <Upload size={16} /> {doc.status === 'Needs Reupload' ? 'Reupload' : doc.fileName || doc.file ? 'Change File' : 'Upload'}
+                    <Upload size={15} /> {doc.status === 'Needs Reupload' ? 'Reupload' : (doc.fileName || doc.file || doc.fileData) ? 'Replace' : 'Upload'}
                   </button>
                 )}
               </div>

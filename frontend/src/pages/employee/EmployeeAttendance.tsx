@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { CalendarClock, CheckCircle2, XCircle } from 'lucide-react';
+import { getApiUrl } from '../../config/api';
 
 const EmployeeAttendance: React.FC = () => {
   const [employeeName, setEmployeeName] = useState('Employee');
@@ -9,12 +10,36 @@ const EmployeeAttendance: React.FC = () => {
     const user = localStorage.getItem('loggedInUser') || 'Employee';
     setEmployeeName(user);
     
+    // 1. Initial local load
     const records = JSON.parse(localStorage.getItem('employeeAttendance') || '[]');
-    const userRecords = records.filter((r: any) => r.name === user);
-    // Sort descending by date
+    const userRecords = records.filter((r: any) => r.name?.toLowerCase() === user.toLowerCase());
     userRecords.sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    
     setMyAttendance(userRecords);
+
+    // 2. Load from backend API
+    const fetchApiAttendance = async () => {
+      try {
+        const res = await fetch(`${getApiUrl()}/attendance?staffName=${encodeURIComponent(user)}`);
+        if (res.ok) {
+          const apiData = await res.json();
+          if (Array.isArray(apiData) && apiData.length > 0) {
+            // Merge with local records
+            const merged = [...apiData];
+            records.forEach((lr: any) => {
+              if (lr.name?.toLowerCase() === user.toLowerCase() && !merged.some(m => m.date === lr.date)) {
+                merged.push(lr);
+              }
+            });
+            merged.sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
+            setMyAttendance(merged);
+          }
+        }
+      } catch (err) {
+        console.warn('Could not fetch attendance from API:', err);
+      }
+    };
+
+    fetchApiAttendance();
   }, []);
 
   return (
@@ -24,7 +49,7 @@ const EmployeeAttendance: React.FC = () => {
           My Attendance
         </h2>
         <p style={{ color: 'var(--text-secondary)', fontSize: '1rem' }}>
-          View your check-in and check-out history.
+          View check-in and check-out logs for {employeeName}.
         </p>
       </div>
 

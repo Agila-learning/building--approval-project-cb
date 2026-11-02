@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Search, UserCheck, Calendar, Clock, Download, Users, UserX, CalendarClock, MoreVertical, Filter, X } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { getApiUrl } from '../../config/api';
 
 const AttendanceList: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -8,17 +9,39 @@ const AttendanceList: React.FC = () => {
   const [attendance, setAttendance] = useState<any[]>([]);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
 
-  const loadAttendance = () => {
-    const records = JSON.parse(localStorage.getItem('employeeAttendance') || '[]');
-    // Filter for selected date
-    const dateRecords = records.filter((r: any) => r.date === selectedDate);
+  const loadAttendance = async () => {
+    const localRecords = JSON.parse(localStorage.getItem('employeeAttendance') || '[]');
+    const dateRecords = localRecords.filter((r: any) => r.date === selectedDate);
     setAttendance(dateRecords);
+
+    try {
+      const res = await fetch(`${getApiUrl()}/attendance?date=${selectedDate}`);
+      if (res.ok) {
+        const apiRecords = await res.json();
+        if (Array.isArray(apiRecords)) {
+          // Merge api records with local records to ensure complete real-time view
+          const merged = [...apiRecords];
+          dateRecords.forEach((lr: any) => {
+            if (!merged.some(m => m.id === lr.id || m.name?.toLowerCase() === lr.name?.toLowerCase())) {
+              merged.push(lr);
+            }
+          });
+          setAttendance(merged);
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to fetch attendance from API:', err);
+    }
   };
 
   useEffect(() => {
     loadAttendance();
+    const interval = setInterval(loadAttendance, 5000);
     window.addEventListener('storage', loadAttendance);
-    return () => window.removeEventListener('storage', loadAttendance);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('storage', loadAttendance);
+    };
   }, [selectedDate]);
 
   // Export Modal State

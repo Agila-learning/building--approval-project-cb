@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Filter, Plus, Copy, MessageCircle, Link as LinkIcon, CheckCircle2 } from 'lucide-react';
+import { Search, Filter, Plus, Copy, MessageCircle, Link as LinkIcon, CheckCircle2, Eye, Download, X, FileText, FileUp } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getApiUrl } from '../../config/api';
 
@@ -12,6 +12,7 @@ const MyApplications: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState('All');
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [viewingAppDocs, setViewingAppDocs] = useState<any | null>(null);
 
   const fetchAssignedCases = useCallback(async (userName: string, staffIdVal: string) => {
     try {
@@ -77,8 +78,50 @@ const MyApplications: React.FC = () => {
 
   const tabs = ['All', 'In Progress', 'Documents Pending', 'Verification', 'Approved'];
 
+  const matchesTab = (status: string, tab: string) => {
+    if (tab === 'All') return true;
+    const s = (status || '').toUpperCase();
+    if (tab === 'Documents Pending') {
+      return ['DOCUMENT_COLLECTION', 'DOCUMENTS_PENDING', 'DOCUMENTS PENDING', 'INTAKE', 'ACTION_NEEDED', 'ACTION REQUIRED', 'NEW', 'DRAFT'].includes(s);
+    }
+    if (tab === 'Verification') {
+      return ['DOCUMENTS_VERIFICATION', 'SCRUTINY', 'SITE INSPECTION', 'UNDER REVIEW', 'SUBMITTED', 'SUBMITTED_FOR_APPROVAL', 'VERIFICATION', 'GOV VERIFICATION', 'WORKER VERIFIED'].includes(s);
+    }
+    if (tab === 'Approved') {
+      return ['APPROVED', 'COMPLETED'].includes(s);
+    }
+    if (tab === 'In Progress') {
+      return !['APPROVED', 'COMPLETED', 'REJECTED'].includes(s);
+    }
+    return s === tab.toUpperCase();
+  };
+
+  const formatStatus = (status: string) => {
+    const s = (status || '').toUpperCase();
+    if (['APPROVED', 'COMPLETED'].includes(s)) return 'Approved';
+    if (['DOCUMENT_COLLECTION', 'DOCUMENTS_PENDING', 'INTAKE', 'NEW', 'DRAFT'].includes(s)) return 'Documents Pending';
+    if (['DOCUMENTS_VERIFICATION', 'WORKER VERIFIED', 'SCRUTINY', 'VERIFICATION'].includes(s)) return 'Verification';
+    if (['SUBMITTED', 'SUBMITTED_FOR_APPROVAL', 'UNDER REVIEW'].includes(s)) return 'Gov Review';
+    if (s === 'REJECTED') return 'Rejected';
+    return status?.replace(/_/g, ' ') || 'In Progress';
+  };
+
+  const getStatusBadgeStyle = (status: string) => {
+    const s = (status || '').toUpperCase();
+    if (['APPROVED', 'COMPLETED'].includes(s)) {
+      return { backgroundColor: 'rgba(34, 160, 107, 0.1)', color: 'var(--success-green)', border: '1px solid rgba(34, 160, 107, 0.2)' };
+    }
+    if (['DOCUMENT_COLLECTION', 'DOCUMENTS_PENDING', 'INTAKE', 'NEW'].includes(s)) {
+      return { backgroundColor: 'rgba(239, 68, 68, 0.1)', color: 'var(--error-red)', border: '1px solid rgba(239, 68, 68, 0.2)' };
+    }
+    if (['DOCUMENTS_VERIFICATION', 'WORKER VERIFIED', 'SCRUTINY'].includes(s)) {
+      return { backgroundColor: 'rgba(214, 167, 86, 0.15)', color: '#b45309', border: '1px solid rgba(214, 167, 86, 0.3)' };
+    }
+    return { backgroundColor: 'rgba(30, 58, 138, 0.08)', color: 'var(--primary)', border: '1px solid rgba(30, 58, 138, 0.2)' };
+  };
+
   const filteredApps = applications.filter(app => {
-    if (activeTab !== 'All' && app.status !== activeTab) return false;
+    if (!matchesTab(app.status, activeTab)) return false;
     
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
@@ -95,7 +138,9 @@ const MyApplications: React.FC = () => {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
         <div>
           <h2 className="heading-2" style={{ marginBottom: '0.25rem' }}>My Applications</h2>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Manage and process applications assigned to you.</p>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
+            Assigned applications for <strong>{employeeName}</strong> {employeeId ? `(${employeeId})` : ''}
+          </p>
         </div>
         <button className="btn-primary" onClick={() => navigate('/employee/applications/new')} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           <Plus size={18} /> New Application
@@ -200,18 +245,38 @@ const MyApplications: React.FC = () => {
                   </td>
                   <td style={{ padding: '1rem 1.5rem' }}>
                     <span style={{ 
-                      padding: '0.25rem 0.5rem', 
+                      padding: '0.3rem 0.6rem', 
                       borderRadius: '4px', 
                       fontSize: '0.75rem', 
                       fontWeight: 600, 
-                      backgroundColor: app.status === 'Approved' ? 'rgba(47, 125, 90, 0.1)' : app.status === 'Documents Pending' ? 'rgba(185, 74, 72, 0.1)' : 'rgba(30, 58, 138, 0.05)', 
-                      color: app.status === 'Approved' ? 'var(--success-green)' : app.status === 'Documents Pending' ? 'var(--error-red)' : 'var(--primary)' 
+                      display: 'inline-block',
+                      ...getStatusBadgeStyle(app.status)
                     }}>
-                      {app.status}
+                      {formatStatus(app.status)}
                     </span>
                   </td>
                   <td style={{ padding: '1rem 1.5rem', textAlign: 'right' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.5rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.4rem', flexWrap: 'wrap' }}>
+                      <button 
+                        onClick={() => setViewingAppDocs(app)}
+                        title="View Customer Uploaded Documents"
+                        style={{
+                          backgroundColor: 'var(--bg-secondary)',
+                          color: 'var(--primary-dark)',
+                          border: '1px solid var(--border-color)',
+                          borderRadius: '0.375rem',
+                          padding: '0.4rem 0.65rem',
+                          fontSize: '0.75rem',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.3rem'
+                        }}
+                      >
+                        <Eye size={13} /> View Docs
+                      </button>
+
                       <button 
                         onClick={() => handleShareWhatsApp(app)}
                         title="Send Upload Link via WhatsApp"
@@ -251,7 +316,7 @@ const MyApplications: React.FC = () => {
 
                       <button 
                         className="btn-primary" 
-                        style={{ padding: '0.4rem 1rem', fontSize: '0.75rem' }} 
+                        style={{ padding: '0.4rem 0.85rem', fontSize: '0.75rem' }} 
                         onClick={() => navigate(`/employee/applications/${app.id}`)}
                       >
                         Process
@@ -270,6 +335,132 @@ const MyApplications: React.FC = () => {
           </table>
         </div>
       </div>
+
+      {/* Customer Uploaded Documents Modal */}
+      {viewingAppDocs && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15, 23, 42, 0.75)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem', backdropFilter: 'blur(3px)' }}>
+          <div style={{ backgroundColor: 'white', borderRadius: '0.75rem', width: '100%', maxWidth: '820px', maxHeight: '85vh', display: 'flex', flexDirection: 'column', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)', overflow: 'hidden' }}>
+            <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f8fafc' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1.125rem', fontWeight: 700, color: 'var(--primary-dark)' }}>
+                  Customer Uploaded Documents: {viewingAppDocs.id}
+                </h3>
+                <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
+                  Applicant: <strong>{viewingAppDocs.customer}</strong> • Mobile: {viewingAppDocs.mobile || '—'}
+                </p>
+              </div>
+              <button 
+                onClick={() => setViewingAppDocs(null)} 
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', padding: '0.25rem' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div style={{ flex: 1, overflowY: 'auto', padding: '1.5rem' }}>
+              {(() => {
+                const files = viewingAppDocs.uploadedFiles || {};
+                const localDocsStr = localStorage.getItem(`customerDocs_${viewingAppDocs.id}`);
+                const localDocs = localDocsStr ? JSON.parse(localDocsStr) : [];
+                
+                const docEntries: { name: string; url: string }[] = [];
+                Object.entries(files).forEach(([k, v]) => {
+                  if (v && typeof v === 'string') {
+                    docEntries.push({ name: k.replace(/_/g, ' '), url: v });
+                  }
+                });
+
+                localDocs.forEach((d: any) => {
+                  const url = d.fileData || d.url || d.file;
+                  if (url && !docEntries.some(e => e.name.toLowerCase() === d.name.toLowerCase())) {
+                    docEntries.push({ name: d.name, url });
+                  }
+                });
+
+                if (docEntries.length === 0) {
+                  return (
+                    <div style={{ textAlign: 'center', padding: '3rem 1rem', color: 'var(--text-secondary)' }}>
+                      <FileUp size={48} color="#cbd5e1" style={{ margin: '0 auto 1rem' }} />
+                      <h4 style={{ margin: '0 0 0.5rem 0', color: 'var(--primary-dark)', fontSize: '1rem', fontWeight: 600 }}>No documents uploaded yet</h4>
+                      <p style={{ margin: 0, fontSize: '0.875rem' }}>The customer has not uploaded files yet. You can share the upload link via WhatsApp.</p>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
+                    {docEntries.map((doc, idx) => {
+                      const isPdf = doc.url.endsWith('.pdf') || doc.url.startsWith('data:application/pdf');
+                      const isImg = doc.url.startsWith('data:image/') || doc.url.match(/\.(jpg|jpeg|png|webp|gif)($|\?)/i) || (doc.url.includes('cloudinary.com') && !isPdf);
+
+                      return (
+                        <div key={idx} style={{ border: '1px solid var(--border-color)', borderRadius: '0.5rem', padding: '1rem', backgroundColor: '#f8fafc', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                          <div style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--primary-dark)', minHeight: '36px', display: 'flex', alignItems: 'center' }}>
+                            {doc.name}
+                          </div>
+                          
+                          <div style={{ height: '140px', backgroundColor: '#e2e8f0', borderRadius: '0.375rem', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            {isImg ? (
+                              <img src={doc.url} alt={doc.name} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                            ) : isPdf ? (
+                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', color: '#0284c7' }}>
+                                <FileText size={40} />
+                                <span style={{ fontSize: '0.75rem', fontWeight: 600, marginTop: '0.35rem' }}>PDF Document</span>
+                              </div>
+                            ) : (
+                              <FileText size={40} color="var(--text-secondary)" />
+                            )}
+                          </div>
+
+                          <div style={{ display: 'flex', gap: '0.5rem', marginTop: 'auto' }}>
+                            <a 
+                              href={doc.url} 
+                              target="_blank" 
+                              rel="noopener noreferrer" 
+                              style={{ flex: 1, padding: '0.4rem', backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-color)', borderRadius: '0.25rem', textAlign: 'center', color: 'var(--primary)', fontSize: '0.75rem', fontWeight: 600, textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.25rem' }}
+                            >
+                              <Eye size={13} /> View
+                            </a>
+                            <a 
+                              href={doc.url} 
+                              download={doc.name} 
+                              target="_blank" 
+                              rel="noopener noreferrer" 
+                              style={{ flex: 1, padding: '0.4rem', backgroundColor: 'var(--primary)', color: 'white', borderRadius: '0.25rem', textAlign: 'center', fontSize: '0.75rem', fontWeight: 600, textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.25rem' }}
+                            >
+                              <Download size={13} /> Download
+                            </a>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+            </div>
+
+            <div style={{ padding: '1rem 1.5rem', borderTop: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f8fafc' }}>
+              <button 
+                onClick={() => setViewingAppDocs(null)} 
+                style={{ padding: '0.5rem 1.25rem', backgroundColor: '#e2e8f0', color: '#475569', border: 'none', borderRadius: '0.375rem', fontWeight: 600, fontSize: '0.875rem', cursor: 'pointer' }}
+              >
+                Close
+              </button>
+              <button 
+                className="btn-primary" 
+                onClick={() => {
+                  const targetId = viewingAppDocs.id;
+                  setViewingAppDocs(null);
+                  navigate(`/employee/applications/${targetId}`);
+                }}
+                style={{ padding: '0.5rem 1.25rem', fontSize: '0.875rem' }}
+              >
+                Process This Application →
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

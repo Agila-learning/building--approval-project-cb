@@ -74,6 +74,16 @@ const ApplicationsList: React.FC = () => {
     }
   }, [queryParam]);
 
+  const computeDaysElapsed = (rawDate: any, status?: string, updatedDate?: any) => {
+    if (!rawDate) return 0;
+    const start = new Date(rawDate).getTime();
+    if (isNaN(start)) return 0;
+    const isCompleted = ['Rejected', 'Approved', 'Completed', 'COMPLETED'].includes(status || '');
+    const end = isCompleted && updatedDate && !isNaN(new Date(updatedDate).getTime()) ? new Date(updatedDate).getTime() : Date.now();
+    const diffDays = Math.floor(Math.max(0, end - start) / (1000 * 60 * 60 * 24));
+    return diffDays;
+  };
+
   const fetchCases = React.useCallback(async () => {
     try {
       const apiUrl = getApiUrl();
@@ -84,27 +94,29 @@ const ApplicationsList: React.FC = () => {
         const localCases = localCasesStr ? JSON.parse(localCasesStr).filter((c: any) => c.type !== 'Lead') : [];
         const allCases = [...casesData, ...localCases];
         
-        let mappedApps = allCases.map((c: any) => ({
-          id: c.application_number || c.id,
-          mongoId: c.id,
-          customer: c.property?.owner_name || c.fullData?.customerName || 'Unknown',
-          mobile: c.property?.owner_phone || c.fullData?.mobile || '',
-          location: c.fullData?.propertyDetails?.city || c.property?.city || c.property?.jurisdiction || c.property?.village || '',
-          type: 'Building',
-          appType: c.approval_type || c.fullData?.serviceType || 'Building Approval',
-          status: getApplicationStatus(c.application_number || c.id, c.status, c),
-          rawStatus: c.status,
-          created_at: c.created_at || c.createdAt || c.date,
-          staff: c.assigned_staff?.name || c.fullData?.staff || 'Unassigned',
-          date: c.created_at ? new Date(c.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—',
-          days: (() => {
-               if (!c.created_at) return 0;
-               const start = new Date(c.created_at).getTime();
-               const isCompleted = ['Rejected', 'Approved', 'Completed'].includes(c.status);
-               const end = isCompleted && c.updated_at ? new Date(c.updated_at).getTime() : new Date().getTime();
-               return Math.ceil(Math.max(0, end - start) / (1000 * 60 * 60 * 24));
-          })()
-        }));
+        let mappedApps = allCases.map((c: any) => {
+          const appDateRaw = c.created_at || c.createdAt || c.date;
+          const appDateDisplay = appDateRaw && !isNaN(new Date(appDateRaw).getTime()) 
+            ? new Date(appDateRaw).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) 
+            : '—';
+          const days = computeDaysElapsed(appDateRaw, c.status, c.updated_at || c.updatedAt);
+
+          return {
+            id: c.application_number || c.id,
+            mongoId: c.id,
+            customer: c.property?.owner_name || c.fullData?.customerName || 'Unknown',
+            mobile: c.property?.owner_phone || c.fullData?.mobile || '',
+            location: c.fullData?.propertyDetails?.city || c.property?.city || c.property?.jurisdiction || c.property?.village || '',
+            type: 'Building',
+            appType: c.approval_type || c.fullData?.serviceType || 'Building Approval',
+            status: getApplicationStatus(c.application_number || c.id, c.status, c),
+            rawStatus: c.status,
+            created_at: appDateRaw,
+            staff: c.assigned_staff?.name || c.fullData?.staff || 'Unassigned',
+            date: appDateDisplay,
+            days
+          };
+        });
         
         // Remove duplicates based on ID
         mappedApps = mappedApps.filter((app: any, index: number, self: any[]) => 
@@ -116,21 +128,29 @@ const ApplicationsList: React.FC = () => {
         const localCasesStr = localStorage.getItem('mock_saved_cases');
         const localCases = localCasesStr ? JSON.parse(localCasesStr).filter((c: any) => c.type !== 'Lead') : [];
         if (localCases.length > 0) {
-          const mappedApps = localCases.map((c: any) => ({
-            id: c.application_number || c.id,
-            mongoId: c.id,
-            customer: c.property?.owner_name || c.fullData?.customerName || 'Unknown',
-            mobile: c.property?.owner_phone || c.fullData?.mobile || '',
-            location: c.fullData?.propertyDetails?.city || c.property?.city || c.property?.jurisdiction || c.property?.village || '',
-            type: 'Building',
-            appType: c.approval_type || c.fullData?.serviceType || 'Building Approval',
-            status: getApplicationStatus(c.application_number || c.id, c.status, c),
-            rawStatus: c.status,
-            created_at: c.created_at || c.createdAt || c.date,
-            staff: c.assigned_staff?.name || c.fullData?.staff || 'Unassigned',
-            date: c.created_at ? new Date(c.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—',
-            days: 0
-          }));
+          const mappedApps = localCases.map((c: any) => {
+            const appDateRaw = c.created_at || c.createdAt || c.date;
+            const appDateDisplay = appDateRaw && !isNaN(new Date(appDateRaw).getTime()) 
+              ? new Date(appDateRaw).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) 
+              : '—';
+            const days = computeDaysElapsed(appDateRaw, c.status, c.updated_at || c.updatedAt);
+
+            return {
+              id: c.application_number || c.id,
+              mongoId: c.id,
+              customer: c.property?.owner_name || c.fullData?.customerName || 'Unknown',
+              mobile: c.property?.owner_phone || c.fullData?.mobile || '',
+              location: c.fullData?.propertyDetails?.city || c.property?.city || c.property?.jurisdiction || c.property?.village || '',
+              type: 'Building',
+              appType: c.approval_type || c.fullData?.serviceType || 'Building Approval',
+              status: getApplicationStatus(c.application_number || c.id, c.status, c),
+              rawStatus: c.status,
+              created_at: appDateRaw,
+              staff: c.assigned_staff?.name || c.fullData?.staff || 'Unassigned',
+              date: appDateDisplay,
+              days
+            };
+          });
           setApplications(mappedApps);
         } else {
           setApplications([]);
@@ -141,21 +161,29 @@ const ApplicationsList: React.FC = () => {
       const localCasesStr = localStorage.getItem('mock_saved_cases');
       const localCases = localCasesStr ? JSON.parse(localCasesStr).filter((c: any) => c.type !== 'Lead') : [];
       if (localCases.length > 0) {
-        const mappedApps = localCases.map((c: any) => ({
-          id: c.application_number || c.id,
-          mongoId: c.id,
-          customer: c.property?.owner_name || c.fullData?.customerName || 'Unknown',
-          mobile: c.property?.owner_phone || c.fullData?.mobile || '',
-          location: c.fullData?.propertyDetails?.city || c.property?.city || c.property?.jurisdiction || c.property?.village || '',
-          type: 'Building',
-          appType: c.approval_type || c.fullData?.serviceType || 'Building Approval',
-          status: getApplicationStatus(c.application_number || c.id, c.status, c),
-          rawStatus: c.status,
-          created_at: c.created_at || c.createdAt || c.date,
-          staff: c.assigned_staff?.name || c.fullData?.staff || 'Unassigned',
-          date: c.created_at ? new Date(c.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—',
-          days: 0
-        }));
+        const mappedApps = localCases.map((c: any) => {
+          const appDateRaw = c.created_at || c.createdAt || c.date;
+          const appDateDisplay = appDateRaw && !isNaN(new Date(appDateRaw).getTime()) 
+            ? new Date(appDateRaw).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) 
+            : '—';
+          const days = computeDaysElapsed(appDateRaw, c.status, c.updated_at || c.updatedAt);
+
+          return {
+            id: c.application_number || c.id,
+            mongoId: c.id,
+            customer: c.property?.owner_name || c.fullData?.customerName || 'Unknown',
+            mobile: c.property?.owner_phone || c.fullData?.mobile || '',
+            location: c.fullData?.propertyDetails?.city || c.property?.city || c.property?.jurisdiction || c.property?.village || '',
+            type: 'Building',
+            appType: c.approval_type || c.fullData?.serviceType || 'Building Approval',
+            status: getApplicationStatus(c.application_number || c.id, c.status, c),
+            rawStatus: c.status,
+            created_at: appDateRaw,
+            staff: c.assigned_staff?.name || c.fullData?.staff || 'Unassigned',
+            date: appDateDisplay,
+            days
+          };
+        });
         setApplications(mappedApps);
       } else {
         setApplications([]);
@@ -360,6 +388,16 @@ const ApplicationsList: React.FC = () => {
           </button>
         )}
       </div>
+
+      {isMainList && (
+        <div style={{ backgroundColor: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '0.5rem', padding: '0.85rem 1.25rem', marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          <Building size={22} color="#1d4ed8" />
+          <div>
+            <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#1e3a8a' }}>Official Approval Applications</div>
+            <div style={{ fontSize: '0.8rem', color: '#3b82f6' }}>Formal building approval proposals undergoing legal verification, document scrutiny, payment verification, and DTCP / CMDA government sanction.</div>
+          </div>
+        </div>
+      )}
 
       {/* Quick Action Filter Chips */}
       {isMainList && (
@@ -780,7 +818,7 @@ const ApplicationsList: React.FC = () => {
                       </select>
                     </td>
                     <td style={{ padding: '0.75rem 1rem', fontSize: '0.875rem', fontWeight: 600, color: 'var(--primary-dark)' }}>
-                      {app.days !== undefined ? `${app.days} ${app.days === 1 ? 'day' : 'days'}` : '—'}
+                      {app.days !== undefined ? (app.days === 0 ? 'Today' : `${app.days} ${app.days === 1 ? 'day' : 'days'}`) : '—'}
                     </td>
                     <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>
                       <button

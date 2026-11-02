@@ -52,93 +52,94 @@ const CustomerLeads: React.FC = () => {
     fetchStaff();
   }, []);
 
+  const computeDaysElapsed = (rawDate: any, status?: string, updatedDate?: any) => {
+    if (!rawDate) return 0;
+    const start = new Date(rawDate).getTime();
+    if (isNaN(start)) return 0;
+    const isCompleted = ['Rejected', 'Approved', 'Application Created', 'Converted'].includes(status || '');
+    const end = isCompleted && updatedDate && !isNaN(new Date(updatedDate).getTime()) ? new Date(updatedDate).getTime() : Date.now();
+    const diffDays = Math.floor(Math.max(0, end - start) / (1000 * 60 * 60 * 24));
+    return diffDays;
+  };
+
   useEffect(() => {
     const loadLeads = async () => {
       try {
         const apiUrl = getApiUrl();
-        const [leadsRes, casesRes] = await Promise.all([
-          fetch(`${apiUrl}/leads`),
-          fetch(`${apiUrl}/cases`)
-        ]);
+        const leadsRes = await fetch(`${apiUrl}/leads`);
 
         let combinedLeads: any[] = [];
 
         if (leadsRes.ok) {
           const data = await leadsRes.json();
           const formattedLeads = data
-            .filter((lead: any) => lead.type === 'Lead')
-            .map((lead: any) => ({
-              id: lead.id,
-              displayId: lead.leadId || lead.id,
-              name: lead.name,
-              phone: lead.phone,
-              email: lead.email || '',
-              location: lead.location || '',
-              projectType: lead.projectType || 'General Enquiry',
-              propertyDetails: lead.propertyDetails || 'General Enquiry via Popup',
-              date: new Date(lead.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
-              days: (() => {
-                 if (!lead.created_at) return 0;
-                 const start = new Date(lead.created_at).getTime();
-                 const isCompleted = ['Rejected', 'Approved', 'Application Created'].includes(lead.status);
-                 const end = isCompleted && lead.updated_at ? new Date(lead.updated_at).getTime() : new Date().getTime();
-                 return Math.ceil(Math.max(0, end - start) / (1000 * 60 * 60 * 24));
-              })(),
-              status: lead.status,
-              assignedTo: lead.assignedTo || '',
-              aadharFile: lead.aadharFile,
-              aadharFileName: lead.aadharFileName,
-              buildingPhoto: lead.buildingPhoto,
-              buildingPhotoName: lead.buildingPhotoName,
-              uploadedFiles: lead.uploadedFiles || {},
-              isCase: false
-            }));
+            .filter((lead: any) => lead.type === 'Lead' || lead.type === 'Enquiry')
+            .map((lead: any) => {
+              const leadDateRaw = lead.created_at || lead.createdAt;
+              const leadDateDisplay = leadDateRaw && !isNaN(new Date(leadDateRaw).getTime())
+                ? new Date(leadDateRaw).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+                : '—';
+              const days = computeDaysElapsed(leadDateRaw, lead.status, lead.updated_at || lead.updatedAt);
+
+              return {
+                id: lead.id,
+                displayId: lead.leadId || lead.id,
+                name: lead.name,
+                phone: lead.phone,
+                email: lead.email || '',
+                location: lead.location || '',
+                projectType: lead.projectType || 'General Enquiry',
+                propertyDetails: lead.propertyDetails || 'General Enquiry via Popup',
+                date: leadDateDisplay,
+                days,
+                status: lead.status || 'New',
+                assignedTo: lead.assignedTo || '',
+                aadharFile: lead.aadharFile,
+                aadharFileName: lead.aadharFileName,
+                buildingPhoto: lead.buildingPhoto,
+                buildingPhotoName: lead.buildingPhotoName,
+                uploadedFiles: lead.uploadedFiles || {},
+                isCase: false
+              };
+            });
           combinedLeads = [...formattedLeads];
         }
 
-        if (casesRes.ok) {
-          const casesData = await casesRes.json();
-          const staffLeads = casesData
-            .filter((c: any) => {
-              const full = c.fullData || {};
-              return c.type === 'Lead' || full.isLead || full.leadId || c.status === 'Draft' || c.status === 'Lead' || full.createdByStaff;
-            })
+        // Add local leads if any
+        const saved = localStorage.getItem('mock_saved_cases');
+        if (saved) {
+          const localLeads = JSON.parse(saved)
+            .filter((c: any) => c.type === 'Lead')
             .map((c: any) => {
               const full = c.fullData || {};
               const prop = c.property || {};
-              const caseUploaded = (c.uploadedFiles as Record<string, string>) || (full.uploadedFiles as Record<string, string>) || (full.documents as Record<string, string>) || {};
-              
-              // Resolve specific document URLs if present
-              const aadhar = caseUploaded['AADHAR CARD'] || caseUploaded['AADHAAR CARD'] || full.aadharFile || full.applicant?.aadharFile || '';
-              const photo = caseUploaded['CUSTOMER PHOTOGRAPH'] || caseUploaded['PHOTO'] || caseUploaded['BUILDING PHOTO'] || caseUploaded['BUILDING PLAN'] || full.buildingPhoto || '';
+              const leadDateRaw = c.created_at || c.createdAt || c.date;
+              const leadDateDisplay = leadDateRaw && !isNaN(new Date(leadDateRaw).getTime())
+                ? new Date(leadDateRaw).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+                : '—';
+              const days = computeDaysElapsed(leadDateRaw, c.status, c.updated_at || c.updatedAt);
 
               return {
                 id: c.id,
-                displayId: c.application_number || c.id,
-                name: prop.owner_name || full.customerName || 'Staff Lead',
+                displayId: c.leadId || c.id,
+                name: prop.owner_name || full.customerName || 'Lead Prospect',
                 phone: prop.owner_phone || full.mobile || '',
                 email: prop.owner_email || full.email || '',
                 location: prop.address || prop.village || '',
-                projectType: c.approval_type || full.serviceType || 'Building Approval',
-                propertyDetails: `Survey: ${prop.survey_number || 'TBD'}, Village: ${prop.village || 'TBD'}`,
-                date: c.created_at ? new Date(c.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—',
-                days: c.created_at ? Math.ceil(Math.max(0, new Date().getTime() - new Date(c.created_at).getTime()) / (1000 * 60 * 60 * 24)) : 0,
+                projectType: c.approval_type || full.serviceType || 'General Enquiry',
+                propertyDetails: full.propertyDetails || 'Inquiry',
+                date: leadDateDisplay,
+                days,
                 status: c.status || 'New',
                 assignedTo: c.assigned_staff?.name || full.staff || '',
-                isCase: true,
-                caseId: c.id,
-                uploadedFiles: caseUploaded,
-                aadharFile: aadhar,
-                aadharFileName: aadhar ? 'Aadhaar Card' : undefined,
-                buildingPhoto: photo,
-                buildingPhotoName: photo ? 'Site / Building Photo' : undefined
+                isCase: false
               };
             });
 
           const existingIds = new Set(combinedLeads.map(l => l.displayId));
-          for (const sl of staffLeads) {
-            if (!existingIds.has(sl.displayId)) {
-              combinedLeads.push(sl);
+          for (const ll of localLeads) {
+            if (!existingIds.has(ll.displayId)) {
+              combinedLeads.push(ll);
             }
           }
         }
@@ -249,6 +250,27 @@ const CustomerLeads: React.FC = () => {
         </button>
       </div>
 
+      {/* Pipeline Distinction Banner */}
+      <div style={{
+        backgroundColor: '#eff6ff',
+        border: '1px solid #bfdbfe',
+        borderLeft: '4px solid #2563eb',
+        borderRadius: '0.5rem',
+        padding: '0.85rem 1.25rem',
+        marginBottom: '1.25rem',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '0.75rem',
+        color: '#1e3a8a',
+        fontSize: '0.875rem',
+        lineHeight: 1.5
+      }}>
+        <Info size={20} color="#2563eb" style={{ flexShrink: 0 }} />
+        <div>
+          <strong>Prospective Customer Inquiries (CRM Leads):</strong> Potential clients who have submitted inquiries or requested quotations. Review interest, follow up with them, and click <strong>"Convert"</strong> when ready to file their official government approval application.
+        </div>
+      </div>
+
       <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
         <div style={{ padding: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
@@ -319,6 +341,7 @@ const CustomerLeads: React.FC = () => {
               <tr style={{ backgroundColor: '#1e3a8a', borderBottom: '1px solid var(--border-color)' }}>
                 <th style={{ padding: '0.75rem 1rem', fontSize: '0.75rem', fontWeight: 600, color: 'white' }}>Edit</th>
                 <th style={{ padding: '0.75rem 1rem', fontSize: '0.75rem', fontWeight: 600, color: 'white' }}>View</th>
+                <th style={{ padding: '0.75rem 1rem', fontSize: '0.75rem', fontWeight: 600, color: 'white' }}>Convert</th>
                 <th style={{ padding: '0.75rem 1rem', fontSize: '0.75rem', fontWeight: 600, color: 'white', cursor: 'pointer' }}><div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>Proposal No <ArrowUpDown size={12} style={{ opacity: 0.7 }} /></div></th>
                 <th style={{ padding: '0.75rem 1rem', fontSize: '0.75rem', fontWeight: 600, color: 'white', cursor: 'pointer' }}><div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>Customer Name <ArrowUpDown size={12} style={{ opacity: 0.7 }} /></div></th>
                 <th style={{ padding: '0.75rem 1rem', fontSize: '0.75rem', fontWeight: 600, color: 'white', cursor: 'pointer' }}><div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>Mobile Number <ArrowUpDown size={12} style={{ opacity: 0.7 }} /></div></th>
@@ -348,6 +371,28 @@ const CustomerLeads: React.FC = () => {
                       title="View Details"
                     >
                       <Info size={16} />
+                    </button>
+                  </td>
+                  <td style={{ padding: '0.75rem 1rem' }}>
+                    <button
+                      onClick={() => navigate('/admin/applications/new', { state: { lead } })}
+                      style={{
+                        padding: '0.35rem 0.65rem',
+                        borderRadius: '0.375rem',
+                        backgroundColor: '#2563eb',
+                        color: '#fff',
+                        border: 'none',
+                        cursor: 'pointer',
+                        fontSize: '0.75rem',
+                        fontWeight: 600,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.3rem',
+                        whiteSpace: 'nowrap'
+                      }}
+                      title="Convert this lead into a formal government approval application"
+                    >
+                      <UserCheck size={14} /> Convert
                     </button>
                   </td>
                   <td style={{ padding: '0.75rem 1rem', fontSize: '0.875rem', fontWeight: 600, color: 'var(--primary)' }}>{lead.application_number || lead.displayId}</td>
@@ -402,13 +447,13 @@ const CustomerLeads: React.FC = () => {
                     </select>
                   </td>
                   <td style={{ padding: '0.75rem 1rem', fontSize: '0.875rem', fontWeight: 600, color: 'var(--primary-dark)' }}>
-                    {lead.days !== undefined ? `${lead.days} ${lead.days === 1 ? 'day' : 'days'}` : '—'}
+                    {lead.days === 0 ? 'Today' : (lead.days !== undefined ? `${lead.days} ${lead.days === 1 ? 'day' : 'days'}` : '—')}
                   </td>
                 </tr>
               ))}
               {filteredLeads.length === 0 && (
                 <tr>
-                  <td colSpan={10} style={{ padding: '3rem 1.5rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
+                  <td colSpan={11} style={{ padding: '3rem 1.5rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
                     <FileText size={48} style={{ margin: '0 auto 1rem', opacity: 0.5 }} />
                     <p>No customer leads found.</p>
                   </td>

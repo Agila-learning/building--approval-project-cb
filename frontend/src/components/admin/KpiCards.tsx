@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, FileText, AlertTriangle, Building, CheckCircle2 } from 'lucide-react';
+import { Users, FileText, AlertTriangle, Building, CheckCircle2, UserCheck } from 'lucide-react';
 import { getApplicationStatus } from '../../utils/statusHelper';
 import { getApiUrl } from '../../config/api';
 
@@ -27,6 +27,7 @@ const isRejected = (status: string) => {
 const KpiCards: React.FC = () => {
   const navigate = useNavigate();
   const [kpi, setKpi] = useState({ total: 0, active: 0, docsPending: 0, govReview: 0, approved: 0 });
+  const [staffPresent, setStaffPresent] = useState(0);
 
   useEffect(() => {
     const fetchCases = async () => {
@@ -57,6 +58,23 @@ const KpiCards: React.FC = () => {
         const approved = mappedApps.filter((a: any) => isApproved(a.dynamicStatus) || isApproved(a.status)).length;
 
         setKpi({ total, active, docsPending, govReview, approved });
+
+        // Fetch today's attendance count from backend API & local
+        const today = new Date().toISOString().split('T')[0];
+        let todayPresent = 0;
+        try {
+          const attRes = await fetch(`${apiUrl}/attendance?date=${today}`);
+          if (attRes.ok) {
+            const attData = await attRes.json();
+            if (Array.isArray(attData)) {
+              todayPresent = attData.filter((r: any) => r.status === 'Present').length;
+            }
+          }
+        } catch (e) {}
+
+        const localAtt = JSON.parse(localStorage.getItem('employeeAttendance') || '[]');
+        const localTodayPresent = localAtt.filter((r: any) => r.date === today && r.status === 'Present').length;
+        setStaffPresent(Math.max(todayPresent, localTodayPresent));
       } catch (err) {
         console.error("Failed to fetch kpi data:", err);
       }
@@ -121,6 +139,16 @@ const KpiCards: React.FC = () => {
       subColor: 'var(--success-green)',
       Icon: CheckCircle2,
       path: '/admin/applications?status=approved',
+    },
+    {
+      label: 'Staff Present',
+      value: staffPresent,
+      sub: staffPresent === 0 ? 'No check-ins today' : `${staffPresent} staff active`,
+      iconBg: 'rgba(34, 160, 107, 0.1)',
+      iconColor: 'var(--success-green)',
+      subColor: 'var(--success-green)',
+      Icon: UserCheck,
+      path: '/admin/attendance',
     },
   ];
 

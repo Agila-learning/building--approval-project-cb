@@ -14,6 +14,7 @@ import leadRoutes from './lead.routes';
 import userRoutes from './user.routes';
 import paymentRoutes from './payment.routes';
 import settingsRoutes from './settings.routes';
+import attendanceRoutes from './attendance.routes';
 import { authController } from '../controllers/AuthController';
 
 const router = Router();
@@ -71,6 +72,8 @@ router.get('/health', async (req, res) => {
 });
 
 router.post('/login', authController.login);
+router.post('/forgot-password', authController.forgotPassword);
+router.post('/reset-password', authController.forgotPassword);
 router.get('/me', authController.getMe);
 router.use('/auth', authRoutes);
 router.use('/properties', propertyRoutes);
@@ -84,5 +87,6 @@ router.use('/leads', leadRoutes);
 router.use('/users', userRoutes);
 router.use('/payments', paymentRoutes);
 router.use('/settings', settingsRoutes);
+router.use('/attendance', attendanceRoutes);
 
 export default router;

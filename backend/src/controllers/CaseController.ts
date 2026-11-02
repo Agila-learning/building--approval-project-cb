@@ -106,6 +106,34 @@ export class CaseController {
         return res.status(400).json({ error: 'Mobile number must be exactly 10 digits starting with 6, 7, 8, or 9.' });
       }
 
+      // Alternate Mobile Validation & Same-number prevention
+      const rawAltMobile = data.fullData?.altMobile || data.altMobile || data.altPhone;
+      if (rawAltMobile) {
+        const cleanAltMobile = String(rawAltMobile).trim().replace(/\D/g, '').slice(-10);
+        if (!/^[6-9]\d{9}$/.test(cleanAltMobile)) {
+          return res.status(400).json({ error: 'Alternative mobile number must be exactly 10 digits starting with 6, 7, 8, or 9.' });
+        }
+        if (cleanMobile && cleanMobile === cleanAltMobile) {
+          return res.status(400).json({ error: 'Mobile number and alternate mobile number cannot be the same.' });
+        }
+      }
+
+      // Duplicate Check on Application Creation
+      if (!data.id && cleanMobile) {
+        const existingCase = await prisma.case.findFirst({
+          where: {
+            property: {
+              owner_phone: { in: [cleanMobile, `+91${cleanMobile}`, `91${cleanMobile}`] }
+            }
+          }
+        });
+        if (existingCase) {
+          return res.status(409).json({
+            error: 'An application with this mobile number is already registered. If registering for another building, please provide a different mobile number.'
+          });
+        }
+      }
+
       // 2. Email Validation
       const rawEmail = data.fullData?.email || data.property?.owner_email || data.email;
       const cleanEmail = rawEmail ? String(rawEmail).trim().toLowerCase() : '';

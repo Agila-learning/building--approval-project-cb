@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { 
   CheckCircle2, Clock, AlertCircle, FileText, 
   Phone, Plus, Calendar as CalendarIcon, 
-  ArrowRight, PhoneCall, MessageCircle, FileUp
+  ArrowRight, PhoneCall, MessageCircle, FileUp,
+  Eye, X, Download
 } from 'lucide-react';
 import { getEmployeeFollowUps, updateFollowUpStatus } from '../utils/employeeUtils';
 import type { EmployeeFollowUp } from '../utils/employeeUtils';
@@ -79,36 +80,73 @@ const EmployeeDashboard: React.FC = () => {
     return () => clearInterval(interval);
   }, []);
 
-  const loadTodayAttendance = (user: string) => {
+  // Helper status checkers
+  const isApproved = (s: string) => ['APPROVED', 'COMPLETED'].includes((s || '').toUpperCase());
+  const isRejected = (s: string) => (s || '').toUpperCase() === 'REJECTED';
+  const isDocsPending = (s: string) => ['DOCUMENT_COLLECTION', 'DOCUMENTS_PENDING', 'DOCUMENTS PENDING', 'INTAKE', 'ACTION_NEEDED', 'ACTION REQUIRED', 'NEW', 'DRAFT'].includes((s || '').toUpperCase());
+  const isVerification = (s: string) => ['DOCUMENTS_VERIFICATION', 'SCRUTINY', 'SITE INSPECTION', 'UNDER REVIEW', 'SUBMITTED', 'SUBMITTED_FOR_APPROVAL', 'VERIFICATION', 'GOV VERIFICATION', 'WORKER VERIFIED'].includes((s || '').toUpperCase());
+
+  // Modal for viewing customer uploaded documents
+  const [viewingCaseDocs, setViewingCaseDocs] = useState<any | null>(null);
+
+  const loadTodayAttendance = async (user: string) => {
     const today = new Date().toISOString().split('T')[0];
-    const attendanceRecords = JSON.parse(localStorage.getItem('employeeAttendance') || '[]');
-    const todayRecord = attendanceRecords.find((r: any) => r.name === user && r.date === today);
-    if (todayRecord) {
-      if (todayRecord.checkIn !== '--') {
+    // 1. Instant local read
+    const localRecords = JSON.parse(localStorage.getItem('employeeAttendance') || '[]');
+    const localRecord = localRecords.find((r: any) => r.name?.toLowerCase() === user.toLowerCase() && r.date === today);
+    if (localRecord) {
+      if (localRecord.checkIn && localRecord.checkIn !== '--') {
         setHasCheckedIn(true);
-        setCheckInTime(todayRecord.checkIn);
+        setCheckInTime(localRecord.checkIn);
       }
-      if (todayRecord.checkOut !== '--') {
+      if (localRecord.checkOut && localRecord.checkOut !== '--') {
         setHasCheckedOut(true);
-        setCheckOutTime(todayRecord.checkOut);
+        setCheckOutTime(localRecord.checkOut);
       }
+    }
+
+    // 2. Sync with backend API
+    try {
+      const res = await fetch(`${getApiUrl()}/attendance?date=${today}&staffName=${encodeURIComponent(user)}`);
+      if (res.ok) {
+        const records = await res.json();
+        const apiRecord = Array.isArray(records) && records.length > 0 ? records[0] : null;
+        if (apiRecord) {
+          if (apiRecord.checkIn && apiRecord.checkIn !== '--') {
+            setHasCheckedIn(true);
+            setCheckInTime(apiRecord.checkIn);
+          }
+          if (apiRecord.checkOut && apiRecord.checkOut !== '--') {
+            setHasCheckedOut(true);
+            setCheckOutTime(apiRecord.checkOut);
+          }
+          // Merge to local storage
+          const updated = localRecords.filter((r: any) => !(r.name?.toLowerCase() === user.toLowerCase() && r.date === today));
+          updated.push(apiRecord);
+          localStorage.setItem('employeeAttendance', JSON.stringify(updated));
+        }
+      }
+    } catch (err) {
+      console.warn('Could not sync attendance from backend:', err);
     }
   };
 
-  const updateAttendance = (type: 'checkIn' | 'checkOut') => {
+  const updateAttendance = async (type: 'checkIn' | 'checkOut') => {
     const today = new Date().toISOString().split('T')[0];
     const timeString = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
     
     let attendanceRecords = JSON.parse(localStorage.getItem('employeeAttendance') || '[]');
-    let recordIndex = attendanceRecords.findIndex((r: any) => r.name === employeeName && r.date === today);
+    let recordIndex = attendanceRecords.findIndex((r: any) => r.name?.toLowerCase() === employeeName.toLowerCase() && r.date === today);
     
+    let updatedRecord: any = null;
     if (recordIndex >= 0) {
       if (type === 'checkIn') attendanceRecords[recordIndex].checkIn = timeString;
       if (type === 'checkOut') attendanceRecords[recordIndex].checkOut = timeString;
       attendanceRecords[recordIndex].status = 'Present';
+      updatedRecord = attendanceRecords[recordIndex];
     } else {
-      attendanceRecords.push({
-        id: employeeId,
+      updatedRecord = {
+        id: employeeId || `EMP-${employeeName.replace(/\s+/g, '')}`,
         name: employeeName,
         role: 'Staff Member',
         date: today,
@@ -116,22 +154,55 @@ const EmployeeDashboard: React.FC = () => {
         checkOut: type === 'checkOut' ? timeString : '--',
         status: 'Present',
         avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(employeeName)}&background=0D8ABC&color=fff`
-      });
+      };
+      attendanceRecords.push(updatedRecord);
     }
     
     localStorage.setItem('employeeAttendance', JSON.stringify(attendanceRecords));
     window.dispatchEvent(new Event('storage'));
-    loadTodayAttendance(employeeName);
+    
+    if (type === 'checkIn') {
+      setHasCheckedIn(true);
+      setCheckInTime(timeString);
+    } else {
+      setHasCheckedOut(true);
+      setCheckOutTime(timeString);
+    }
+
+    // Sync to backend API for admin dashboard reflection
+    try {
+      await fetch(`${getApiUrl()}/attendance`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-role': 'STAFF',
+          'x-user-name': employeeName,
+          'x-staff-id': employeeId
+        },
+        body: JSON.stringify({
+          id: employeeId,
+          name: employeeName,
+          role: 'Staff Member',
+          date: today,
+          type,
+          checkIn: updatedRecord.checkIn,
+          checkOut: updatedRecord.checkOut,
+          status: 'Present'
+        })
+      });
+    } catch (err) {
+      console.warn('Failed to sync attendance to backend:', err);
+    }
   };
 
-  // Compute metrics
-  const activeApps = applications.filter(a => a.status !== 'Approved' && a.status !== 'Rejected').length;
-  const inProgressApps = applications.filter(a => a.status === 'In Progress' || a.status === 'Verification').length;
-  const pendingDocs = applications.filter(a => a.status === 'Documents Pending').length;
-  const completedApps = applications.filter(a => a.status === 'Approved').length;
+  // Compute metrics with comprehensive status categorization
+  const activeApps = applications.filter(a => !isApproved(a.status) && !isRejected(a.status)).length;
+  const inProgressApps = applications.filter(a => isVerification(a.status) || (!isApproved(a.status) && !isRejected(a.status) && !isDocsPending(a.status))).length;
+  const pendingDocs = applications.filter(a => isDocsPending(a.status)).length;
+  const completedApps = applications.filter(a => isApproved(a.status)).length;
   
-  // Get 4 apps that need attention (e.g. not approved/rejected, maybe pending docs)
-  const actionRequiredApps = applications.filter(a => a.status !== 'Approved' && a.status !== 'Rejected').slice(0, 4);
+  // Get applications that need staff attention
+  const actionRequiredApps = applications.filter(a => !isApproved(a.status) && !isRejected(a.status)).slice(0, 6);
 
   return (
     <div className="animate-fade-in" style={{ paddingBottom: '3rem' }}>
@@ -256,6 +327,26 @@ const EmployeeDashboard: React.FC = () => {
                             <MessageCircle size={14} /> WhatsApp
                           </button>
                         )}
+                        <button
+                          type="button"
+                          onClick={() => setViewingCaseDocs(app)}
+                          title="View customer uploaded documents"
+                          style={{
+                            padding: '0.4rem 0.8rem',
+                            borderRadius: '0.375rem',
+                            backgroundColor: 'var(--bg-secondary)',
+                            color: 'var(--primary-dark)',
+                            border: '1px solid var(--border-color)',
+                            fontSize: '0.8125rem',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.35rem'
+                          }}
+                        >
+                          <Eye size={14} /> View Docs
+                        </button>
                         <button className="btn-primary" style={{ padding: '0.4rem 1rem', fontSize: '0.875rem' }} onClick={() => navigate(`/employee/applications/${app.id}`)}>
                           Process Application
                         </button>
@@ -369,6 +460,133 @@ const EmployeeDashboard: React.FC = () => {
 
         </div>
       </div>
+
+      {/* Customer Uploaded Documents Modal */}
+      {viewingCaseDocs && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15, 23, 42, 0.75)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem', backdropFilter: 'blur(3px)' }}>
+          <div style={{ backgroundColor: 'white', borderRadius: '0.75rem', width: '100%', maxWidth: '800px', maxHeight: '85vh', display: 'flex', flexDirection: 'column', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)', overflow: 'hidden' }}>
+            <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f8fafc' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1.125rem', fontWeight: 700, color: 'var(--primary-dark)' }}>
+                  Customer Uploaded Documents: {viewingCaseDocs.id}
+                </h3>
+                <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
+                  Applicant: <strong>{viewingCaseDocs.customer}</strong> • Mobile: {viewingCaseDocs.mobile || '—'}
+                </p>
+              </div>
+              <button 
+                onClick={() => setViewingCaseDocs(null)} 
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', padding: '0.25rem' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div style={{ flex: 1, overflowY: 'auto', padding: '1.5rem' }}>
+              {(() => {
+                const files = viewingCaseDocs.uploadedFiles || {};
+                const localDocsStr = localStorage.getItem(`customerDocs_${viewingCaseDocs.id}`);
+                const localDocs = localDocsStr ? JSON.parse(localDocsStr) : [];
+                
+                // Merge files dictionary with local docs
+                const docEntries: { name: string; url: string }[] = [];
+                Object.entries(files).forEach(([k, v]) => {
+                  if (v && typeof v === 'string') {
+                    docEntries.push({ name: k.replace(/_/g, ' '), url: v });
+                  }
+                });
+
+                localDocs.forEach((d: any) => {
+                  const url = d.fileData || d.url || d.file;
+                  if (url && !docEntries.some(e => e.name.toLowerCase() === d.name.toLowerCase())) {
+                    docEntries.push({ name: d.name, url });
+                  }
+                });
+
+                if (docEntries.length === 0) {
+                  return (
+                    <div style={{ textAlign: 'center', padding: '3rem 1rem', color: 'var(--text-secondary)' }}>
+                      <FileUp size={48} color="#cbd5e1" style={{ margin: '0 auto 1rem' }} />
+                      <h4 style={{ margin: '0 0 0.5rem 0', color: 'var(--primary-dark)', fontSize: '1rem', fontWeight: 600 }}>No documents uploaded yet</h4>
+                      <p style={{ margin: 0, fontSize: '0.875rem' }}>The customer has not yet uploaded files for this application. You can share the upload link via WhatsApp.</p>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
+                    {docEntries.map((doc, idx) => {
+                      const isPdf = doc.url.endsWith('.pdf') || doc.url.startsWith('data:application/pdf');
+                      const isImg = doc.url.startsWith('data:image/') || doc.url.match(/\.(jpg|jpeg|png|webp|gif)($|\?)/i) || (doc.url.includes('cloudinary.com') && !isPdf);
+
+                      return (
+                        <div key={idx} style={{ border: '1px solid var(--border-color)', borderRadius: '0.5rem', padding: '1rem', backgroundColor: '#f8fafc', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                          <div style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--primary-dark)', minHeight: '36px', display: 'flex', alignItems: 'center' }}>
+                            {doc.name}
+                          </div>
+                          
+                          <div style={{ height: '140px', backgroundColor: '#e2e8f0', borderRadius: '0.375rem', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            {isImg ? (
+                              <img src={doc.url} alt={doc.name} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                            ) : isPdf ? (
+                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', color: '#0284c7' }}>
+                                <FileText size={40} />
+                                <span style={{ fontSize: '0.75rem', fontWeight: 600, marginTop: '0.35rem' }}>PDF Document</span>
+                              </div>
+                            ) : (
+                              <FileText size={40} color="var(--text-secondary)" />
+                            )}
+                          </div>
+
+                          <div style={{ display: 'flex', gap: '0.5rem', marginTop: 'auto' }}>
+                            <a 
+                              href={doc.url} 
+                              target="_blank" 
+                              rel="noopener noreferrer" 
+                              style={{ flex: 1, padding: '0.4rem', backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-color)', borderRadius: '0.25rem', textAlign: 'center', color: 'var(--primary)', fontSize: '0.75rem', fontWeight: 600, textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.25rem' }}
+                            >
+                              <Eye size={13} /> View
+                            </a>
+                            <a 
+                              href={doc.url} 
+                              download={doc.name} 
+                              target="_blank" 
+                              rel="noopener noreferrer" 
+                              style={{ flex: 1, padding: '0.4rem', backgroundColor: 'var(--primary)', color: 'white', borderRadius: '0.25rem', textAlign: 'center', fontSize: '0.75rem', fontWeight: 600, textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.25rem' }}
+                            >
+                              <Download size={13} /> Download
+                            </a>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+            </div>
+
+            <div style={{ padding: '1rem 1.5rem', borderTop: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f8fafc' }}>
+              <button 
+                onClick={() => setViewingCaseDocs(null)} 
+                style={{ padding: '0.5rem 1.25rem', backgroundColor: '#e2e8f0', color: '#475569', border: 'none', borderRadius: '0.375rem', fontWeight: 600, fontSize: '0.875rem', cursor: 'pointer' }}
+              >
+                Close
+              </button>
+              <button 
+                className="btn-primary" 
+                onClick={() => {
+                  const targetId = viewingCaseDocs.id;
+                  setViewingCaseDocs(null);
+                  navigate(`/employee/applications/${targetId}`);
+                }}
+                style={{ padding: '0.5rem 1.25rem', fontSize: '0.875rem' }}
+              >
+                Process This Application →
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

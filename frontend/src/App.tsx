@@ -39,6 +39,7 @@ import CashBook from './pages/admin/CashBook';
 import ApplicationEdit from './pages/admin/ApplicationEdit';
 import ApplicationView from './pages/admin/ApplicationView';
 import DocumentsManagement from './pages/admin/DocumentsManagement';
+import Maintenance from './pages/admin/Maintenance';
 
 function App() {
   useEffect(() => {
@@ -168,9 +169,10 @@ function App() {
             <Route path="settings/*" element={<Settings />} />
             
             {/* Maintenance Module */}
-            <Route path="maintenance/view" element={<ApplicationsList />} />
-            <Route path="maintenance/logs" element={<ApplicationsList />} />
-            <Route path="maintenance/revert" element={<ApplicationsList />} />
+            <Route path="maintenance" element={<Maintenance />} />
+            <Route path="maintenance/view" element={<Maintenance />} />
+            <Route path="maintenance/logs" element={<Maintenance />} />
+            <Route path="maintenance/revert" element={<Maintenance />} />
           </Route>
           {/* Employee Layout */}
           <Route path="/employee" element={<EmployeeLayout />}>
@@ -182,6 +184,8 @@ function App() {
             <Route path="applications/:id" element={<ApplicationView />} />
             <Route path="documents" element={<DocumentsManagement />} />
             <Route path="documents/*" element={<DocumentsManagement />} />
+            <Route path="quotations" element={<Quotations />} />
+            <Route path="expenses" element={<Expenses />} />
             <Route path="payments" element={<EmployeePayments />} />
             
             {/* Routes */}

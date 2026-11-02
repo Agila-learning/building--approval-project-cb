@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, Bell, ChevronDown, Menu, CheckCircle2, Clock } from 'lucide-react';
+import { Search, Bell, ChevronDown, Menu, Clock } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { getApiUrl } from '../../config/api';
 
@@ -18,7 +18,7 @@ interface NotificationItem {
   created_at?: string;
 }
 
-const EmployeeTopbar: React.FC<EmployeeTopbarProps> = ({ toggleSidebar, isSidebarOpen = true }) => {
+const EmployeeTopbar: React.FC<EmployeeTopbarProps> = ({ toggleSidebar }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const [employeeName, setEmployeeName] = useState('Employee');
@@ -104,45 +104,28 @@ const EmployeeTopbar: React.FC<EmployeeTopbarProps> = ({ toggleSidebar, isSideba
         {toggleSidebar && (
           <button 
             type="button"
-            className="sidebar-toggle-btn"
+            className="mobile-menu-btn"
             onClick={toggleSidebar}
             aria-label="Toggle navigation menu"
-            title={isSidebarOpen ? "Close sidebar for Full Screen" : "Open menu"}
+            title="Toggle Menu"
+            style={{
+              background: 'none',
+              border: 'none',
+              color: 'var(--text-primary)',
+              padding: '0.4rem',
+              cursor: 'pointer',
+              borderRadius: '6px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transition: 'background-color 0.2s'
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-secondary)'}
+            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
           >
-            <Menu size={18} />
-            <span className="hidden-mobile-xs" style={{ fontSize: '0.75rem' }}>
-              {isSidebarOpen ? "Full Screen" : "Menu"}
-            </span>
+            <Menu size={22} />
           </button>
         )}
-        <button
-          type="button"
-          className="desktop-sidebar-toggle-btn"
-          onClick={() => {
-            const isColl = localStorage.getItem('employee_sidebar_collapsed') === 'true';
-            localStorage.setItem('employee_sidebar_collapsed', (!isColl).toString());
-            window.dispatchEvent(new Event('employee_sidebar_toggle'));
-          }}
-          aria-label="Toggle sidebar width"
-          title="Toggle sidebar (Minimise / Maximise)"
-          style={{
-            background: 'none',
-            border: '1px solid var(--border-color)',
-            borderRadius: '6px',
-            color: 'var(--text-primary)',
-            padding: '0.35rem 0.5rem',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '0.35rem',
-            fontSize: '0.75rem',
-            fontWeight: 600,
-            transition: 'all 0.2s',
-          }}
-        >
-          <Menu size={16} />
-        </button>
         <div>
           <h1 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--primary-dark)', marginBottom: '0.1rem' }}>{currentPage}</h1>
           <div className="hidden-mobile-xs" style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>

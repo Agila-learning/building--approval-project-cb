@@ -132,21 +132,7 @@ export class DocumentController {
       const staffId = (req.headers['x-staff-id'] || req.query.staffId || '') as string;
       const isAdmin = userRole.toUpperCase() === 'ADMIN' || staffName.toLowerCase() === 'admin';
 
-      const whereCondition: any = {};
-      if (!isAdmin && userRole.toUpperCase() === 'STAFF') {
-        const orClauses: any[] = [];
-        if (staffId && /^[0-9a-fA-F]{24}$/.test(staffId)) {
-          orClauses.push({ assigned_staff_id: staffId });
-        }
-        if (staffName) {
-          orClauses.push({ assigned_staff: { name: { equals: String(staffName), mode: 'insensitive' } } });
-        }
-        if (orClauses.length === 0) return res.json([]);
-        whereCondition.OR = orClauses;
-      }
-
       const cases = await prisma.case.findMany({
-        where: whereCondition,
         include: { property: true, assigned_staff: true, documents: true },
         orderBy: { created_at: 'desc' }
       });
@@ -154,6 +140,14 @@ export class DocumentController {
       const docsList: any[] = [];
 
       for (const c of cases) {
+        if (!isAdmin && userRole.toUpperCase() === 'STAFF') {
+          const isStaffCase = (staffId && c.assigned_staff_id === staffId) ||
+            (staffName && c.assigned_staff?.name && c.assigned_staff.name.toLowerCase() === staffName.toLowerCase()) ||
+            (staffName && (c.fullData as any)?.staff && String((c.fullData as any).staff).toLowerCase() === staffName.toLowerCase()) ||
+            (staffName && (c.fullData as any)?.createdByStaff && String((c.fullData as any).createdByStaff).toLowerCase() === staffName.toLowerCase());
+          if (!isStaffCase) continue;
+        }
+
         const customerName = c.property?.owner_name || (c.fullData as any)?.customerName || 'Customer';
         const proposalNumber = c.application_number || c.id;
         const customerPhone = c.property?.owner_phone || (c.fullData as any)?.mobile || '';
@@ -205,9 +199,11 @@ export class DocumentController {
 
           // Get verification status
           const verification = docVerification[normalizedDocKey] || docVerification[rawKey] || {};
-          let status: 'Pending Review' | 'Verified' | 'Re-upload Required' = 'Pending Review';
+          let status: 'Pending Review' | 'Worker Verified' | 'Verified' | 'Re-upload Required' = 'Pending Review';
           if (verification.status === 'Verified') {
             status = 'Verified';
+          } else if (verification.status === 'Worker Verified') {
+            status = 'Worker Verified';
           } else if (verification.status === 'Re-upload Required' || requestedReuploads.includes(normalizedDocKey) || requestedReuploads.includes(rawKey)) {
             status = 'Re-upload Required';
           }
@@ -281,8 +277,11 @@ export class DocumentController {
       if (!isAdmin && userRole.toUpperCase() === 'STAFF') {
         const staffName = req.headers['x-user-name'] as string;
         const staffId = req.headers['x-staff-id'] as string;
+        const full = (targetCase.fullData as any) || {};
         const isAssigned = (staffId && targetCase.assigned_staff_id === staffId) ||
-          (staffName && targetCase.assigned_staff?.name?.toLowerCase() === staffName.toLowerCase());
+          (staffName && targetCase.assigned_staff?.name?.toLowerCase() === staffName.toLowerCase()) ||
+          (staffName && full.staff && String(full.staff).toLowerCase() === staffName.toLowerCase()) ||
+          (staffName && full.createdByStaff && String(full.createdByStaff).toLowerCase() === staffName.toLowerCase());
         if (!isAssigned) {
           return res.status(403).json({ error: 'Forbidden: You are not assigned to review documents for this application.' });
         }

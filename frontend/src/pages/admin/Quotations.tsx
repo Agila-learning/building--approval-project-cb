@@ -1,8 +1,13 @@
 import React, { useState } from 'react';
-import { Printer, FileText, User, History } from 'lucide-react';
+import { Printer, FileText, User, History, Check, X, ShieldAlert, CheckCircle2 } from 'lucide-react';
 import html2pdf from 'html2pdf.js';
+import toast from 'react-hot-toast';
 
 const Quotations: React.FC = () => {
+  const userRole = localStorage.getItem('userRole') || '';
+  const loggedInUser = localStorage.getItem('loggedInUser') || '';
+  const isStaff = userRole.toUpperCase() === 'STAFF' || (loggedInUser !== 'Admin' && loggedInUser !== '');
+
   const [savedQuotations, setSavedQuotations] = useState<any[]>(() => {
     const saved = localStorage.getItem('savedQuotations');
     return saved ? JSON.parse(saved) : [];
@@ -35,15 +40,42 @@ const Quotations: React.FC = () => {
 
   const quotationDate = new Date().toLocaleDateString();
 
+  const handleApproveQuotation = (qtNo: string) => {
+    const updated = savedQuotations.map(q => q.qtNo === qtNo ? { ...q, status: 'Approved' } : q);
+    setSavedQuotations(updated);
+    localStorage.setItem('savedQuotations', JSON.stringify(updated));
+    toast.success(`Quotation ${qtNo} approved!`);
+  };
+
+  const handleRejectQuotation = (qtNo: string) => {
+    const updated = savedQuotations.map(q => q.qtNo === qtNo ? { ...q, status: 'Rejected' } : q);
+    setSavedQuotations(updated);
+    localStorage.setItem('savedQuotations', JSON.stringify(updated));
+    toast.error(`Quotation ${qtNo} rejected.`);
+  };
+
   const handleGeneratePDF = () => {
     const qtNo = currentQtNo || `QT-${String(savedQuotations.length + 1).padStart(4, '0')}`;
     
     if (!currentQtNo) {
       setCurrentQtNo(qtNo);
-      const newRecord = { qtNo, customerName, phone, location, services, totalAmount, date: quotationDate };
+      const newRecord = { 
+        qtNo, 
+        customerName, 
+        phone, 
+        location, 
+        services, 
+        totalAmount, 
+        date: quotationDate,
+        createdBy: loggedInUser || (isStaff ? 'Staff Member' : 'Admin'),
+        status: isStaff ? 'Pending Admin Approval' : 'Approved'
+      };
       const updated = [newRecord, ...savedQuotations];
       setSavedQuotations(updated);
       localStorage.setItem('savedQuotations', JSON.stringify(updated));
+      if (isStaff) {
+        toast.success(`Quotation ${qtNo} submitted for Admin Approval.`);
+      }
     }
 
     const element = document.getElementById('quotation-template');
@@ -87,6 +119,27 @@ const Quotations: React.FC = () => {
 
   return (
     <div style={{ paddingBottom: '3rem' }}>
+      {isStaff && (
+        <div style={{
+          backgroundColor: '#eff6ff',
+          border: '1px solid #bfdbfe',
+          borderLeft: '4px solid #2563eb',
+          borderRadius: '0.5rem',
+          padding: '0.85rem 1.25rem',
+          marginBottom: '1.5rem',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.75rem',
+          color: '#1e3a8a',
+          fontSize: '0.875rem'
+        }}>
+          <ShieldAlert size={20} color="#2563eb" style={{ flexShrink: 0 }} />
+          <div>
+            <strong>Staff Quotation Portal:</strong> Quotations generated here will enter <em>Pending Admin Approval</em>. Only after Admin approval will they be counted in company records.
+          </div>
+        </div>
+      )}
+
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
         <div>
           <h2 className="heading-2" style={{ marginBottom: '0.25rem' }}>Quotation Generator</h2>
@@ -208,28 +261,92 @@ const Quotations: React.FC = () => {
                   <th style={{ padding: '1rem', fontWeight: 600 }}>Quotation No</th>
                   <th style={{ padding: '1rem', fontWeight: 600 }}>Date</th>
                   <th style={{ padding: '1rem', fontWeight: 600 }}>Customer Name</th>
+                  <th style={{ padding: '1rem', fontWeight: 600 }}>Created By</th>
+                  <th style={{ padding: '1rem', fontWeight: 600 }}>Status</th>
                   <th style={{ padding: '1rem', fontWeight: 600 }}>Total Amount</th>
                   <th style={{ padding: '1rem', fontWeight: 600, textAlign: 'right' }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {savedQuotations.map((q, idx) => (
-                  <tr key={idx} style={{ borderBottom: '1px solid var(--border-color)' }}>
-                    <td style={{ padding: '1rem', fontWeight: 600, color: 'var(--primary)' }}>{q.qtNo}</td>
-                    <td style={{ padding: '1rem' }}>{q.date}</td>
-                    <td style={{ padding: '1rem' }}>{q.customerName}</td>
-                    <td style={{ padding: '1rem', fontWeight: 600 }}>₹{q.totalAmount.toLocaleString()}</td>
-                    <td style={{ padding: '1rem', textAlign: 'right' }}>
-                      <button 
-                        onClick={() => loadQuotation(q)}
-                        className="btn-secondary"
-                        style={{ padding: '0.5rem 1rem', fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}
-                      >
-                        <FileText size={14} /> View / Print
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                {savedQuotations.map((q, idx) => {
+                  const status = q.status || 'Approved';
+                  const isPending = status === 'Pending Admin Approval';
+                  return (
+                    <tr key={idx} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                      <td style={{ padding: '1rem', fontWeight: 600, color: 'var(--primary)' }}>{q.qtNo}</td>
+                      <td style={{ padding: '1rem' }}>{q.date}</td>
+                      <td style={{ padding: '1rem' }}>{q.customerName}</td>
+                      <td style={{ padding: '1rem', color: 'var(--text-secondary)' }}>{q.createdBy || 'Admin'}</td>
+                      <td style={{ padding: '1rem' }}>
+                        <span style={{
+                          padding: '0.25rem 0.65rem',
+                          borderRadius: '1rem',
+                          fontSize: '0.75rem',
+                          fontWeight: 600,
+                          backgroundColor: isPending ? '#fef3c7' : status === 'Approved' ? '#dcfce7' : '#fee2e2',
+                          color: isPending ? '#d97706' : status === 'Approved' ? '#16a34a' : '#dc2626'
+                        }}>
+                          {status}
+                        </span>
+                      </td>
+                      <td style={{ padding: '1rem', fontWeight: 600 }}>₹{q.totalAmount.toLocaleString()}</td>
+                      <td style={{ padding: '1rem', textAlign: 'right' }}>
+                        <div style={{ display: 'inline-flex', gap: '0.5rem', alignItems: 'center' }}>
+                          <button 
+                            onClick={() => loadQuotation(q)}
+                            className="btn-secondary"
+                            style={{ padding: '0.4rem 0.75rem', fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}
+                          >
+                            <FileText size={14} /> View / Print
+                          </button>
+
+                          {!isStaff && isPending && (
+                            <>
+                              <button
+                                onClick={() => handleApproveQuotation(q.qtNo)}
+                                style={{
+                                  padding: '0.4rem 0.65rem',
+                                  fontSize: '0.75rem',
+                                  fontWeight: 600,
+                                  backgroundColor: '#16a34a',
+                                  color: '#fff',
+                                  border: 'none',
+                                  borderRadius: '0.25rem',
+                                  cursor: 'pointer',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '0.25rem'
+                                }}
+                                title="Approve quotation"
+                              >
+                                <Check size={14} /> Approve
+                              </button>
+                              <button
+                                onClick={() => handleRejectQuotation(q.qtNo)}
+                                style={{
+                                  padding: '0.4rem 0.65rem',
+                                  fontSize: '0.75rem',
+                                  fontWeight: 600,
+                                  backgroundColor: '#dc2626',
+                                  color: '#fff',
+                                  border: 'none',
+                                  borderRadius: '0.25rem',
+                                  cursor: 'pointer',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '0.25rem'
+                                }}
+                                title="Reject quotation"
+                              >
+                                <X size={14} /> Reject
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
