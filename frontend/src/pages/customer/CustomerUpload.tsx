@@ -12,115 +12,130 @@ const CustomerUpload: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   // Default documents fallback
-  // Default documents fallback
+  // Canonical document normalization helper
+  const normalizeDocKey = (key: string) => (key || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+
+  const getCanonicalDocInfo = (rawKey: string, rawLabel?: string) => {
+    const nKey = normalizeDocKey(rawKey);
+    const nLabel = normalizeDocKey(rawLabel || '');
+
+    if (nKey.includes('PHOTO') || nKey.includes('PASSPORT') || nLabel.includes('PHOTO') || nLabel.includes('PASSPORT')) {
+      return { id: 'photo', uploadKey: 'CUSTOMER PHOTOGRAPH', name: 'Passport Size Photograph' };
+    }
+    if (nKey.includes('SIGNATURE') || nKey.includes('SIGN') || nLabel.includes('SIGNATURE') || nLabel.includes('SIGN')) {
+      return { id: 'signature', uploadKey: 'CUSTOMER SIGNATURE', name: 'Customer Signature' };
+    }
+    if (nKey.includes('AADHAR') || nKey.includes('AADHAAR') || nLabel.includes('AADHAR') || nLabel.includes('AADHAAR')) {
+      return { id: 'aadhar', uploadKey: 'AADHAR CARD', name: 'Aadhaar Card' };
+    }
+    if (nKey.includes('PAN') || nLabel.includes('PAN')) {
+      return { id: 'pan', uploadKey: 'PAN CARD', name: 'PAN Card' };
+    }
+    if (nKey.includes('SALEDEED') || nKey.includes('LANDDOC') || nKey.includes('DEED') || nLabel.includes('DEED')) {
+      return { id: 'sale_deed', uploadKey: 'SALE DEED', name: 'Land Document / Sale Deed' };
+    }
+    if (nKey.includes('PATTA') || nLabel.includes('PATTA')) {
+      return { id: 'patta', uploadKey: 'PATTA', name: 'Patta Copy' };
+    }
+    if (nKey.includes('FMB') || nLabel.includes('FMB')) {
+      return { id: 'fmb', uploadKey: 'FMB Sketch', name: 'FMB Sketch' };
+    }
+    if (nKey.includes('ENCUMBRANCE') || nLabel.includes('ENCUMBRANCE') || nKey.includes('RECEIPT')) {
+      return { id: 'encumbrance_certificate', uploadKey: 'ENCUMBRANCE CERTIFICATE', name: 'Encumbrance Certificate (EC)' };
+    }
+    if (nKey.includes('PROPERTYTAX') || nKey.includes('TAX') || nLabel.includes('TAX')) {
+      return { id: 'property_tax', uploadKey: 'PROPERTY TAX', name: 'Property Tax Receipt' };
+    }
+    if (nKey.includes('PLAN') || nLabel.includes('PLAN')) {
+      return { id: 'building_plan', uploadKey: 'BUILDING PLAN', name: 'Proposed Building Plan' };
+    }
+    if (nKey.includes('DRAWING') || nKey.includes('BLUEPRINT') || nLabel.includes('DRAWING')) {
+      return { id: 'working_drawing', uploadKey: 'WORKING DRAWING', name: 'Working Drawing / Blueprint (Optional)' };
+    }
+    if (nKey.includes('OTHER') || nLabel.includes('OTHER')) {
+      return { id: 'other_document', uploadKey: 'OTHER DOCUMENT', name: 'Other Supporting Document (Optional)' };
+    }
+
+    const cleanId = rawKey.toLowerCase().replace(/[^a-z0-9]+/g, '_') || nLabel.toLowerCase();
+    const cleanKey = rawKey.toUpperCase().replace(/[^A-Z0-9]/g, '_') || nLabel;
+    return { id: cleanId, uploadKey: cleanKey, name: rawLabel || rawKey || 'Custom Document' };
+  };
+
+  // Baseline documents (default required: false so it strictly adheres to Settings)
   const DEFAULT_DOCS = [
-    { id: 'sale_deed', name: 'Land Document / Sale Deed', required: true, fileName: null, status: 'Missing' },
-    { id: 'patta', name: 'Patta Copy', required: true, fileName: null, status: 'Missing' },
-    { id: 'fmb', name: 'FMB Sketch', required: false, fileName: null, status: 'Missing' },
-    { id: 'pan', name: 'PAN Card', required: true, fileName: null, status: 'Missing' },
-    { id: 'aadhar', name: 'Aadhaar Card', required: true, fileName: null, status: 'Missing' },
-    { id: 'photo', name: 'Passport Size Photograph', required: true, fileName: null, status: 'Missing' },
-    { id: 'signature', name: 'Customer Signature', required: true, fileName: null, status: 'Missing' },
-    { id: 'building_plan', name: 'Proposed Building Plan', required: false, fileName: null, status: 'Missing' },
-    { id: 'working_drawing', name: 'Working Drawing / Blueprint (Optional)', required: false, fileName: null, status: 'Missing' },
-    { id: 'other_document', name: 'Other Supporting Document (Optional)', required: false, fileName: null, status: 'Missing' }
+    { id: 'photo', uploadKey: 'CUSTOMER PHOTOGRAPH', name: 'Passport Size Photograph', required: false, description: 'Recent passport size photo of the applicant', fileName: null, status: 'Missing' },
+    { id: 'signature', uploadKey: 'CUSTOMER SIGNATURE', name: 'Customer Signature', required: false, description: 'Official customer specimen signature', fileName: null, status: 'Missing' },
+    { id: 'aadhar', uploadKey: 'AADHAR CARD', name: 'Aadhaar Card', required: false, description: 'Government Aadhaar identity proof of owner/applicant', fileName: null, status: 'Missing' },
+    { id: 'pan', uploadKey: 'PAN CARD', name: 'PAN Card', required: false, description: 'Permanent Account Number card', fileName: null, status: 'Missing' },
+    { id: 'sale_deed', uploadKey: 'SALE DEED', name: 'Land Document / Sale Deed', required: false, description: 'Registered sale deed or parent document establishing ownership', fileName: null, status: 'Missing' },
+    { id: 'patta', uploadKey: 'PATTA', name: 'Patta Copy', required: false, description: 'Latest Patta/Chitta copy in applicant name', fileName: null, status: 'Missing' },
+    { id: 'building_plan', uploadKey: 'BUILDING PLAN', name: 'Proposed Building Plan', required: false, description: 'Proposed architectural plan', fileName: null, status: 'Missing' },
+    { id: 'fmb', uploadKey: 'FMB Sketch', name: 'FMB Sketch', required: false, description: 'Field Measurement Book sketch copy', fileName: null, status: 'Missing' },
+    { id: 'encumbrance_certificate', uploadKey: 'ENCUMBRANCE CERTIFICATE', name: 'Encumbrance Certificate (EC)', required: false, description: 'Latest 15 to 30 years EC from Sub-Registrar', fileName: null, status: 'Missing' },
+    { id: 'property_tax', uploadKey: 'PROPERTY TAX', name: 'Property Tax Receipt', required: false, description: 'Latest municipal / panchayat tax paid receipt', fileName: null, status: 'Missing' },
+    { id: 'working_drawing', uploadKey: 'WORKING DRAWING', name: 'Working Drawing / Blueprint (Optional)', required: false, description: 'Technical drawings or CAD blueprint', fileName: null, status: 'Missing' },
+    { id: 'other_document', uploadKey: 'OTHER DOCUMENT', name: 'Other Supporting Document (Optional)', required: false, description: 'Any other supporting document or certificate', fileName: null, status: 'Missing' }
   ];
 
   // Track uploaded documents
   const [documents, setDocuments] = useState<any[]>(DEFAULT_DOCS);
 
   useEffect(() => {
-    const docMapping: any = {
-      'sale_deed': 'SALE DEED',
-      'SALE DEED': 'sale_deed',
-      'LAND DOCUMENT': 'sale_deed',
-      'patta': 'PATTA',
-      'PATTA': 'patta',
-      'fmb': 'FMB',
-      'FMB': 'fmb',
-      'pan': 'PAN CARD',
-      'PAN CARD': 'pan',
-      'aadhar': 'AADHAR CARD',
-      'AADHAR CARD': 'aadhar',
-      'AADHAAR CARD': 'aadhar',
-      'photo': 'CUSTOMER PHOTOGRAPH',
-      'CUSTOMER PHOTOGRAPH': 'photo',
-      'signature': 'CUSTOMER SIGNATURE',
-      'CUSTOMER SIGNATURE': 'signature',
-      'PROPERTY SIGNATURE': 'signature',
-      'building_plan': 'BUILDING PLAN',
-      'BUILDING PLAN': 'building_plan',
-      'working_drawing': 'WORKING DRAWING',
-      'WORKING DRAWING': 'working_drawing',
-      'STRUCTURAL BLUEPRINT': 'working_drawing',
-      'other_document': 'OTHER DOCUMENT',
-      'OTHER DOCUMENT': 'other_document',
-      'ADDITIONAL DOCUMENT': 'other_document'
-    };
-
     const loadDocs = async () => {
-      // 1. Fetch dynamic document checklist from backend settings or localStorage
-      let configuredList = DEFAULT_DOCS;
+      let configuredList = DEFAULT_DOCS.map(d => ({ ...d }));
       try {
         const apiUrl = getApiUrl();
-        let reqDocs: any[] = [];
+        let settingsDocs: any[] = [];
 
-        // Check localStorage first for instant client reflection
-        const savedChecklist = localStorage.getItem('requiredDocuments') || localStorage.getItem('admin_required_documents');
-        if (savedChecklist) {
-          try {
-            const parsed = JSON.parse(savedChecklist);
-            if (Array.isArray(parsed) && parsed.length > 0) {
-              reqDocs = parsed;
+        // 1. Fetch live settings from backend API
+        try {
+          const settingsRes = await fetch(`${apiUrl}/settings`);
+          if (settingsRes.ok) {
+            const settingsData = await settingsRes.json();
+            if (Array.isArray(settingsData.requiredDocuments) && settingsData.requiredDocuments.length > 0) {
+              settingsDocs = settingsData.requiredDocuments;
             }
-          } catch (e) {}
+          }
+        } catch (_) {}
+
+        // 2. Check localStorage fallback if backend settings empty
+        if (settingsDocs.length === 0) {
+          const savedChecklist = localStorage.getItem('requiredDocuments') || localStorage.getItem('admin_required_documents');
+          if (savedChecklist) {
+            try {
+              const parsed = JSON.parse(savedChecklist);
+              if (Array.isArray(parsed) && parsed.length > 0) {
+                settingsDocs = parsed;
+              }
+            } catch (_) {}
+          }
         }
 
-        // Fetch backend settings
-        const settingsRes = await fetch(`${apiUrl}/settings`);
-        if (settingsRes.ok) {
-          const settingsData = await settingsRes.json();
-          if (Array.isArray(settingsData.requiredDocuments) && settingsData.requiredDocuments.length > 0) {
-            if (reqDocs.length === 0) {
-              reqDocs = settingsData.requiredDocuments;
+        // 3. Apply settings to configuredList: exact required status, no duplicates!
+        if (settingsDocs.length > 0) {
+          settingsDocs.forEach((item: any) => {
+            const canon = getCanonicalDocInfo(item.key, item.label);
+            const existing = configuredList.find(d => d.id === canon.id || d.uploadKey === canon.uploadKey);
+            if (existing) {
+              if (item.required !== undefined) existing.required = Boolean(item.required);
+              if (item.description) existing.description = item.description;
+              if (item.label) existing.name = item.label;
             } else {
-              // Merge any missing keys from backend
-              settingsData.requiredDocuments.forEach((sd: any) => {
-                const sKey = (sd.key || sd.id || sd.label || '').toUpperCase();
-                const exists = reqDocs.some((r: any) => (r.key || r.id || r.label || '').toUpperCase() === sKey);
-                if (!exists) reqDocs.push(sd);
+              // Brand new custom doc configured in settings (e.g. Birth cert, Fire NOC)
+              configuredList.push({
+                id: canon.id,
+                uploadKey: canon.uploadKey,
+                name: canon.name,
+                required: Boolean(item.required),
+                description: item.description || '',
+                fileName: null,
+                status: 'Missing'
               });
             }
-          }
-        }
-
-        if (reqDocs.length > 0) {
-          configuredList = reqDocs.map((item: any) => {
-            const rawKey = (item.key || item.id || item.label || 'doc').toString();
-            const docId = rawKey.toLowerCase().replace(/[^a-z0-9]+/g, '_');
-            const docName = item.label || item.name || item.key || 'Custom Document';
-            docMapping[docId] = rawKey.toUpperCase();
-            docMapping[rawKey.toUpperCase()] = docId;
-            return {
-              id: docId,
-              name: docName,
-              required: item.required !== undefined ? Boolean(item.required) : false,
-              description: item.description || '',
-              fileName: null,
-              status: 'Missing'
-            };
           });
-
-          // Ensure optional slots for drawings & other docs
-          if (!configuredList.some(d => d.id === 'working_drawing' || d.id.includes('drawing'))) {
-            configuredList.push({ id: 'working_drawing', name: 'Working Drawing / Blueprint (Optional)', required: false, fileName: null, status: 'Missing' });
-          }
-          if (!configuredList.some(d => d.id === 'other_document' || d.id.includes('other'))) {
-            configuredList.push({ id: 'other_document', name: 'Other Supporting Document (Optional)', required: false, fileName: null, status: 'Missing' });
-          }
         }
       } catch (err) {
-        console.warn('Could not load dynamic settings checklist, using defaults:', err);
+        console.warn('Error loading dynamic settings checklist in CustomerUpload:', err);
       }
 
       const savedDocs = localStorage.getItem(`customerDocs_${id}`);
@@ -128,9 +143,8 @@ const CustomerUpload: React.FC = () => {
       if (savedDocs) {
         try {
           const parsedSaved = JSON.parse(savedDocs);
-          // Merge configuredList with saved uploads
           currentDocs = configuredList.map(cfg => {
-            const existing = parsedSaved.find((p: any) => p.id === cfg.id || p.name.toUpperCase() === cfg.name.toUpperCase());
+            const existing = parsedSaved.find((p: any) => p.id === cfg.id || p.uploadKey === cfg.uploadKey || p.name.toUpperCase() === cfg.name.toUpperCase());
             if (existing) {
               return { ...cfg, ...existing, required: cfg.required };
             }
@@ -142,9 +156,11 @@ const CustomerUpload: React.FC = () => {
       let reqList: string[] = [];
       const localCasesStr = localStorage.getItem('mock_saved_cases');
       if (localCasesStr) {
-        const localCases = JSON.parse(localCasesStr);
-        const caseData = localCases.find((c: any) => (c.application_number || c.id) === id);
-        if (caseData?.requestedReuploads) reqList = caseData.requestedReuploads;
+        try {
+          const localCases = JSON.parse(localCasesStr);
+          const caseData = localCases.find((c: any) => (c.application_number || c.id) === id);
+          if (caseData?.requestedReuploads) reqList = caseData.requestedReuploads;
+        } catch (_) {}
       }
 
       // Also fetch from live MongoDB API
@@ -164,15 +180,12 @@ const CustomerUpload: React.FC = () => {
             const caseFiles = apiCase.uploadedFiles || apiCase.fullData?.documents || {};
             if (caseFiles) {
               currentDocs = currentDocs.map((d: any) => {
-                // Check direct key or mapped key
                 const fileEntryKey = Object.keys(caseFiles).find(k => {
-                  if (docMapping[k] === d.id) return true;
-                  if (k.toUpperCase() === d.name.toUpperCase()) return true;
-                  if (k.toUpperCase() === d.id.toUpperCase()) return true;
-                  return false;
+                  const kCanon = getCanonicalDocInfo(k);
+                  return kCanon.id === d.id || kCanon.uploadKey === d.uploadKey || normalizeDocKey(k) === normalizeDocKey(d.uploadKey) || normalizeDocKey(k) === normalizeDocKey(d.name);
                 });
                 if (fileEntryKey && caseFiles[fileEntryKey]) {
-                  return { ...d, fileData: caseFiles[fileEntryKey], fileName: `${fileEntryKey}.jpg`, status: 'Uploaded' };
+                  return { ...d, fileData: caseFiles[fileEntryKey], fileName: `${d.name}.jpg`, status: 'Uploaded' };
                 }
                 return d;
               });
@@ -184,11 +197,11 @@ const CustomerUpload: React.FC = () => {
       }
 
       if (reqList.length > 0) {
-        const reqIds = reqList.map((r: string) => docMapping[r] || docMapping[r.toUpperCase()] || r.toLowerCase().replace(/\s+/g, '_')).filter(Boolean);
-        setRequestedDocIds(reqIds);
+        const reqCanonIds = reqList.map((r: string) => getCanonicalDocInfo(r).id);
+        setRequestedDocIds(reqCanonIds);
         
         currentDocs = currentDocs.map((d: any) => {
-          if (reqIds.includes(d.id)) {
+          if (reqCanonIds.includes(d.id)) {
             return { ...d, status: 'Needs Reupload', fileName: null, fileData: null };
           }
           return d;
@@ -325,7 +338,7 @@ const CustomerUpload: React.FC = () => {
         const mappedFiles: any = {};
         newDocs.forEach((d: any) => {
           if (d.fileData) {
-            const docKey = docMapping[d.id] || d.name.toUpperCase();
+            const docKey = d.uploadKey || docMapping[d.id] || d.name.toUpperCase();
             mappedFiles[docKey] = d.fileData;
           }
         });
@@ -408,7 +421,7 @@ const CustomerUpload: React.FC = () => {
         const mappedFiles: any = {};
         documents.forEach((d: any) => {
           if (d.fileData) {
-            const docKey = docMapping[d.id] || d.name.toUpperCase();
+            const docKey = d.uploadKey || docMapping[d.id] || d.name.toUpperCase();
             mappedFiles[docKey] = d.fileData;
           }
         });

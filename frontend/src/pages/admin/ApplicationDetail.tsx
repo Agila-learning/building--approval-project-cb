@@ -1265,10 +1265,23 @@ const ApplicationDetail: React.FC = () => {
       });
     }
 
-    const isDocMandatory = (docId: string, defaultVal: boolean) => {
+    const normalizeDocKey = (key: string) => (key || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+
+    const isDocMandatory = (docId: string, defaultVal: boolean = false) => {
+      const nTarget = normalizeDocKey(docId);
       const match = customDocs.find((cd: any) => {
-        const cleanKey = (cd.key || cd.id || cd.label || '').toUpperCase().replace(/[^A-Z0-9]/g, '_');
-        return cleanKey === docId || (cleanKey.includes('PATTA') && docId === 'PATTA') || (cleanKey.includes('PLAN') && docId === 'BUILDING PLAN') || (cleanKey.includes('DEED') && docId === 'SALE DEED');
+        const nKey = normalizeDocKey(cd.key || cd.id || '');
+        const nLabel = normalizeDocKey(cd.label || cd.name || '');
+        if (nKey === nTarget || nLabel === nTarget) return true;
+        if ((nTarget.includes('PHOTO') || nTarget.includes('PASSPORT')) && (nKey.includes('PHOTO') || nLabel.includes('PHOTO'))) return true;
+        if ((nTarget.includes('SIGNATURE') || nTarget.includes('SIGN')) && (nKey.includes('SIGNATURE') || nLabel.includes('SIGNATURE'))) return true;
+        if ((nTarget.includes('AADHAR') || nTarget.includes('AADHAAR')) && (nKey.includes('AADHAR') || nLabel.includes('AADHAR'))) return true;
+        if (nTarget.includes('PAN') && (nKey.includes('PAN') || nLabel.includes('PAN'))) return true;
+        if ((nTarget.includes('SALEDEED') || nTarget.includes('LAND')) && (nKey.includes('SALEDEED') || nKey.includes('DEED') || nLabel.includes('DEED'))) return true;
+        if (nTarget.includes('PATTA') && (nKey.includes('PATTA') || nLabel.includes('PATTA'))) return true;
+        if (nTarget.includes('FMB') && (nKey.includes('FMB') || nLabel.includes('FMB'))) return true;
+        if (nTarget.includes('PLAN') && (nKey.includes('PLAN') || nLabel.includes('PLAN'))) return true;
+        return false;
       });
       return match && match.required !== undefined ? Boolean(match.required) : defaultVal;
     };
@@ -1278,7 +1291,7 @@ const ApplicationDetail: React.FC = () => {
         id: 'CUSTOMER PHOTOGRAPH',
         title: 'Customer Photograph',
         category: 'Applicant Verification',
-        isMandatory: isDocMandatory('CUSTOMER PHOTOGRAPH', true),
+        isMandatory: isDocMandatory('CUSTOMER PHOTOGRAPH', false),
         description: 'Recent passport size photo of the applicant / owner.',
         fileUrl: uploadedFiles['CUSTOMER PHOTOGRAPH'] || uploadedFiles['PHOTO']
       },
@@ -1286,7 +1299,7 @@ const ApplicationDetail: React.FC = () => {
         id: 'CUSTOMER SIGNATURE',
         title: 'Customer Specimen Signature',
         category: 'Applicant Verification',
-        isMandatory: isDocMandatory('CUSTOMER SIGNATURE', true),
+        isMandatory: isDocMandatory('CUSTOMER SIGNATURE', false),
         description: 'Official specimen signature of the property owner / applicant.',
         fileUrl: uploadedFiles['CUSTOMER SIGNATURE'] || uploadedFiles['SIGNATURE']
       },
@@ -1294,7 +1307,7 @@ const ApplicationDetail: React.FC = () => {
         id: 'AADHAR CARD',
         title: 'Aadhaar Card',
         category: 'Applicant Verification',
-        isMandatory: isDocMandatory('AADHAR CARD', true),
+        isMandatory: isDocMandatory('AADHAR CARD', false),
         description: 'Government Aadhaar identity proof of owner/applicant.',
         fileUrl: uploadedFiles['AADHAR CARD'] || uploadedFiles['AADHAAR CARD'] || uploadedFiles['AADHAR']
       },
@@ -1302,7 +1315,7 @@ const ApplicationDetail: React.FC = () => {
         id: 'PAN CARD',
         title: 'PAN Card',
         category: 'Applicant Verification',
-        isMandatory: isDocMandatory('PAN CARD', true),
+        isMandatory: isDocMandatory('PAN CARD', false),
         description: 'Permanent Account Number card copy.',
         fileUrl: uploadedFiles['PAN CARD'] || uploadedFiles['PAN']
       },
@@ -1310,7 +1323,7 @@ const ApplicationDetail: React.FC = () => {
         id: 'SALE DEED',
         title: 'Registered Sale Deed / Title Deed',
         category: 'Property Documents',
-        isMandatory: isDocMandatory('SALE DEED', true),
+        isMandatory: isDocMandatory('SALE DEED', false),
         description: 'Registered title deed or sale deed proving clear ownership.',
         fileUrl: uploadedFiles['SALE DEED'] || uploadedFiles['LAND DOCUMENT']
       },
@@ -1318,7 +1331,7 @@ const ApplicationDetail: React.FC = () => {
         id: 'PATTA',
         title: 'Patta Copy / Revenue Record',
         category: 'Property Documents',
-        isMandatory: isDocMandatory('PATTA', true),
+        isMandatory: isDocMandatory('PATTA', false),
         description: 'Computerized Patta extract or revenue record for the survey number.',
         fileUrl: uploadedFiles['PATTA']
       },
@@ -1368,17 +1381,35 @@ const ApplicationDetail: React.FC = () => {
     if (customDocs && Array.isArray(customDocs)) {
       customDocs.forEach((cd: any) => {
         const rawKey = (cd.key || cd.id || cd.label || '').toString().trim();
-        const cleanKey = rawKey.toUpperCase().replace(/[^A-Z0-9]/g, '_');
-        if (!cleanKey) return;
+        const rawLabel = (cd.label || cd.name || rawKey).toString().trim();
+        const nKey = normalizeDocKey(rawKey);
+        const nLabel = normalizeDocKey(rawLabel);
+        if (!nKey && !nLabel) return;
 
-        const alreadyExists = docItems.some(d => d.id === cleanKey || d.id === rawKey || d.title.toLowerCase() === (cd.label || '').toLowerCase());
+        const alreadyExists = docItems.some(d => {
+          const dKey = normalizeDocKey(d.id);
+          const dTitle = normalizeDocKey(d.title);
+          if (dKey === nKey || dTitle === nLabel || dKey === nLabel || dTitle === nKey) return true;
+          if ((nKey.includes('PHOTO') || nLabel.includes('PHOTO')) && dKey.includes('PHOTO')) return true;
+          if ((nKey.includes('SIGNATURE') || nLabel.includes('SIGNATURE')) && dKey.includes('SIGNATURE')) return true;
+          if ((nKey.includes('AADHAR') || nLabel.includes('AADHAR')) && dKey.includes('AADHAR')) return true;
+          if ((nKey.includes('PAN') || nLabel.includes('PAN')) && dKey.includes('PAN')) return true;
+          if ((nKey.includes('SALEDEED') || nLabel.includes('DEED')) && dKey.includes('SALEDEED')) return true;
+          if ((nKey.includes('PATTA') || nLabel.includes('PATTA')) && dKey.includes('PATTA')) return true;
+          if ((nKey.includes('FMB') || nLabel.includes('FMB')) && dKey.includes('FMB')) return true;
+          if ((nKey.includes('RECEIPT') || nLabel.includes('ENCUMBRANCE')) && dKey.includes('RECEIPT')) return true;
+          if ((nKey.includes('PLAN') || nLabel.includes('PLAN')) && dKey.includes('PLAN')) return true;
+          return false;
+        });
+
         if (!alreadyExists) {
+          const cleanKey = rawKey.toUpperCase().replace(/[^A-Z0-9]/g, '_') || nLabel;
           docItems.push({
             id: cleanKey,
-            title: cd.label || cd.name || cleanKey.replace(/_/g, ' '),
+            title: rawLabel,
             category: 'Custom Configured Documents',
             isMandatory: Boolean(cd.required),
-            description: cd.description || `Required official document: ${cd.label || cleanKey}`,
+            description: cd.description || `Required official document: ${rawLabel}`,
             fileUrl: uploadedFiles[cleanKey] || uploadedFiles[rawKey]
           });
         }

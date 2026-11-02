@@ -32,7 +32,16 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
   const loggedInUser = localStorage.getItem('loggedInUser') || 'Admin';
   const isEmployee = loggedInUser !== 'Admin';
 
-  const [currentStep, setCurrentStep] = useState(1);
+  const [currentStep, setCurrentStep] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('newApp_currentStep');
+      if (saved) {
+        const step = parseInt(saved, 10);
+        if (step >= 1 && step <= 3) return step;
+      }
+    } catch (_) {}
+    return 1;
+  });
   const totalSteps = isCustomer ? 2 : 3;
 
   React.useEffect(() => {
@@ -102,59 +111,58 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
     fetchSettings();
   }, []);
 
+  const normalizeDocKey = (key: string) => (key || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+
   const allApplicationDocs = React.useMemo(() => {
-    const personalKeys = ['CUSTOMER PHOTOGRAPH', 'CUSTOMER SIGNATURE', 'AADHAR CARD', 'PAN CARD', 'PHOTO', 'SIGNATURE', 'AADHAR', 'PAN'];
-
-    const personalDocs = [
-      { key: 'CUSTOMER PHOTOGRAPH', label: 'Customer Photograph', step: 2, required: true, desc: 'Passport size photograph of the applicant' },
-      { key: 'CUSTOMER SIGNATURE', label: 'Customer Signature', step: 2, required: true, desc: 'Official customer specimen signature' },
-      { key: 'AADHAR CARD', label: 'Aadhaar Card', step: 2, required: true, desc: 'Government Aadhaar identity proof of applicant' },
-      { key: 'PAN CARD', label: 'PAN Card', step: 2, required: true, desc: 'Permanent Account Number (PAN) Card' },
-    ];
-
-    // Sync personal docs required status from settings if configured
-    personalDocs.forEach(pd => {
-      const match = settingsDocs?.find((sd: any) => {
-        const cleanKey = (sd.key || sd.id || sd.label || '').toUpperCase().replace(/[^A-Z0-9]/g, '_');
-        return cleanKey === pd.key || cleanKey.replace(/_/g, '') === pd.key.replace(/_/g, '');
-      });
-      if (match && match.required !== undefined) {
-        pd.required = Boolean(match.required);
-      }
-    });
-
-    const propertyDocs = [
-      { key: 'SALE DEED', altKey: 'LAND DOCUMENT', label: 'Sale Deed / Land Document', step: 2, required: true, desc: 'Registered document of property ownership' },
-      { key: 'PATTA', label: 'Patta Copy', step: 2, required: true, desc: 'Official revenue document / Patta copy' },
+    // 1. Baseline application documents
+    const baseDocs = [
+      { key: 'CUSTOMER PHOTOGRAPH', label: 'Customer Photograph', step: 2, required: false, desc: 'Passport size photograph of the applicant' },
+      { key: 'CUSTOMER SIGNATURE', label: 'Customer Signature', step: 2, required: false, desc: 'Official customer specimen signature' },
+      { key: 'AADHAR CARD', label: 'Aadhaar Card', step: 2, required: false, desc: 'Government Aadhaar identity proof of applicant' },
+      { key: 'PAN CARD', label: 'PAN Card', step: 2, required: false, desc: 'Permanent Account Number (PAN) Card' },
+      { key: 'SALE DEED', label: 'Sale Deed / Land Document', step: 2, required: false, desc: 'Registered document of property ownership' },
+      { key: 'PATTA', label: 'Patta Copy', step: 2, required: false, desc: 'Official revenue document / Patta copy' },
       { key: 'BUILDING PLAN', label: 'Proposed Building Plan', step: 2, required: false, desc: 'Approved or proposed architectural plan' },
+      { key: 'FMB', label: 'FMB Sketch', step: 2, required: false, desc: 'Field Measurement Book sketch copy' },
+      { key: 'ENCUMBRANCE CERTIFICATE', label: 'Encumbrance Certificate (EC)', step: 2, required: false, desc: 'Latest 15 to 30 years EC from Sub-Registrar' },
+      { key: 'PROPERTY TAX', label: 'Property Tax Receipt', step: 2, required: false, desc: 'Latest municipal / panchayat tax paid receipt' }
     ];
 
-    // Sync property docs required status from settings (respect if admin changed mandatory to optional)
-    propertyDocs.forEach(b => {
-      const match = settingsDocs?.find((sd: any) => {
-        const cleanKey = (sd.key || sd.id || sd.label || '').toUpperCase().replace(/[^A-Z0-9]/g, '_');
-        return cleanKey === b.key || 
-               (b.altKey && cleanKey === b.altKey) || 
-               cleanKey.includes(b.key.replace(/\s+/g, '')) || 
-               (cleanKey.includes('PATTA') && b.key === 'PATTA') || 
-               (cleanKey.includes('PLAN') && b.key === 'BUILDING PLAN') || 
-               (cleanKey.includes('DEED') && b.key === 'SALE DEED');
-      });
-      if (match && match.required !== undefined) {
-        b.required = Boolean(match.required);
-      }
-    });
+    const matchDoc = (doc: any, rawKey: string, rawLabel?: string) => {
+      const dKey = normalizeDocKey(doc.key);
+      const dLabel = normalizeDocKey(doc.label);
+      const nKey = normalizeDocKey(rawKey);
+      const nLabel = normalizeDocKey(rawLabel || '');
 
-    // Add custom checklist items configured in Admin Settings (e.g. Birth Certificate)
-    if (settingsDocs && settingsDocs.length > 0) {
+      if (dKey === nKey || dLabel === nLabel || dLabel === nKey || dKey === nLabel) return true;
+      if ((nKey.includes('PHOTO') || nKey.includes('PASSPORT')) && dKey.includes('PHOTO')) return true;
+      if ((nKey.includes('SIGNATURE') || nKey.includes('SIGN')) && dKey.includes('SIGNATURE')) return true;
+      if ((nKey.includes('AADHAR') || nKey.includes('AADHAAR')) && dKey.includes('AADHAR')) return true;
+      if (nKey.includes('PAN') && dKey.includes('PAN')) return true;
+      if ((nKey.includes('SALEDEED') || nKey.includes('LANDDOC') || nKey.includes('DEED')) && dKey.includes('SALEDEED')) return true;
+      if (nKey.includes('PATTA') && dKey.includes('PATTA')) return true;
+      if (nKey.includes('FMB') && dKey.includes('FMB')) return true;
+      if (nKey.includes('ENCUMBRANCE') && dKey.includes('ENCUMBRANCE')) return true;
+      if (nKey.includes('PROPERTYTAX') && dKey.includes('PROPERTYTAX')) return true;
+      if (nKey.includes('BUILDINGPLAN') && dKey.includes('BUILDINGPLAN')) return true;
+      return false;
+    };
+
+    // 2. Synchronize required status, labels and descriptions from settingsDocs
+    if (settingsDocs && Array.isArray(settingsDocs) && settingsDocs.length > 0) {
       settingsDocs.forEach((sd: any) => {
-        const cleanKey = (sd.key || sd.id || sd.label || '').toUpperCase().replace(/[^A-Z0-9]/g, '_');
-        const isPersonal = personalKeys.some(pk => cleanKey === pk || cleanKey.replace(/_/g, '') === pk.replace(/_/g, ''));
-        if (isPersonal) return;
+        const rawKey = sd.key || sd.id || sd.label || '';
+        const rawLabel = sd.label || sd.name || sd.key || '';
+        const existing = baseDocs.find(b => matchDoc(b, rawKey, rawLabel));
 
-        const exists = propertyDocs.some(b => b.key === cleanKey || (b as any).altKey === cleanKey);
-        if (!exists && cleanKey) {
-          propertyDocs.push({
+        if (existing) {
+          if (sd.required !== undefined) existing.required = Boolean(sd.required);
+          if (sd.description) existing.desc = sd.description;
+          if (sd.label) existing.label = sd.label;
+        } else {
+          // New custom document configured in Settings (e.g. Birth cert, Fire NOC)
+          const cleanKey = rawKey.toUpperCase().replace(/[^A-Z0-9]/g, '_') || normalizeDocKey(rawLabel);
+          baseDocs.push({
             key: cleanKey,
             label: sd.label || sd.name || cleanKey.replace(/_/g, ' '),
             step: 2,
@@ -165,9 +173,9 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
       });
     }
 
-    // Always include optional Drawing & Other Document slots for admin/staff/customer
-    if (!propertyDocs.some(b => b.key === 'WORKING DRAWING')) {
-      propertyDocs.push({
+    // 3. Optional technical drawings & other document
+    if (!baseDocs.some(b => matchDoc(b, 'WORKING DRAWING', 'Working Drawing / Blueprint'))) {
+      baseDocs.push({
         key: 'WORKING DRAWING',
         label: 'Working Drawing / Blueprint (Optional)',
         step: 2,
@@ -175,8 +183,8 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
         desc: 'Detailed architectural drawings, structural layouts or CAD drawings (Optional)'
       });
     }
-    if (!propertyDocs.some(b => b.key === 'OTHER DOCUMENT')) {
-      propertyDocs.push({
+    if (!baseDocs.some(b => matchDoc(b, 'OTHER DOCUMENT', 'Other Supporting Document'))) {
+      baseDocs.push({
         key: 'OTHER DOCUMENT',
         label: 'Other Supporting Document (Optional)',
         step: 2,
@@ -185,7 +193,7 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
       });
     }
 
-    return [...personalDocs, ...propertyDocs];
+    return baseDocs;
   }, [settingsDocs]);
 
   const MANDATORY_DOCUMENTS = React.useMemo(() => {
@@ -224,6 +232,13 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
       }
       return files;
     }
+    try {
+      const saved = localStorage.getItem('newApp_uploadedFiles');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === 'object') return parsed;
+      }
+    } catch (_) {}
     return {};
   });
 
@@ -282,6 +297,35 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
         referenceDetails: { source: '', name: '', mobile: '' }
       };
     }
+    try {
+      const saved = localStorage.getItem('newApp_formData');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === 'object' && (parsed.customerName || parsed.mobile || parsed.serviceType || parsed.fatherName || parsed.dob || parsed.aadhar || parsed.pan)) {
+          return {
+            serviceType: '',
+            customerName: '',
+            fatherName: '',
+            dob: '',
+            mobile: '',
+            email: '',
+            altMobile: '',
+            aadhar: '',
+            pan: '',
+            staff: isEmployee && !isCustomer ? loggedInUser : '',
+            reference: '',
+            referenceDetails: { source: '', name: '', mobile: '' },
+            feesAmount: '',
+            feeNotes: '',
+            ...parsed,
+            residentialAddress: { houseNo: '', streetName: '', area: '', city: '', taluk: '', pincode: '', state: '', country: 'INDIA', landmark: '', accomodationType: '', yearsResiding: '', ...parsed.residentialAddress },
+            permanentAddress: { sameAsResidential: true, houseNo: '', streetName: '', area: '', city: '', taluk: '', pincode: '', state: '', country: 'INDIA', landmark: '', ...parsed.permanentAddress },
+            propertyDetails: { surveyNo: '', pattaNo: '', dno: '', streetName: '', village: '', panchayat: '', city: '', taluk: '', pincode: '', state: '', landmark: '', ...parsed.propertyDetails }
+          };
+        }
+      }
+    } catch (_) {}
+
     return {
       // Page 1: Services & Personal Details
       serviceType: '',
@@ -509,8 +553,17 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
     }
   };
 
+  const clearDraft = () => {
+    try {
+      localStorage.removeItem('newApp_formData');
+      localStorage.removeItem('newApp_uploadedFiles');
+      localStorage.removeItem('newApp_currentStep');
+    } catch (_) {}
+  };
+
   const handlePartialSave = async () => {
     await saveApplicationData(true, saveReason);
+    clearDraft();
     toast.success(`Application partially saved: ${saveReason}`);
     setIsPartialSaveModalOpen(false);
     if (isEmployee) {
@@ -723,6 +776,7 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
 
     const appNumber = await saveApplicationData(false);
     if (appNumber) {
+      clearDraft();
       toast.success(`Congratulations! Application #${appNumber} submitted successfully.`);
       if (isCustomer) {
         navigate(`/track-application?id=${appNumber}&mobile=${formData.mobile}`);
@@ -1095,33 +1149,6 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
         <h3 style={{ fontSize: '1.125rem', fontWeight: 600, color: 'var(--primary-dark)', display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0 }}>
           <Building size={20} color="var(--primary)" /> Property Details
         </h3>
-      </div>
-
-      {/* Clear Property Ownership Document Upload Slot */}
-      <div style={{ padding: '1.25rem', border: '1px dashed var(--border-color)', borderRadius: '0.5rem', backgroundColor: '#f8fafc', marginBottom: '1.75rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
-        <div>
-          <div style={{ fontWeight: 600, color: 'var(--primary-dark)', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <FileText size={18} color="var(--primary)" /> Property Ownership Document (Sale Deed / Title Deed / Patta Copy)
-          </div>
-          <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
-            Upload registered Sale Deed, Title Deed, or Patta copy proving ownership of the property (PDF or Image).
-          </div>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          {(uploadedFiles['SALE DEED'] || uploadedFiles['LAND DOCUMENT']) ? (
-            <span style={{ fontSize: '0.85rem', color: '#16a34a', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-              <CheckCircle size={16} /> Document Uploaded
-            </span>
-          ) : null}
-          <button
-            type="button"
-            onClick={(e) => { e.preventDefault(); setDocUploadType('SALE DEED'); setIsUploadModalOpen(true); }}
-            className="btn-primary"
-            style={{ padding: '0.45rem 1rem', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
-          >
-            <Upload size={15} /> {(uploadedFiles['SALE DEED'] || uploadedFiles['LAND DOCUMENT']) ? 'Change Document' : 'Upload Document'}
-          </button>
-        </div>
       </div>
       
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '1.5rem', marginBottom: '2.5rem' }}>
