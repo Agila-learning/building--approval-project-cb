@@ -6,16 +6,20 @@ import {
 import toast from 'react-hot-toast';
 
 const Expenses: React.FC = () => {
-  const userRole = localStorage.getItem('userRole') || '';
-  const loggedInUser = localStorage.getItem('loggedInUser') || '';
-  const isStaff = userRole.toUpperCase() === 'STAFF' || (loggedInUser !== 'Admin' && loggedInUser !== '');
+  const userRole = (localStorage.getItem('userRole') || '').toUpperCase();
+  const loggedInUser = localStorage.getItem('loggedInUser') || 'Admin';
+  // Admin permissions: if user is on /admin/expenses or role is ADMIN or SUPERADMIN or not STAFF
+  const isAdmin = userRole === 'ADMIN' || userRole === 'SUPERADMIN' || userRole !== 'STAFF' || !userRole || loggedInUser.toLowerCase().includes('admin');
+  const isStaff = !isAdmin;
 
-  // Default to 'add' so form is ready to use immediately without having to enable anything
-  const [activeTab, setActiveTab] = useState<'add' | 'view'>('add');
+  // Tabs: 'view' (All), 'pending' (Approvals), 'add' (Record)
+  const [activeTab, setActiveTab] = useState<'add' | 'view' | 'pending'>('view');
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [categoryFilter, setCategoryFilter] = useState('ALL');
   const [selectedExpenseForModal, setSelectedExpenseForModal] = useState<any | null>(null);
+  const [rejectModalExpense, setRejectModalExpense] = useState<any | null>(null);
+  const [rejectReasonInput, setRejectReasonInput] = useState('');
 
   const [expenseCategories, setExpenseCategories] = useState<string[]>([
     'Office Supplies', 'Travel & Fuel', 'Site Inspection', 'Government & Municipal Fees', 
@@ -31,6 +35,11 @@ const Expenses: React.FC = () => {
     }
   });
 
+  const isPendingStatus = (s: string) => {
+    const clean = (s || '').toLowerCase().trim();
+    return clean === 'pending' || clean === 'pending admin approval' || clean.includes('pending');
+  };
+
   const generateNextVoucherNo = () => {
     return `EXP-${String(expenses.length + 1).padStart(3, '0')}`;
   };
@@ -40,7 +49,7 @@ const Expenses: React.FC = () => {
     category: 'Office Supplies',
     description: '',
     status: isStaff ? 'Pending Admin Approval' : 'Approved',
-    executive: isStaff ? (loggedInUser || 'Staff Member') : 'Admin User',
+    executive: isStaff ? (loggedInUser || 'Staff Member') : (loggedInUser || 'Admin User'),
     expenseMode: 'Cash',
     expenseDate: new Date().toISOString().split('T')[0],
     expenseAmt: '',
@@ -311,17 +320,58 @@ const Expenses: React.FC = () => {
   };
 
   const handleApproveExpense = (expId: string) => {
-    const updated = expenses.map(e => e.id === expId ? { ...e, status: 'Approved' } : e);
+    const updated = expenses.map(e => e.id === expId ? { 
+      ...e, 
+      status: 'Approved',
+      approvedBy: loggedInUser || 'Admin',
+      approvedAt: new Date().toISOString()
+    } : e);
     setExpenses(updated);
     localStorage.setItem('system_expenses', JSON.stringify(updated));
-    toast.success(`Expense ${expId} approved!`);
+    if (selectedExpenseForModal?.id === expId) {
+      setSelectedExpenseForModal({ ...selectedExpenseForModal, status: 'Approved', approvedBy: loggedInUser || 'Admin' });
+    }
+    toast.success(`Expense voucher ${expId} approved successfully!`);
   };
 
-  const handleRejectExpense = (expId: string) => {
-    const updated = expenses.map(e => e.id === expId ? { ...e, status: 'Rejected' } : e);
+  const handleOpenRejectModal = (exp: any) => {
+    setRejectModalExpense(exp);
+    setRejectReasonInput('');
+  };
+
+  const handleConfirmReject = () => {
+    if (!rejectModalExpense) return;
+    const expId = rejectModalExpense.id;
+    const reason = rejectReasonInput.trim() || 'Declined by Admin';
+    const updated = expenses.map(e => e.id === expId ? { 
+      ...e, 
+      status: 'Rejected',
+      rejectedBy: loggedInUser || 'Admin',
+      rejectedAt: new Date().toISOString(),
+      rejectionReason: reason
+    } : e);
     setExpenses(updated);
     localStorage.setItem('system_expenses', JSON.stringify(updated));
-    toast.error(`Expense ${expId} rejected.`);
+    if (selectedExpenseForModal?.id === expId) {
+      setSelectedExpenseForModal({ ...selectedExpenseForModal, status: 'Rejected', rejectionReason: reason });
+    }
+    setRejectModalExpense(null);
+    setRejectReasonInput('');
+    toast.error(`Expense voucher ${expId} marked as Rejected.`);
+  };
+
+  const handleRevertToPending = (expId: string) => {
+    const updated = expenses.map(e => e.id === expId ? { 
+      ...e, 
+      status: 'Pending Admin Approval',
+      rejectionReason: undefined
+    } : e);
+    setExpenses(updated);
+    localStorage.setItem('system_expenses', JSON.stringify(updated));
+    if (selectedExpenseForModal?.id === expId) {
+      setSelectedExpenseForModal({ ...selectedExpenseForModal, status: 'Pending Admin Approval' });
+    }
+    toast.success(`Expense voucher ${expId} reverted to Pending.`);
   };
 
   const handleSubmitExpense = (e: React.FormEvent, shouldPrint: boolean = true) => {
@@ -347,7 +397,7 @@ const Expenses: React.FC = () => {
       amount: Number(formData.expenseAmt),
       mode: formData.expenseMode,
       status: isStaff ? 'Pending Admin Approval' : 'Approved',
-      executive: isStaff ? (loggedInUser || 'Staff Member') : 'Admin User',
+      executive: isStaff ? (loggedInUser || 'Staff Member') : (loggedInUser || 'Admin User'),
       createdByStaff: isStaff,
       instrNo: formData.instrNo,
       instrBankName: formData.instrBankName
@@ -385,7 +435,11 @@ const Expenses: React.FC = () => {
     });
   };
 
-  // Filtered expenses for View tab
+  const pendingApprovalExpenses = expenses.filter(e => isPendingStatus(e.status));
+  const approvedExpenses = expenses.filter(e => e.status === 'Approved');
+  const rejectedExpenses = expenses.filter(e => (e.status || '').toLowerCase() === 'rejected');
+
+  // Filtered expenses for View & Pending tab
   const filteredExpenses = expenses.filter(exp => {
     const matchesSearch = 
       (exp.id || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -393,17 +447,29 @@ const Expenses: React.FC = () => {
       (exp.description || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (exp.executive || '').toLowerCase().includes(searchTerm.toLowerCase());
 
-    const matchesStatus = statusFilter === 'ALL' || exp.status === statusFilter;
+    const isExpPending = isPendingStatus(exp.status);
+
+    let matchesStatus = true;
+    if (activeTab === 'pending') {
+      matchesStatus = isExpPending;
+    } else if (statusFilter !== 'ALL') {
+      if (statusFilter === 'Pending Admin Approval' || statusFilter === 'Pending') {
+        matchesStatus = isExpPending;
+      } else {
+        matchesStatus = exp.status === statusFilter;
+      }
+    }
+
     const matchesCategory = categoryFilter === 'ALL' || exp.category === categoryFilter;
 
     return matchesSearch && matchesStatus && matchesCategory;
   });
 
-  const totalExpenseAmount = expenses
-    .filter(e => e.status === 'Approved')
+  const totalExpenseAmount = approvedExpenses
     .reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
 
-  const pendingApprovalExpenses = expenses.filter(e => e.status === 'Pending Admin Approval');
+  const pendingExpenseAmount = pendingApprovalExpenses
+    .reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
 
   return (
     <div style={{ paddingBottom: '3rem' }}>
@@ -469,7 +535,61 @@ const Expenses: React.FC = () => {
         </div>
 
         {/* User-friendly Toggle Tabs */}
-        <div style={{ display: 'flex', backgroundColor: '#f1f5f9', padding: '4px', borderRadius: '8px', border: '1px solid #e2e8f0', gap: '4px' }}>
+        <div style={{ display: 'flex', backgroundColor: '#f1f5f9', padding: '4px', borderRadius: '8px', border: '1px solid #e2e8f0', gap: '4px', flexWrap: 'wrap' }}>
+          <button
+            onClick={() => { setActiveTab('view'); setStatusFilter('ALL'); }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.45rem',
+              padding: '0.55rem 1.1rem',
+              borderRadius: '6px',
+              border: 'none',
+              cursor: 'pointer',
+              fontWeight: 600,
+              fontSize: '0.875rem',
+              backgroundColor: activeTab === 'view' ? 'var(--primary)' : 'transparent',
+              color: activeTab === 'view' ? '#fff' : '#475569',
+              boxShadow: activeTab === 'view' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+              transition: 'all 0.15s ease'
+            }}
+          >
+            <Eye size={16} /> All Expenses ({expenses.length})
+          </button>
+
+          <button
+            onClick={() => { setActiveTab('pending'); setStatusFilter('ALL'); }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.45rem',
+              padding: '0.55rem 1.1rem',
+              borderRadius: '6px',
+              border: 'none',
+              cursor: 'pointer',
+              fontWeight: 600,
+              fontSize: '0.875rem',
+              backgroundColor: activeTab === 'pending' ? '#d97706' : 'transparent',
+              color: activeTab === 'pending' ? '#fff' : '#475569',
+              boxShadow: activeTab === 'pending' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+              transition: 'all 0.15s ease'
+            }}
+          >
+            <Clock size={16} /> Pending Approvals ({pendingApprovalExpenses.length})
+            {pendingApprovalExpenses.length > 0 && (
+              <span style={{
+                backgroundColor: activeTab === 'pending' ? '#ffffff' : '#f59e0b',
+                color: activeTab === 'pending' ? '#d97706' : '#ffffff',
+                padding: '0.1rem 0.45rem',
+                borderRadius: '9999px',
+                fontSize: '0.7rem',
+                fontWeight: 700
+              }}>
+                {pendingApprovalExpenses.length}
+              </span>
+            )}
+          </button>
+
           <button
             onClick={() => setActiveTab('add')}
             style={{
@@ -489,27 +609,6 @@ const Expenses: React.FC = () => {
             }}
           >
             <Plus size={16} /> Record Expense
-          </button>
-
-          <button
-            onClick={() => setActiveTab('view')}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.45rem',
-              padding: '0.55rem 1.1rem',
-              borderRadius: '6px',
-              border: 'none',
-              cursor: 'pointer',
-              fontWeight: 600,
-              fontSize: '0.875rem',
-              backgroundColor: activeTab === 'view' ? 'var(--primary)' : 'transparent',
-              color: activeTab === 'view' ? '#fff' : '#475569',
-              boxShadow: activeTab === 'view' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
-              transition: 'all 0.15s ease'
-            }}
-          >
-            <Eye size={16} /> View All Expenses ({expenses.length})
           </button>
         </div>
       </div>
@@ -747,31 +846,61 @@ const Expenses: React.FC = () => {
         </div>
       )}
 
-      {/* TAB 2: VIEW ALL EXPENSES */}
-      {activeTab === 'view' && (
+      {/* TAB 2 & 3: VIEW ALL EXPENSES & PENDING APPROVALS */}
+      {(activeTab === 'view' || activeTab === 'pending') && (
         <div>
+          {/* Pending Approval Section Banner */}
+          {activeTab === 'pending' && (
+            <div style={{
+              backgroundColor: '#fffbeb',
+              border: '1px solid #fde68a',
+              borderLeft: '4px solid #d97706',
+              borderRadius: '0.5rem',
+              padding: '1rem 1.25rem',
+              marginBottom: '1.25rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.75rem',
+              color: '#92400e',
+              fontSize: '0.875rem'
+            }}>
+              <Clock size={20} color="#d97706" style={{ flexShrink: 0 }} />
+              <div>
+                <strong>Pending Expense Approvals ({pendingApprovalExpenses.length}):</strong> Review staff-submitted vouchers below. Click <strong>Approve</strong> to authorize and reflect in official accounts, or <strong>Reject</strong> to decline.
+              </div>
+            </div>
+          )}
+
           {/* Summary Metric Cards */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
-            <div className="card" style={{ padding: '1.25rem', borderLeft: '4px solid var(--primary)' }}>
+            <div className="card" style={{ padding: '1.25rem', borderLeft: '4px solid var(--primary)', cursor: 'pointer' }} onClick={() => { setActiveTab('view'); setStatusFilter('Approved'); }}>
               <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Total Approved Expenses</div>
               <div style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--primary-dark)', marginTop: '0.35rem' }}>
                 ₹{totalExpenseAmount.toLocaleString('en-IN')}
               </div>
-              <div style={{ fontSize: '0.75rem', color: '#16a34a', marginTop: '0.2rem' }}>Count: {expenses.filter(e => e.status === 'Approved').length}</div>
+              <div style={{ fontSize: '0.75rem', color: '#16a34a', marginTop: '0.2rem' }}>Count: {approvedExpenses.length} approved</div>
             </div>
 
-            <div className="card" style={{ padding: '1.25rem', borderLeft: '4px solid #f59e0b' }}>
-              <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Awaiting Approval</div>
+            <div className="card" style={{ padding: '1.25rem', borderLeft: '4px solid #f59e0b', cursor: 'pointer', backgroundColor: activeTab === 'pending' ? '#fffdf7' : 'white' }} onClick={() => { setActiveTab('pending'); setStatusFilter('ALL'); }}>
+              <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#d97706', textTransform: 'uppercase' }}>Awaiting Approval</div>
               <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#d97706', marginTop: '0.35rem' }}>
-                {pendingApprovalExpenses.length}
+                {pendingApprovalExpenses.length} Vouchers
               </div>
-              <div style={{ fontSize: '0.75rem', color: '#b45309', marginTop: '0.2rem' }}>Staff submissions</div>
+              <div style={{ fontSize: '0.75rem', color: '#b45309', marginTop: '0.2rem' }}>Total: ₹{pendingExpenseAmount.toLocaleString('en-IN')}</div>
             </div>
 
-            <div className="card" style={{ padding: '1.25rem', borderLeft: '4px solid #64748b' }}>
+            <div className="card" style={{ padding: '1.25rem', borderLeft: '4px solid #ef4444', cursor: 'pointer' }} onClick={() => { setActiveTab('view'); setStatusFilter('Rejected'); }}>
+              <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Rejected Expenses</div>
+              <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#b91c1c', marginTop: '0.35rem' }}>
+                {rejectedExpenses.length} Vouchers
+              </div>
+              <div style={{ fontSize: '0.75rem', color: '#991b1b', marginTop: '0.2rem' }}>Declined by Admin</div>
+            </div>
+
+            <div className="card" style={{ padding: '1.25rem', borderLeft: '4px solid #64748b', cursor: 'pointer' }} onClick={() => { setActiveTab('view'); setStatusFilter('ALL'); }}>
               <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Total Records</div>
               <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#334155', marginTop: '0.35rem' }}>
-                {expenses.length}
+                {expenses.length} Vouchers
               </div>
               <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.2rem' }}>All recorded vouchers</div>
             </div>
@@ -798,16 +927,18 @@ const Expenses: React.FC = () => {
               </div>
 
               <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-                <select
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                  style={{ padding: '0.6rem 0.85rem', border: '1px solid var(--border-color)', borderRadius: '6px', fontSize: '0.85rem', backgroundColor: '#fff' }}
-                >
-                  <option value="ALL">All Statuses</option>
-                  <option value="Approved">Approved</option>
-                  <option value="Pending Admin Approval">Pending Admin Approval</option>
-                  <option value="Rejected">Rejected</option>
-                </select>
+                {activeTab !== 'pending' && (
+                  <select
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value)}
+                    style={{ padding: '0.6rem 0.85rem', border: '1px solid var(--border-color)', borderRadius: '6px', fontSize: '0.85rem', backgroundColor: '#fff' }}
+                  >
+                    <option value="ALL">All Statuses</option>
+                    <option value="Pending Admin Approval">Pending Approval</option>
+                    <option value="Approved">Approved</option>
+                    <option value="Rejected">Rejected</option>
+                  </select>
+                )}
 
                 <select
                   value={categoryFilter}
@@ -844,83 +975,144 @@ const Expenses: React.FC = () => {
                   {filteredExpenses.length === 0 ? (
                     <tr>
                       <td colSpan={9} style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
-                        No expense records found matching your filters.
+                        {activeTab === 'pending' ? 'No expense vouchers are currently awaiting approval.' : 'No expense records found matching your filters.'}
                       </td>
                     </tr>
                   ) : (
-                    filteredExpenses.map((exp) => (
-                      <tr key={exp.id} style={{ borderBottom: '1px solid var(--border-color)', transition: 'background-color 0.15s' }}>
-                        <td style={{ padding: '0.85rem 1rem', fontWeight: 700, color: 'var(--primary)' }}>
-                          {exp.id}
-                        </td>
-                        <td style={{ padding: '0.85rem 1rem', color: '#475569' }}>
-                          {exp.date}
-                        </td>
-                        <td style={{ padding: '0.85rem 1rem', fontWeight: 600 }}>
-                          {exp.category}
-                        </td>
-                        <td style={{ padding: '0.85rem 1rem', color: '#334155', maxWidth: '240px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={exp.description}>
-                          {exp.description || '—'}
-                        </td>
-                        <td style={{ padding: '0.85rem 1rem' }}>
-                          <span style={{ fontSize: '0.8rem', padding: '0.2rem 0.5rem', backgroundColor: '#f1f5f9', borderRadius: '4px', color: '#475569', fontWeight: 500 }}>
-                            {exp.mode}
-                          </span>
-                        </td>
-                        <td style={{ padding: '0.85rem 1rem', color: '#64748b' }}>
-                          {exp.executive || 'Staff'}
-                        </td>
-                        <td style={{ padding: '0.85rem 1rem', fontWeight: 700, color: 'var(--primary-dark)' }}>
-                          ₹{Number(exp.amount).toLocaleString('en-IN')}
-                        </td>
-                        <td style={{ padding: '0.85rem 1rem' }}>
-                          <span style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '0.3rem',
-                            padding: '0.25rem 0.6rem',
-                            borderRadius: '9999px',
-                            fontSize: '0.75rem',
-                            fontWeight: 700,
-                            backgroundColor: exp.status === 'Approved' ? '#ecfdf5' : exp.status === 'Rejected' ? '#fef2f2' : '#fffbeb',
-                            color: exp.status === 'Approved' ? '#047857' : exp.status === 'Rejected' ? '#b91c1c' : '#b45309'
-                          }}>
-                            {exp.status === 'Approved' && <CheckCircle2 size={12} />}
-                            {exp.status === 'Rejected' && <XCircle size={12} />}
-                            {exp.status === 'Pending Admin Approval' && <Clock size={12} />}
-                            {exp.status}
-                          </span>
-                        </td>
-                        <td style={{ padding: '0.85rem 1rem', textAlign: 'center' }}>
-                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+                    filteredExpenses.map((exp) => {
+                      const isPending = isPendingStatus(exp.status);
+                      const isApproved = exp.status === 'Approved';
+                      const isRejected = (exp.status || '').toLowerCase() === 'rejected';
+
+                      return (
+                        <tr key={exp.id} style={{ borderBottom: '1px solid var(--border-color)', transition: 'background-color 0.15s' }}>
+                          <td style={{ padding: '0.85rem 1rem', fontWeight: 700, color: 'var(--primary)' }}>
                             <button
-                              onClick={() => handlePrintExpense(exp)}
-                              title="Print / View Voucher"
+                              type="button"
+                              onClick={() => setSelectedExpenseForModal(exp)}
+                              style={{ background: 'none', border: 'none', color: 'var(--primary)', fontWeight: 700, cursor: 'pointer', padding: 0, fontSize: '0.875rem' }}
+                            >
+                              {exp.id}
+                            </button>
+                          </td>
+                          <td style={{ padding: '0.85rem 1rem', color: '#475569' }}>
+                            {exp.date}
+                          </td>
+                          <td style={{ padding: '0.85rem 1rem', fontWeight: 600 }}>
+                            {exp.category}
+                          </td>
+                          <td style={{ padding: '0.85rem 1rem', color: '#334155', maxWidth: '240px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={exp.description}>
+                            {exp.description || '—'}
+                          </td>
+                          <td style={{ padding: '0.85rem 1rem' }}>
+                            <span style={{ fontSize: '0.8rem', padding: '0.2rem 0.5rem', backgroundColor: '#f1f5f9', borderRadius: '4px', color: '#475569', fontWeight: 500 }}>
+                              {exp.mode}
+                            </span>
+                          </td>
+                          <td style={{ padding: '0.85rem 1rem', color: '#64748b' }}>
+                            {exp.executive || 'Staff'}
+                          </td>
+                          <td style={{ padding: '0.85rem 1rem', fontWeight: 700, color: 'var(--primary-dark)' }}>
+                            ₹{Number(exp.amount).toLocaleString('en-IN')}
+                          </td>
+                          <td style={{ padding: '0.85rem 1rem' }}>
+                            <span 
+                              title={isRejected && exp.rejectionReason ? `Reason: ${exp.rejectionReason}` : undefined}
                               style={{
-                                padding: '0.4rem 0.65rem',
-                                backgroundColor: 'var(--primary)',
-                                color: '#fff',
-                                border: 'none',
-                                borderRadius: '4px',
-                                cursor: 'pointer',
-                                fontSize: '0.75rem',
-                                fontWeight: 600,
                                 display: 'inline-flex',
                                 alignItems: 'center',
-                                gap: '0.3rem'
+                                gap: '0.3rem',
+                                padding: '0.25rem 0.6rem',
+                                borderRadius: '9999px',
+                                fontSize: '0.75rem',
+                                fontWeight: 700,
+                                backgroundColor: isApproved ? '#ecfdf5' : isRejected ? '#fef2f2' : '#fffbeb',
+                                color: isApproved ? '#047857' : isRejected ? '#b91c1c' : '#b45309'
                               }}
                             >
-                              <Printer size={14} /> Print
-                            </button>
+                              {isApproved && <CheckCircle2 size={12} />}
+                              {isRejected && <XCircle size={12} />}
+                              {isPending && <Clock size={12} />}
+                              {isPending ? 'Pending Admin Approval' : exp.status}
+                            </span>
+                          </td>
+                          <td style={{ padding: '0.85rem 1rem', textAlign: 'center' }}>
+                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap', justifyContent: 'center' }}>
+                              
+                              {/* 1. Admin Approve & Reject Buttons for Pending */}
+                              {isPending && (
+                                <>
+                                  <button
+                                    onClick={() => handleApproveExpense(exp.id)}
+                                    title="Approve Expense Voucher"
+                                    style={{
+                                      padding: '0.4rem 0.65rem',
+                                      backgroundColor: '#16a34a',
+                                      color: '#fff',
+                                      border: 'none',
+                                      borderRadius: '4px',
+                                      cursor: 'pointer',
+                                      fontSize: '0.75rem',
+                                      fontWeight: 600,
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '0.25rem'
+                                    }}
+                                  >
+                                    <Check size={13} /> Approve
+                                  </button>
+                                  <button
+                                    onClick={() => handleOpenRejectModal(exp)}
+                                    title="Reject Expense Voucher"
+                                    style={{
+                                      padding: '0.4rem 0.65rem',
+                                      backgroundColor: '#dc2626',
+                                      color: '#fff',
+                                      border: 'none',
+                                      borderRadius: '4px',
+                                      cursor: 'pointer',
+                                      fontSize: '0.75rem',
+                                      fontWeight: 600,
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '0.25rem'
+                                    }}
+                                  >
+                                    <X size={13} /> Reject
+                                  </button>
+                                </>
+                              )}
 
-                            {/* Admin Approve & Reject Buttons */}
-                            {!isStaff && exp.status === 'Pending Admin Approval' && (
-                              <>
+                              {/* 2. Revert to Pending for Approved vouchers */}
+                              {isApproved && (
+                                <button
+                                  onClick={() => handleRevertToPending(exp.id)}
+                                  title="Revert to Pending"
+                                  style={{
+                                    padding: '0.4rem 0.55rem',
+                                    backgroundColor: '#f1f5f9',
+                                    color: '#475569',
+                                    border: '1px solid #cbd5e1',
+                                    borderRadius: '4px',
+                                    cursor: 'pointer',
+                                    fontSize: '0.75rem',
+                                    fontWeight: 500,
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '0.25rem'
+                                  }}
+                                >
+                                  <RotateCcw size={12} /> Revert
+                                </button>
+                              )}
+
+                              {/* 3. Re-approve for Rejected vouchers */}
+                              {isRejected && (
                                 <button
                                   onClick={() => handleApproveExpense(exp.id)}
-                                  title="Approve Expense"
+                                  title="Re-approve this voucher"
                                   style={{
-                                    padding: '0.4rem 0.6rem',
+                                    padding: '0.4rem 0.55rem',
                                     backgroundColor: '#16a34a',
                                     color: '#fff',
                                     border: 'none',
@@ -929,33 +1121,57 @@ const Expenses: React.FC = () => {
                                     fontSize: '0.75rem',
                                     fontWeight: 600,
                                     display: 'inline-flex',
-                                    alignItems: 'center'
+                                    alignItems: 'center',
+                                    gap: '0.25rem'
                                   }}
                                 >
-                                  <Check size={14} />
+                                  <Check size={12} /> Re-Approve
                                 </button>
-                                <button
-                                  onClick={() => handleRejectExpense(exp.id)}
-                                  title="Reject Expense"
-                                  style={{
-                                    padding: '0.4rem 0.6rem',
-                                    backgroundColor: '#dc2626',
-                                    color: '#fff',
-                                    border: 'none',
-                                    borderRadius: '4px',
-                                    cursor: 'pointer',
-                                    fontSize: '0.75rem',
-                                    fontWeight: 600,
-                                    display: 'inline-flex',
-                                    alignItems: 'center'
-                                  }}
-                                >
-                                  <X size={14} />
-                                </button>
-                              </>
-                            )}
+                              )}
 
-                            {!isStaff && (
+                              {/* View Details */}
+                              <button
+                                onClick={() => setSelectedExpenseForModal(exp)}
+                                title="View Voucher Details"
+                                style={{
+                                  padding: '0.4rem 0.55rem',
+                                  backgroundColor: '#f8fafc',
+                                  color: '#334155',
+                                  border: '1px solid #cbd5e1',
+                                  borderRadius: '4px',
+                                  cursor: 'pointer',
+                                  fontSize: '0.75rem',
+                                  fontWeight: 500,
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '0.25rem'
+                                }}
+                              >
+                                <Eye size={13} /> View
+                              </button>
+
+                              {/* Print Voucher */}
+                              <button
+                                onClick={() => handlePrintExpense(exp)}
+                                title="Print Voucher"
+                                style={{
+                                  padding: '0.4rem 0.55rem',
+                                  backgroundColor: 'var(--primary)',
+                                  color: '#fff',
+                                  border: 'none',
+                                  borderRadius: '4px',
+                                  cursor: 'pointer',
+                                  fontSize: '0.75rem',
+                                  fontWeight: 600,
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '0.25rem'
+                                }}
+                              >
+                                <Printer size={13} /> Print
+                              </button>
+
+                              {/* Delete Button */}
                               <button
                                 onClick={() => {
                                   if (!window.confirm(`Are you sure you want to delete expense voucher ${exp.id}?`)) return;
@@ -966,7 +1182,7 @@ const Expenses: React.FC = () => {
                                 }}
                                 title="Delete Expense"
                                 style={{
-                                  padding: '0.4rem 0.65rem',
+                                  padding: '0.4rem 0.55rem',
                                   backgroundColor: '#fee2e2',
                                   color: '#b91c1c',
                                   border: '1px solid #fecaca',
@@ -976,19 +1192,284 @@ const Expenses: React.FC = () => {
                                   fontWeight: 600,
                                   display: 'inline-flex',
                                   alignItems: 'center',
-                                  gap: '0.3rem'
+                                  gap: '0.25rem'
                                 }}
                               >
-                                <Trash2 size={14} /> Delete
+                                <Trash2 size={13} />
                               </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* REJECTION REASON MODAL */}
+      {rejectModalExpense && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(15, 23, 42, 0.65)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999,
+          padding: '1rem'
+        }}>
+          <div className="card" style={{ maxWidth: '480px', width: '100%', padding: '1.75rem', borderRadius: '12px', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+              <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 700, color: '#b91c1c', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <XCircle size={20} /> Reject Expense Voucher
+              </h3>
+              <button 
+                onClick={() => setRejectModalExpense(null)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div style={{ backgroundColor: '#fef2f2', border: '1px solid #fee2e2', borderRadius: '6px', padding: '0.85rem', marginBottom: '1.25rem', fontSize: '0.85rem' }}>
+              <div><strong>Voucher:</strong> {rejectModalExpense.id}</div>
+              <div><strong>Category:</strong> {rejectModalExpense.category}</div>
+              <div><strong>Amount:</strong> ₹{Number(rejectModalExpense.amount).toLocaleString('en-IN')}</div>
+              <div><strong>Submitted By:</strong> {rejectModalExpense.executive || 'Staff'}</div>
+            </div>
+
+            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#334155', marginBottom: '0.4rem' }}>
+              Reason for Rejection (Optional)
+            </label>
+            <textarea
+              rows={3}
+              value={rejectReasonInput}
+              onChange={(e) => setRejectReasonInput(e.target.value)}
+              placeholder="e.g. Missing bill receipt, duplicate submission, amount mismatch..."
+              style={{
+                width: '100%',
+                padding: '0.65rem',
+                border: '1px solid var(--border-color)',
+                borderRadius: '6px',
+                fontSize: '0.875rem',
+                marginBottom: '1.25rem'
+              }}
+            />
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+              <button
+                type="button"
+                onClick={() => setRejectModalExpense(null)}
+                style={{
+                  padding: '0.6rem 1.25rem',
+                  backgroundColor: '#f1f5f9',
+                  color: '#475569',
+                  border: '1px solid #cbd5e1',
+                  borderRadius: '6px',
+                  fontWeight: 600,
+                  fontSize: '0.85rem',
+                  cursor: 'pointer'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmReject}
+                style={{
+                  padding: '0.6rem 1.25rem',
+                  backgroundColor: '#dc2626',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '6px',
+                  fontWeight: 600,
+                  fontSize: '0.85rem',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.35rem'
+                }}
+              >
+                <X size={15} /> Confirm Rejection
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* VIEW DETAILS / REVIEW MODAL */}
+      {selectedExpenseForModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(15, 23, 42, 0.65)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999,
+          padding: '1rem'
+        }}>
+          <div className="card" style={{ maxWidth: '560px', width: '100%', padding: '1.75rem', borderRadius: '12px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.75rem' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700, color: 'var(--primary-dark)' }}>
+                  Expense Voucher Details
+                </h3>
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                  Voucher No: {selectedExpenseForModal.id}
+                </span>
+              </div>
+              <button 
+                onClick={() => setSelectedExpenseForModal(null)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem', fontSize: '0.875rem' }}>
+              <div>
+                <span style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', textTransform: 'uppercase', fontWeight: 600 }}>Date</span>
+                <div style={{ fontWeight: 600 }}>{selectedExpenseForModal.date}</div>
+              </div>
+              <div>
+                <span style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', textTransform: 'uppercase', fontWeight: 600 }}>Category</span>
+                <div style={{ fontWeight: 600 }}>{selectedExpenseForModal.category}</div>
+              </div>
+              <div>
+                <span style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', textTransform: 'uppercase', fontWeight: 600 }}>Amount</span>
+                <div style={{ fontWeight: 700, color: 'var(--primary-dark)', fontSize: '1.25rem' }}>₹{Number(selectedExpenseForModal.amount).toLocaleString('en-IN')}</div>
+              </div>
+              <div>
+                <span style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', textTransform: 'uppercase', fontWeight: 600 }}>Payment Mode</span>
+                <div style={{ fontWeight: 600 }}>{selectedExpenseForModal.mode}</div>
+              </div>
+              <div>
+                <span style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', textTransform: 'uppercase', fontWeight: 600 }}>Submitted By</span>
+                <div style={{ fontWeight: 600 }}>{selectedExpenseForModal.executive || 'Staff Member'}</div>
+              </div>
+              <div>
+                <span style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', textTransform: 'uppercase', fontWeight: 600 }}>Status</span>
+                <div>
+                  <span style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.3rem',
+                    padding: '0.2rem 0.5rem',
+                    borderRadius: '9999px',
+                    fontSize: '0.75rem',
+                    fontWeight: 700,
+                    backgroundColor: selectedExpenseForModal.status === 'Approved' ? '#ecfdf5' : (selectedExpenseForModal.status || '').toLowerCase() === 'rejected' ? '#fef2f2' : '#fffbeb',
+                    color: selectedExpenseForModal.status === 'Approved' ? '#047857' : (selectedExpenseForModal.status || '').toLowerCase() === 'rejected' ? '#b91c1c' : '#b45309'
+                  }}>
+                    {selectedExpenseForModal.status}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ marginBottom: '1.25rem', backgroundColor: '#f8fafc', padding: '0.85rem', borderRadius: '6px', border: '1px solid var(--border-color)', fontSize: '0.875rem' }}>
+              <span style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', textTransform: 'uppercase', fontWeight: 600 }}>Description</span>
+              <p style={{ margin: '0.25rem 0 0 0', color: '#1e293b' }}>{selectedExpenseForModal.description || 'No description provided.'}</p>
+              {selectedExpenseForModal.rejectionReason && (
+                <div style={{ marginTop: '0.5rem', color: '#b91c1c', fontSize: '0.8rem' }}>
+                  <strong>Rejection Note:</strong> {selectedExpenseForModal.rejectionReason}
+                </div>
+              )}
+            </div>
+
+            {/* Action Buttons in Modal */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.75rem', borderTop: '1px solid var(--border-color)', paddingTop: '1rem', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                onClick={() => handlePrintExpense(selectedExpenseForModal)}
+                style={{
+                  padding: '0.6rem 1rem',
+                  backgroundColor: 'var(--primary)',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '6px',
+                  fontWeight: 600,
+                  fontSize: '0.85rem',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.35rem'
+                }}
+              >
+                <Printer size={15} /> Print Voucher
+              </button>
+
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                {isPendingStatus(selectedExpenseForModal.status) && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => handleApproveExpense(selectedExpenseForModal.id)}
+                      style={{
+                        padding: '0.6rem 1rem',
+                        backgroundColor: '#16a34a',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '6px',
+                        fontWeight: 600,
+                        fontSize: '0.85rem',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.35rem'
+                      }}
+                    >
+                      <Check size={15} /> Approve
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenRejectModal(selectedExpenseForModal)}
+                      style={{
+                        padding: '0.6rem 1rem',
+                        backgroundColor: '#dc2626',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '6px',
+                        fontWeight: 600,
+                        fontSize: '0.85rem',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.35rem'
+                      }}
+                    >
+                      <X size={15} /> Reject
+                    </button>
+                  </>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setSelectedExpenseForModal(null)}
+                  style={{
+                    padding: '0.6rem 1rem',
+                    backgroundColor: '#f1f5f9',
+                    color: '#475569',
+                    border: '1px solid #cbd5e1',
+                    borderRadius: '6px',
+                    fontWeight: 600,
+                    fontSize: '0.85rem',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Close
+                </button>
+              </div>
             </div>
           </div>
         </div>

@@ -325,6 +325,7 @@ const Settings: React.FC = () => {
     localStorage.setItem('customFileTypes', JSON.stringify(fileTypes));
     localStorage.setItem('expenseCategories', JSON.stringify(expenseCategories));
     localStorage.setItem('requiredDocuments', JSON.stringify(requiredDocuments));
+    window.dispatchEvent(new CustomEvent('settingsUpdated', { detail: requiredDocuments }));
     if (adminSignature) localStorage.setItem('adminSignature', adminSignature);
     localStorage.setItem('companyBankDetails', JSON.stringify(bankDetails));
 
@@ -866,6 +867,7 @@ const Settings: React.FC = () => {
                   const updatedDocs = [...requiredDocuments, newDoc];
                   setRequiredDocuments(updatedDocs);
                   localStorage.setItem('requiredDocuments', JSON.stringify(updatedDocs));
+                  window.dispatchEvent(new CustomEvent('settingsUpdated', { detail: updatedDocs }));
                   
                   // Immediately sync to backend
                   try {
@@ -960,6 +962,7 @@ const Settings: React.FC = () => {
                         const updatedDocs = requiredDocuments.map((item, i) => i === dIdx ? { ...item, required: !item.required } : item);
                         setRequiredDocuments(updatedDocs);
                         localStorage.setItem('requiredDocuments', JSON.stringify(updatedDocs));
+                        window.dispatchEvent(new CustomEvent('settingsUpdated', { detail: updatedDocs }));
                         try {
                           const apiUrl = getApiUrl();
                           const userRole = localStorage.getItem('userRole') || 'ADMIN';
@@ -1012,6 +1015,7 @@ const Settings: React.FC = () => {
                         const updatedDocs = requiredDocuments.filter((_, i) => i !== dIdx);
                         setRequiredDocuments(updatedDocs);
                         localStorage.setItem('requiredDocuments', JSON.stringify(updatedDocs));
+                        window.dispatchEvent(new CustomEvent('settingsUpdated', { detail: updatedDocs }));
                         try {
                           const apiUrl = getApiUrl();
                           const userRole = localStorage.getItem('userRole') || 'ADMIN';

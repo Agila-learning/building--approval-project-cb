@@ -218,7 +218,11 @@ const CustomerUpload: React.FC = () => {
     
     loadDocs();
     window.addEventListener('storage', loadDocs);
-    return () => window.removeEventListener('storage', loadDocs);
+    window.addEventListener('settingsUpdated', loadDocs);
+    return () => {
+      window.removeEventListener('storage', loadDocs);
+      window.removeEventListener('settingsUpdated', loadDocs);
+    };
   }, [id]);
   
   const [activeUploadId, setActiveUploadId] = useState<string | null>(null);

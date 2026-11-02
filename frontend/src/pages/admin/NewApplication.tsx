@@ -77,38 +77,62 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
   React.useEffect(() => {
     const fetchSettings = async () => {
       try {
-        let mergedDocs: any[] = [];
-        const local = localStorage.getItem('requiredDocuments');
-        if (local) {
-          try {
-            mergedDocs = JSON.parse(local);
-          } catch (e) {}
-        }
         const res = await fetch(`${getApiUrl()}/settings`);
         if (res.ok) {
           const data = await res.json();
           if (Array.isArray(data.requiredDocuments) && data.requiredDocuments.length > 0) {
-            data.requiredDocuments.forEach((bd: any) => {
-              const bKey = (bd.key || bd.id || bd.label || '').toUpperCase().replace(/[^A-Z0-9]/g, '_');
-              const exists = mergedDocs.some((ld: any) => {
-                const lKey = (ld.key || ld.id || ld.label || '').toUpperCase().replace(/[^A-Z0-9]/g, '_');
-                return lKey === bKey;
+            const backendDocs = data.requiredDocuments.map((bd: any) => ({
+              ...bd,
+              required: Boolean(bd.required)
+            }));
+            
+            // Check if any local custom document is not in backend
+            let localDocs: any[] = [];
+            try {
+              const local = localStorage.getItem('requiredDocuments');
+              if (local) localDocs = JSON.parse(local);
+            } catch (_) {}
+
+            const merged = [...backendDocs];
+            if (Array.isArray(localDocs)) {
+              localDocs.forEach((ld: any) => {
+                const lKey = (ld.key || ld.id || ld.label || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+                if (!merged.some((bd: any) => (bd.key || bd.id || bd.label || '').toUpperCase().replace(/[^A-Z0-9]/g, '') === lKey)) {
+                  merged.push(ld);
+                }
               });
-              if (!exists) {
-                mergedDocs.push(bd);
-              }
-            });
+            }
+
+            setSettingsDocs(merged);
+            localStorage.setItem('requiredDocuments', JSON.stringify(merged));
           }
-        }
-        if (mergedDocs.length > 0) {
-          setSettingsDocs(mergedDocs);
-          localStorage.setItem('requiredDocuments', JSON.stringify(mergedDocs));
         }
       } catch (e) {
         console.warn('Could not fetch settings documents in NewApplication:', e);
       }
     };
     fetchSettings();
+
+    const handleSettingsUpdate = (e?: any) => {
+      try {
+        if (e?.detail && Array.isArray(e.detail)) {
+          setSettingsDocs(e.detail);
+          return;
+        }
+        const local = localStorage.getItem('requiredDocuments');
+        if (local) {
+          const parsed = JSON.parse(local);
+          if (Array.isArray(parsed)) setSettingsDocs(parsed);
+        }
+      } catch (_) {}
+    };
+
+    window.addEventListener('settingsUpdated', handleSettingsUpdate);
+    window.addEventListener('storage', handleSettingsUpdate);
+    return () => {
+      window.removeEventListener('settingsUpdated', handleSettingsUpdate);
+      window.removeEventListener('storage', handleSettingsUpdate);
+    };
   }, []);
 
   const normalizeDocKey = (key: string) => (key || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -1221,9 +1245,10 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
                 key={doc.key}
                 style={{
                   padding: '1.25rem',
-                  borderRadius: '0.5rem',
+                  borderRadius: '0.625rem',
                   border: isMissing ? '2px solid #ef4444' : isUploaded ? '1.5px solid #10b981' : '1px solid var(--border-color)',
-                  backgroundColor: isMissing ? '#fef2f2' : isUploaded ? '#f0fdf4' : 'var(--bg-secondary)',
+                  backgroundColor: isMissing ? '#fef2f2' : isUploaded ? '#f0fdf4' : 'var(--bg-surface, #ffffff)',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
                   display: 'flex',
                   flexDirection: 'column',
                   justifyContent: 'space-between',
@@ -1269,7 +1294,7 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
                       gap: '0.35rem'
                     }}
                   >
-                    <Upload size={14} /> {isUploaded ? 'Replace Document' : 'Upload File *'}
+                    <Upload size={14} /> {isUploaded ? 'Replace Document' : `Upload File${doc.required ? ' *' : ''}`}
                   </button>
 
                   {isUploaded && (

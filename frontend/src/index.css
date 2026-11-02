@@ -10,23 +10,23 @@
   --gold: #D6A756;
 
   /* Backgrounds */
-  --bg-primary: #F7F4EE; /* Ivory */
-  --bg-secondary: #EDE7DA; /* Soft Sand */
-  --bg-surface: #FFFFFF; /* White */
+  --bg-primary: #F8FAFC; /* Clean modern slate-50 */
+  --bg-secondary: #F1F5F9; /* Clean subtle slate-100 */
+  --bg-surface: #FFFFFF; /* Pure White */
 
   /* Text */
-  --text-primary: #1C2420;
-  --text-secondary: #68716B;
-  --text-muted: #8A918C;
+  --text-primary: #0F172A; /* Slate-900 */
+  --text-secondary: #475569; /* Slate-600 */
+  --text-muted: #94A3B8; /* Slate-400 */
 
   /* Borders */
-  --border-color: #D9DED8;
+  --border-color: #E2E8F0; /* Clean Slate-200 */
 
   /* Status Colors */
-  --success-green: #2F7D5A;
-  --warning-gold: #C98A3D;
-  --error-red: #B94A48;
-  --info-green: #4E7468;
+  --success-green: #10B981;
+  --warning-gold: #D97706;
+  --error-red: #EF4444;
+  --info-green: #2563EB;
 
   /* Legacy aliases for compatibility (Removed to enforce new theme) */
 
