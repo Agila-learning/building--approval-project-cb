@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Receipt, Search, Download, Printer, CheckCircle, Clock, AlertCircle, RefreshCw, IndianRupee } from 'lucide-react';
+import { Receipt, Search, Download, Printer, CheckCircle, Clock, AlertCircle, RefreshCw, IndianRupee, Eye } from 'lucide-react';
 import { getApiUrl } from '../../config/api';
 
 interface PaymentItem {
@@ -226,7 +226,7 @@ const EmployeePayments: React.FC = () => {
                 <th style={{ padding: '0.85rem 1rem' }}>Transaction ID</th>
                 <th style={{ padding: '0.85rem 1rem' }}>Payment Date</th>
                 <th style={{ padding: '0.85rem 1rem' }}>Status</th>
-                <th style={{ padding: '0.85rem 1rem', textAlign: 'center' }}>Receipt</th>
+                <th style={{ padding: '0.85rem 1rem', textAlign: 'center' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -247,7 +247,7 @@ const EmployeePayments: React.FC = () => {
               ) : (
                 paginatedPayments.map((p, idx) => (
                   <tr key={p.id || idx} style={{ borderBottom: '1px solid var(--border-color)', transition: 'background-color 0.15s ease' }}>
-                    <td style={{ padding: '0.85rem 1rem', fontWeight: 700, color: 'var(--primary-color)' }}>
+                    <td style={{ padding: '0.85rem 1rem', fontWeight: 700, color: 'var(--primary)' }}>
                       <Link to={`/employee/applications/${p.caseId}`} style={{ color: 'inherit', textDecoration: 'none' }}>
                         #{p.proposalNumber}
                       </Link>
@@ -277,30 +277,56 @@ const EmployeePayments: React.FC = () => {
                       {getStatusBadge(p.paymentStatus)}
                     </td>
                     <td style={{ padding: '0.85rem 1rem', textAlign: 'center' }}>
-                      {p.amountPaid > 0 ? (
-                        <a
-                          href={`/print/receipt/${p.proposalNumber}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
+                      <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', flexWrap: 'nowrap' }}>
+                        <Link
+                          to={`/employee/applications/${p.caseId}`}
                           style={{
                             display: 'inline-flex',
                             alignItems: 'center',
                             gap: '0.35rem',
-                            padding: '0.35rem 0.65rem',
+                            padding: '0.4rem 0.65rem',
                             borderRadius: '0.375rem',
-                            backgroundColor: 'var(--primary-color)',
-                            color: '#ffffff',
+                            backgroundColor: '#eff6ff',
+                            border: '1px solid #bfdbfe',
+                            color: '#1d4ed8',
                             textDecoration: 'none',
                             fontSize: '0.75rem',
                             fontWeight: 600,
-                            boxShadow: 'var(--shadow-sm)'
+                            cursor: 'pointer'
                           }}
+                          title="View Application Details"
                         >
-                          <Printer size={13} /> Print
-                        </a>
-                      ) : (
-                        <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontStyle: 'italic' }}>Pending</span>
-                      )}
+                          <Eye size={13} color="#1d4ed8" /> View
+                        </Link>
+                        {p.amountPaid > 0 ? (
+                          <a
+                            href={`/print/receipt/${p.proposalNumber}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '0.35rem',
+                              padding: '0.4rem 0.75rem',
+                              borderRadius: '0.375rem',
+                              backgroundColor: '#1044C4',
+                              color: '#ffffff',
+                              textDecoration: 'none',
+                              fontSize: '0.75rem',
+                              fontWeight: 600,
+                              boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
+                              cursor: 'pointer'
+                            }}
+                            title="Print Official Payment Receipt"
+                          >
+                            <Printer size={13} color="#ffffff" /> Print Receipt
+                          </a>
+                        ) : (
+                          <span style={{ fontSize: '0.72rem', color: '#b45309', backgroundColor: '#fef3c7', padding: '0.25rem 0.5rem', borderRadius: '0.25rem', fontWeight: 600 }}>
+                            Due
+                          </span>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -331,8 +357,8 @@ const EmployeePayments: React.FC = () => {
                     padding: '0.35rem 0.65rem',
                     borderRadius: '0.25rem',
                     border: '1px solid',
-                    borderColor: currentPage === page ? 'var(--primary-color)' : 'var(--border-color)',
-                    backgroundColor: currentPage === page ? 'var(--primary-color)' : 'transparent',
+                    borderColor: currentPage === page ? 'var(--primary)' : 'var(--border-color)',
+                    backgroundColor: currentPage === page ? 'var(--primary)' : 'transparent',
                     color: currentPage === page ? '#ffffff' : 'var(--text-primary)',
                     cursor: 'pointer'
                   }}

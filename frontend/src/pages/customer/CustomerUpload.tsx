@@ -63,23 +63,34 @@ const CustomerUpload: React.FC = () => {
       let configuredList = DEFAULT_DOCS;
       try {
         const apiUrl = getApiUrl();
-        const settingsRes = await fetch(`${apiUrl}/settings`);
         let reqDocs: any[] = [];
+
+        // Check localStorage first for instant client reflection
+        const savedChecklist = localStorage.getItem('requiredDocuments') || localStorage.getItem('admin_required_documents');
+        if (savedChecklist) {
+          try {
+            const parsed = JSON.parse(savedChecklist);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              reqDocs = parsed;
+            }
+          } catch (e) {}
+        }
+
+        // Fetch backend settings
+        const settingsRes = await fetch(`${apiUrl}/settings`);
         if (settingsRes.ok) {
           const settingsData = await settingsRes.json();
           if (Array.isArray(settingsData.requiredDocuments) && settingsData.requiredDocuments.length > 0) {
-            reqDocs = settingsData.requiredDocuments;
-          }
-        }
-        if (reqDocs.length === 0) {
-          const savedChecklist = localStorage.getItem('requiredDocuments') || localStorage.getItem('admin_required_documents');
-          if (savedChecklist) {
-            try {
-              const parsed = JSON.parse(savedChecklist);
-              if (Array.isArray(parsed) && parsed.length > 0) {
-                reqDocs = parsed;
-              }
-            } catch (e) {}
+            if (reqDocs.length === 0) {
+              reqDocs = settingsData.requiredDocuments;
+            } else {
+              // Merge any missing keys from backend
+              settingsData.requiredDocuments.forEach((sd: any) => {
+                const sKey = (sd.key || sd.id || sd.label || '').toUpperCase();
+                const exists = reqDocs.some((r: any) => (r.key || r.id || r.label || '').toUpperCase() === sKey);
+                if (!exists) reqDocs.push(sd);
+              });
+            }
           }
         }
 

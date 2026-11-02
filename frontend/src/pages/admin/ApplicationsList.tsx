@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Plus, Info, Pencil, ArrowUpDown, Search, FileText, ArrowRight, X, Filter } from 'lucide-react';
+import { Plus, Info, Pencil, ArrowUpDown, Search, FileText, ArrowRight, X, Filter, Building } from 'lucide-react';
 import toast from 'react-hot-toast';
 import StatusBadge from '../../components/admin/StatusBadge';
 import { recentApplications } from '../../data/mockData';
@@ -45,6 +45,41 @@ const isCurrentMonthApp = (app: any) => {
   else if (app.date && !isNaN(new Date(app.date).getTime())) appDate = new Date(app.date);
   if (!appDate || isNaN(appDate.getTime())) return false;
   return appDate.getMonth() === now.getMonth() && appDate.getFullYear() === now.getFullYear();
+};
+
+const matchesFilterStatus = (appStatus: string, rawStatus?: string, filterValue?: string): boolean => {
+  if (!filterValue || filterValue === 'select' || filterValue === 'All' || filterValue === 'all') return true;
+  
+  const norm = (s: string) => (s || '').toUpperCase().replace(/[\s_-]+/g, '');
+  const nApp = norm(appStatus);
+  const nRaw = norm(rawStatus || '');
+  const nFilter = norm(filterValue);
+
+  // Exact normalized match
+  if (nApp === nFilter || nRaw === nFilter) return true;
+
+  // Category matching
+  if (nFilter.includes('DOCUMENTSPENDING') || nFilter === 'NEW' || nFilter === 'DRAFT' || nFilter.includes('INTAKE') || nFilter.includes('DOCSPENDING')) {
+    return isDocsPendingStatus(appStatus, rawStatus) || nApp.includes('PENDING') || nRaw.includes('PENDING') || nApp === 'DRAFT' || nRaw === 'DRAFT' || nApp === 'NEW';
+  }
+
+  if (nFilter.includes('VERIF') || nFilter.includes('SCRUTINY') || nFilter.includes('REVIEW') || nFilter.includes('INSPECTION') || nFilter.includes('GOVREVIEW')) {
+    return isGovReviewStatus(appStatus, rawStatus) || nApp.includes('VERIF') || nRaw.includes('VERIF') || nApp.includes('REVIEW') || nRaw.includes('REVIEW') || nApp.includes('INSPECTION');
+  }
+
+  if (nFilter.includes('SUBMIT')) {
+    return nApp.includes('SUBMIT') || nRaw.includes('SUBMIT');
+  }
+
+  if (nFilter.includes('APPROV') || nFilter.includes('COMPLETE')) {
+    return isApprovedStatus(appStatus, rawStatus);
+  }
+
+  if (nFilter.includes('REJECT')) {
+    return isRejectedStatus(appStatus, rawStatus);
+  }
+
+  return nApp.includes(nFilter) || nRaw.includes(nFilter);
 };
 
 const ApplicationsList: React.FC = () => {
@@ -286,8 +321,7 @@ const ApplicationsList: React.FC = () => {
     if (filterOn === 'Product' && subFilter !== 'select') {
       matchesFilter = (app.appType || '').toLowerCase().includes(subFilter.toLowerCase());
     } else if (filterOn === 'Status' && subFilter !== 'select') {
-      matchesFilter = app.status.toLowerCase() === subFilter.toLowerCase() ||
-                      (app.rawStatus && app.rawStatus.toLowerCase() === subFilter.toLowerCase());
+      matchesFilter = matchesFilterStatus(app.status, app.rawStatus, subFilter);
     }
 
     // Match URL filter param
@@ -302,21 +336,7 @@ const ApplicationsList: React.FC = () => {
 
     // Match status param (combines with filterParam if both present)
     if (statusParam && matchesUrlFilter) {
-      const sp = statusParam.toLowerCase();
-      if (sp === 'active') {
-        matchesUrlFilter = isActiveStatus(app.status, app.rawStatus);
-      } else if (sp === 'docs_pending') {
-        matchesUrlFilter = isDocsPendingStatus(app.status, app.rawStatus);
-      } else if (sp === 'gov_review') {
-        matchesUrlFilter = isGovReviewStatus(app.status, app.rawStatus);
-      } else if (sp === 'approved') {
-        matchesUrlFilter = isApprovedStatus(app.status, app.rawStatus);
-      } else if (sp === 'rejected') {
-        matchesUrlFilter = isRejectedStatus(app.status, app.rawStatus);
-      } else {
-        matchesUrlFilter = app.status.toLowerCase() === sp ||
-                           (app.rawStatus && app.rawStatus.toLowerCase() === sp);
-      }
+      matchesUrlFilter = matchesFilterStatus(app.status, app.rawStatus, statusParam);
     }
 
     let matchesMaintenance = true;
@@ -647,11 +667,10 @@ const ApplicationsList: React.FC = () => {
                     )}
                     {filterOn === 'Status' && (
                       <>
-                        <option value="New">New</option>
-                        <option value="Documents Pending">Documents Pending</option>
-                        <option value="Verification">Verification</option>
-                        <option value="Submitted">Submitted</option>
-                        <option value="Approved">Approved</option>
+                        <option value="Documents Pending">Documents Pending (Draft / Intake)</option>
+                        <option value="Verification">Verification & Review (Scrutiny / Inspection)</option>
+                        <option value="Submitted">Submitted for Approval</option>
+                        <option value="Approved">Approved / Completed</option>
                         <option value="Rejected">Rejected</option>
                       </>
                     )}

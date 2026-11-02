@@ -1299,46 +1299,28 @@ const ApplicationDetail: React.FC = () => {
       }
     };
 
+    const customDocsStr = localStorage.getItem('requiredDocuments');
+    let customDocs: any[] = [];
+    if (customDocsStr) {
+      try {
+        customDocs = JSON.parse(customDocsStr);
+      } catch (e) {}
+    }
+
+    const isDocMandatory = (docId: string, defaultVal: boolean) => {
+      const match = customDocs.find((cd: any) => {
+        const cleanKey = (cd.key || cd.id || cd.label || '').toUpperCase().replace(/[^A-Z0-9]/g, '_');
+        return cleanKey === docId || (cleanKey.includes('PATTA') && docId === 'PATTA') || (cleanKey.includes('PLAN') && docId === 'BUILDING PLAN') || (cleanKey.includes('DEED') && docId === 'SALE DEED');
+      });
+      return match && match.required !== undefined ? Boolean(match.required) : defaultVal;
+    };
+
     const docItems = [
-      {
-        id: 'CUSTOMER PHOTOGRAPH',
-        title: 'Customer Photograph',
-        category: 'Applicant Identification',
-        isMandatory: true,
-        description: 'Applicant passport photograph (uploaded in Step 1).',
-        fileUrl: uploadedFiles['CUSTOMER PHOTOGRAPH'],
-        fromStep1: true
-      },
-      {
-        id: 'CUSTOMER SIGNATURE',
-        title: 'Customer Specimen Signature',
-        category: 'Applicant Identification',
-        isMandatory: true,
-        description: 'Applicant official specimen signature (uploaded in Step 1).',
-        fileUrl: uploadedFiles['CUSTOMER SIGNATURE'],
-        fromStep1: true
-      },
-      {
-        id: 'AADHAR CARD',
-        title: 'Aadhaar Card Copy',
-        category: 'Applicant Identification',
-        isMandatory: true,
-        description: 'Government issued 12-digit Aadhaar card copy (front & back).',
-        fileUrl: uploadedFiles['AADHAR CARD']
-      },
-      {
-        id: 'PAN CARD',
-        title: 'PAN Card Copy',
-        category: 'Applicant Identification',
-        isMandatory: true,
-        description: 'Income Tax Department PAN card copy.',
-        fileUrl: uploadedFiles['PAN CARD']
-      },
       {
         id: 'SALE DEED',
         title: 'Registered Sale Deed / Title Deed',
         category: 'Property Documents',
-        isMandatory: true,
+        isMandatory: isDocMandatory('SALE DEED', true),
         description: 'Registered title deed or sale deed proving clear ownership.',
         fileUrl: uploadedFiles['SALE DEED'] || uploadedFiles['LAND DOCUMENT']
       },
@@ -1346,7 +1328,7 @@ const ApplicationDetail: React.FC = () => {
         id: 'PATTA',
         title: 'Patta Copy / Revenue Record',
         category: 'Property Documents',
-        isMandatory: true,
+        isMandatory: isDocMandatory('PATTA', true),
         description: 'Computerized Patta extract or revenue record for the survey number.',
         fileUrl: uploadedFiles['PATTA']
       },
@@ -1354,7 +1336,7 @@ const ApplicationDetail: React.FC = () => {
         id: 'BUILDING PLAN',
         title: 'Proposed Building Plan Blueprint',
         category: 'Property Documents',
-        isMandatory: true,
+        isMandatory: isDocMandatory('BUILDING PLAN', false),
         description: 'Blueprint drawing prepared by licensed surveyor/architect.',
         fileUrl: uploadedFiles['BUILDING PLAN']
       },
@@ -1362,7 +1344,7 @@ const ApplicationDetail: React.FC = () => {
         id: 'FMB',
         title: 'FMB Sketch (Field Measurement Book)',
         category: 'Property Documents',
-        isMandatory: false,
+        isMandatory: isDocMandatory('FMB', false),
         description: 'Field Measurement Book sketch copy showing property boundaries.',
         fileUrl: uploadedFiles['FMB']
       },
@@ -1370,7 +1352,7 @@ const ApplicationDetail: React.FC = () => {
         id: 'RECEIPT',
         title: 'Encumbrance Certificate (EC) / Property Tax',
         category: 'Property Documents',
-        isMandatory: false,
+        isMandatory: isDocMandatory('RECEIPT', false),
         description: 'Recent EC or municipal/panchayat property tax receipt.',
         fileUrl: uploadedFiles['RECEIPT']
       },
@@ -1392,27 +1374,25 @@ const ApplicationDetail: React.FC = () => {
       }
     ];
 
-    // Dynamically append any custom document checklist items configured in Settings
-    const customDocsStr = localStorage.getItem('requiredDocuments');
-    if (customDocsStr) {
-      try {
-        const customDocs = JSON.parse(customDocsStr);
-        if (Array.isArray(customDocs)) {
-          customDocs.forEach((cd: any) => {
-            const cleanKey = (cd.key || cd.id || cd.label || '').toUpperCase().replace(/[^A-Z0-9]/g, '_');
-            if (cleanKey && !docItems.some(d => d.id === cleanKey)) {
-              docItems.push({
-                id: cleanKey,
-                title: cd.label || cd.name || cleanKey.replace(/_/g, ' '),
-                category: 'Custom Configured Documents',
-                isMandatory: Boolean(cd.required),
-                description: cd.description || `Required official document: ${cd.label || cleanKey}`,
-                fileUrl: uploadedFiles[cleanKey]
-              });
-            }
+    // Dynamically append any custom document checklist items configured in Settings (excluding Step 1 personal docs)
+    const personalKeys = ['CUSTOMER PHOTOGRAPH', 'CUSTOMER SIGNATURE', 'AADHAR CARD', 'PAN CARD', 'PHOTO', 'SIGNATURE', 'AADHAR', 'PAN'];
+    if (customDocs && Array.isArray(customDocs)) {
+      customDocs.forEach((cd: any) => {
+        const cleanKey = (cd.key || cd.id || cd.label || '').toUpperCase().replace(/[^A-Z0-9]/g, '_');
+        const isPersonal = personalKeys.some(pk => cleanKey === pk || cleanKey.replace(/_/g, '') === pk.replace(/_/g, ''));
+        if (isPersonal) return; // Do not repeat photo, signature, aadhaar, or pan
+
+        if (cleanKey && !docItems.some(d => d.id === cleanKey)) {
+          docItems.push({
+            id: cleanKey,
+            title: cd.label || cd.name || cleanKey.replace(/_/g, ' '),
+            category: 'Custom Configured Documents',
+            isMandatory: Boolean(cd.required),
+            description: cd.description || `Required official document: ${cd.label || cleanKey}`,
+            fileUrl: uploadedFiles[cleanKey]
           });
         }
-      } catch (e) {}
+      });
     }
 
     const openUploadModalFor = (docType: string, tab: 'upload' | 'view' = 'upload') => {

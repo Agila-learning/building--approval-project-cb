@@ -84,22 +84,58 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
   }, []);
 
   const allApplicationDocs = React.useMemo(() => {
-    const baseDocs = [
+    const personalKeys = ['CUSTOMER PHOTOGRAPH', 'CUSTOMER SIGNATURE', 'AADHAR CARD', 'PAN CARD', 'PHOTO', 'SIGNATURE', 'AADHAR', 'PAN'];
+
+    const personalDocs = [
       { key: 'CUSTOMER PHOTOGRAPH', label: 'Customer Photograph', step: 1, required: true, desc: 'Passport size photograph of the applicant' },
       { key: 'CUSTOMER SIGNATURE', label: 'Customer Signature', step: 1, required: true, desc: 'Official customer specimen signature' },
       { key: 'AADHAR CARD', label: 'Aadhaar Card', step: 1, required: true, desc: 'Government Aadhaar identity proof of applicant' },
       { key: 'PAN CARD', label: 'PAN Card', step: 1, required: true, desc: 'Permanent Account Number (PAN) Card' },
-      { key: 'SALE DEED', altKey: 'LAND DOCUMENT', label: 'Sale Deed / Land Document', step: 2, required: true, desc: 'Registered document of property ownership' },
-      { key: 'PATTA', label: 'Patta Copy', step: 2, required: true, desc: 'Official revenue document / Patta copy' },
-      { key: 'BUILDING PLAN', label: 'Proposed Building Plan', step: 2, required: true, desc: 'Approved or proposed architectural plan' },
     ];
 
+    // Sync personal docs required status from settings if configured
+    personalDocs.forEach(pd => {
+      const match = settingsDocs?.find((sd: any) => {
+        const cleanKey = (sd.key || sd.id || sd.label || '').toUpperCase().replace(/[^A-Z0-9]/g, '_');
+        return cleanKey === pd.key || cleanKey.replace(/_/g, '') === pd.key.replace(/_/g, '');
+      });
+      if (match && match.required !== undefined) {
+        pd.required = Boolean(match.required);
+      }
+    });
+
+    const propertyDocs = [
+      { key: 'SALE DEED', altKey: 'LAND DOCUMENT', label: 'Sale Deed / Land Document', step: 2, required: true, desc: 'Registered document of property ownership' },
+      { key: 'PATTA', label: 'Patta Copy', step: 2, required: true, desc: 'Official revenue document / Patta copy' },
+      { key: 'BUILDING PLAN', label: 'Proposed Building Plan', step: 2, required: false, desc: 'Approved or proposed architectural plan' },
+    ];
+
+    // Sync property docs required status from settings (respect if admin changed mandatory to optional)
+    propertyDocs.forEach(b => {
+      const match = settingsDocs?.find((sd: any) => {
+        const cleanKey = (sd.key || sd.id || sd.label || '').toUpperCase().replace(/[^A-Z0-9]/g, '_');
+        return cleanKey === b.key || 
+               (b.altKey && cleanKey === b.altKey) || 
+               cleanKey.includes(b.key.replace(/\s+/g, '')) || 
+               (cleanKey.includes('PATTA') && b.key === 'PATTA') || 
+               (cleanKey.includes('PLAN') && b.key === 'BUILDING PLAN') || 
+               (cleanKey.includes('DEED') && b.key === 'SALE DEED');
+      });
+      if (match && match.required !== undefined) {
+        b.required = Boolean(match.required);
+      }
+    });
+
+    // Add custom checklist items configured in Admin Settings (strictly exclude Step 1 personal items)
     if (settingsDocs && settingsDocs.length > 0) {
       settingsDocs.forEach((sd: any) => {
         const cleanKey = (sd.key || sd.id || sd.label || '').toUpperCase().replace(/[^A-Z0-9]/g, '_');
-        const exists = baseDocs.some(b => b.key === cleanKey || (b as any).altKey === cleanKey);
+        const isPersonal = personalKeys.some(pk => cleanKey === pk || cleanKey.replace(/_/g, '') === pk.replace(/_/g, ''));
+        if (isPersonal) return; // Do not repeat personal docs in Step 2!
+
+        const exists = propertyDocs.some(b => b.key === cleanKey || (b as any).altKey === cleanKey);
         if (!exists && cleanKey) {
-          baseDocs.push({
+          propertyDocs.push({
             key: cleanKey,
             label: sd.label || sd.name || cleanKey.replace(/_/g, ' '),
             step: 2,
@@ -111,8 +147,8 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
     }
 
     // Always include optional Drawing & Other Document slots for admin/staff/customer
-    if (!baseDocs.some(b => b.key === 'WORKING DRAWING')) {
-      baseDocs.push({
+    if (!propertyDocs.some(b => b.key === 'WORKING DRAWING')) {
+      propertyDocs.push({
         key: 'WORKING DRAWING',
         label: 'Working Drawing / Blueprint (Optional)',
         step: 2,
@@ -120,8 +156,8 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
         desc: 'Detailed architectural drawings, structural layouts or CAD drawings (Optional)'
       });
     }
-    if (!baseDocs.some(b => b.key === 'OTHER DOCUMENT')) {
-      baseDocs.push({
+    if (!propertyDocs.some(b => b.key === 'OTHER DOCUMENT')) {
+      propertyDocs.push({
         key: 'OTHER DOCUMENT',
         label: 'Other Supporting Document (Optional)',
         step: 2,
@@ -130,7 +166,7 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
       });
     }
 
-    return baseDocs;
+    return [...personalDocs, ...propertyDocs];
   }, [settingsDocs]);
 
   const MANDATORY_DOCUMENTS = React.useMemo(() => {
@@ -151,7 +187,7 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
     'FINAL_APPROVAL'?: string;
     receiptNumber?: string;
   }>(() => {
-    if (location.state?.lead) {
+    if (!isCustomer && location.state?.lead) {
       const lead = location.state.lead;
       const files: any = {};
       if (lead.aadharFile) files['AADHAR CARD'] = lead.aadharFile;
@@ -204,7 +240,7 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
   };
 
   const [formData, setFormData] = useState(() => {
-    if (location.state?.lead) {
+    if (!isCustomer && location.state?.lead) {
       const lead = location.state.lead;
       return {
         serviceType: lead.projectType === 'Residential' ? 'building' : lead.projectType || '',
@@ -216,7 +252,7 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
         altMobile: '',
         aadhar: '',
         pan: '',
-        residentialAddress: { houseNo: '', streetName: '', area: lead.location || '', city: '', taluk: '', pincode: '', state: '', country: 'INDIA', landmark: '', accomodationType: 'Own', yearsResiding: '' },
+        residentialAddress: { houseNo: '', streetName: '', area: lead.location || '', city: '', taluk: '', pincode: '', state: '', country: 'INDIA', landmark: '', accomodationType: '', yearsResiding: '' },
         permanentAddress: { sameAsResidential: true, houseNo: '', streetName: '', area: lead.location || '', city: '', taluk: '', pincode: '', state: '', country: 'INDIA', landmark: '' },
         staff: isEmployee ? loggedInUser : '',
         propertyDetails: { surveyNo: '', pattaNo: '', dno: '', streetName: '', village: lead.location || '', panchayat: '', city: '', taluk: '', pincode: '', state: '', landmark: '' },
@@ -238,9 +274,9 @@ const NewApplication: React.FC<NewApplicationProps> = ({ isCustomer = false }) =
       altMobile: '',
       aadhar: '',
       pan: '',
-      residentialAddress: { houseNo: '', streetName: '', area: '', city: '', taluk: '', pincode: '', state: '', country: 'INDIA', landmark: '', accomodationType: 'Own', yearsResiding: '' },
+      residentialAddress: { houseNo: '', streetName: '', area: '', city: '', taluk: '', pincode: '', state: '', country: 'INDIA', landmark: '', accomodationType: '', yearsResiding: '' },
       permanentAddress: { sameAsResidential: true, houseNo: '', streetName: '', area: '', city: '', taluk: '', pincode: '', state: '', country: 'INDIA', landmark: '' },
-      staff: isEmployee ? loggedInUser : '',
+      staff: isEmployee && !isCustomer ? loggedInUser : '',
       reference: '',
       referenceDetails: { source: '', name: '', mobile: '' },
       

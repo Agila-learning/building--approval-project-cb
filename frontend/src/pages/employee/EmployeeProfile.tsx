@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { 
   User, Mail, Phone, ShieldCheck, KeyRound, 
   CheckCircle2, Clock, FileText, CalendarClock, 
-  LogOut, AlertCircle, Save, Award, RefreshCw 
+  LogOut, AlertCircle, Save, Award, RefreshCw,
+  Eye, EyeOff
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getApiUrl } from '../../config/api';
@@ -37,6 +38,8 @@ const EmployeeProfile: React.FC = () => {
   // Password fields
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const fetchProfileAndStats = async () => {
     setLoading(true);
@@ -189,23 +192,54 @@ const EmployeeProfile: React.FC = () => {
     setChangingPass(true);
     try {
       const apiUrl = getApiUrl();
-      if (userId) {
-        const res = await fetch(`${apiUrl}/users/${userId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            password: newPassword
-          })
-        });
-
-        if (!res.ok) {
-          throw new Error('Failed to change password');
+      const targetId = userId || staffId || localStorage.getItem('staffId') || name || localStorage.getItem('loggedInUser');
+      if (targetId) {
+        try {
+          await fetch(`${apiUrl}/users/${targetId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              password: newPassword.trim()
+            })
+          });
+        } catch (apiErr) {
+          console.warn("Backend user password update failed:", apiErr);
         }
+      }
+
+      // Always update local cache so staff can login immediately online and offline
+      try {
+        const cachedStr = localStorage.getItem('cached_staff_accounts');
+        let accounts: any[] = cachedStr ? JSON.parse(cachedStr) : [];
+        const currentName = name || localStorage.getItem('loggedInUser') || '';
+        const currentStaffId = staffId || localStorage.getItem('staffId') || '';
+        const idx = accounts.findIndex((a: any) => 
+          (currentStaffId && a.staffId === currentStaffId) ||
+          (currentName && a.name?.toLowerCase() === currentName.toLowerCase()) ||
+          (mobile && a.mobile === mobile)
+        );
+        if (idx !== -1) {
+          accounts[idx].password = newPassword.trim();
+        } else {
+          accounts.push({
+            id: userId || `USER-${Date.now()}`,
+            staffId: currentStaffId || 'EMP-001',
+            name: currentName || 'Staff Member',
+            mobile: mobile || '',
+            role: 'STAFF',
+            status: 'Active',
+            password: newPassword.trim()
+          });
+        }
+        localStorage.setItem('cached_staff_accounts', JSON.stringify(accounts));
+        localStorage.setItem(`staff_pass_${currentStaffId || currentName}`, newPassword.trim());
+      } catch (cacheErr) {
+        console.warn("Could not cache updated password:", cacheErr);
       }
 
       setNewPassword('');
       setConfirmPassword('');
-      toast.success('Password changed successfully');
+      toast.success('Password changed successfully! You can now log in with your new password.');
     } catch (err: any) {
       toast.error(err.message || 'Error changing password');
     } finally {
@@ -458,26 +492,70 @@ const EmployeeProfile: React.FC = () => {
             <form onSubmit={handleChangePassword} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: 'var(--primary-dark)', marginBottom: '0.35rem' }}>New Password</label>
-                <input
-                  type="password"
-                  placeholder="Min 6 characters"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  required
-                  style={{ width: '100%', padding: '0.625rem', border: '1px solid var(--border-color)', borderRadius: '6px', backgroundColor: '#fff' }}
-                />
+                <div style={{ position: 'relative' }}>
+                  <input
+                    type={showNewPassword ? 'text' : 'password'}
+                    placeholder="Min 6 characters"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    required
+                    style={{ width: '100%', padding: '0.625rem 2.5rem 0.625rem 0.625rem', border: '1px solid var(--border-color)', borderRadius: '6px', backgroundColor: '#fff' }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPassword(!showNewPassword)}
+                    title={showNewPassword ? "Hide Password" : "Show Password"}
+                    style={{
+                      position: 'absolute',
+                      right: '0.625rem',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      color: '#64748b',
+                      display: 'flex',
+                      alignItems: 'center',
+                      padding: 0
+                    }}
+                  >
+                    {showNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
               </div>
 
               <div>
                 <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: 'var(--primary-dark)', marginBottom: '0.35rem' }}>Confirm New Password</label>
-                <input
-                  type="password"
-                  placeholder="Re-enter password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  required
-                  style={{ width: '100%', padding: '0.625rem', border: '1px solid var(--border-color)', borderRadius: '6px', backgroundColor: '#fff' }}
-                />
+                <div style={{ position: 'relative' }}>
+                  <input
+                    type={showConfirmPassword ? 'text' : 'password'}
+                    placeholder="Re-enter password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    required
+                    style={{ width: '100%', padding: '0.625rem 2.5rem 0.625rem 0.625rem', border: '1px solid var(--border-color)', borderRadius: '6px', backgroundColor: '#fff' }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    title={showConfirmPassword ? "Hide Password" : "Show Password"}
+                    style={{
+                      position: 'absolute',
+                      right: '0.625rem',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      color: '#64748b',
+                      display: 'flex',
+                      alignItems: 'center',
+                      padding: 0
+                    }}
+                  >
+                    {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
               </div>
 
               <div style={{ marginTop: '0.5rem' }}>

@@ -742,7 +742,7 @@ const Settings: React.FC = () => {
 
               <button
                 type="button"
-                onClick={() => {
+                onClick={async () => {
                   if (!newDocLabel.trim()) {
                     toast.error('Please enter a document name.');
                     return;
@@ -758,11 +758,39 @@ const Settings: React.FC = () => {
                     required: newDocRequired,
                     description: newDocDesc.trim() || undefined
                   };
-                  setRequiredDocuments([...requiredDocuments, newDoc]);
+                  const updatedDocs = [...requiredDocuments, newDoc];
+                  setRequiredDocuments(updatedDocs);
+                  localStorage.setItem('requiredDocuments', JSON.stringify(updatedDocs));
+                  
+                  // Immediately sync to backend
+                  try {
+                    const apiUrl = getApiUrl();
+                    const userRole = localStorage.getItem('userRole') || 'ADMIN';
+                    const userName = localStorage.getItem('loggedInUser') || 'Admin';
+                    await fetch(`${apiUrl}/settings`, {
+                      method: 'POST',
+                      headers: { 
+                        'Content-Type': 'application/json',
+                        'x-user-role': userRole,
+                        'x-user-name': userName
+                      },
+                      body: JSON.stringify({
+                        ...bankDetails,
+                        adminSignature,
+                        adminName,
+                        adminDesignation,
+                        requiredDocuments: updatedDocs,
+                        adminRole: 'ADMIN'
+                      })
+                    });
+                  } catch (e) {
+                    console.warn("Backend settings sync error:", e);
+                  }
+
                   setNewDocLabel('');
                   setNewDocDesc('');
                   setNewDocRequired(true);
-                  toast.success(`Added "${newDoc.label}" to document checklist.`);
+                  toast.success(`Added "${newDoc.label}" to document checklist and synced.`);
                 }}
                 className="btn-primary"
                 style={{ padding: '0.55rem 1.25rem', fontSize: '0.8125rem', display: 'flex', alignItems: 'center', gap: '0.4rem', borderRadius: '0.375rem' }}
@@ -823,8 +851,33 @@ const Settings: React.FC = () => {
                     {/* Mandatory Toggle Button */}
                     <button
                       type="button"
-                      onClick={() => {
-                        setRequiredDocuments(prev => prev.map((item, i) => i === dIdx ? { ...item, required: !item.required } : item));
+                      onClick={async () => {
+                        const updatedDocs = requiredDocuments.map((item, i) => i === dIdx ? { ...item, required: !item.required } : item);
+                        setRequiredDocuments(updatedDocs);
+                        localStorage.setItem('requiredDocuments', JSON.stringify(updatedDocs));
+                        try {
+                          const apiUrl = getApiUrl();
+                          const userRole = localStorage.getItem('userRole') || 'ADMIN';
+                          const userName = localStorage.getItem('loggedInUser') || 'Admin';
+                          await fetch(`${apiUrl}/settings`, {
+                            method: 'POST',
+                            headers: { 
+                              'Content-Type': 'application/json',
+                              'x-user-role': userRole,
+                              'x-user-name': userName
+                            },
+                            body: JSON.stringify({
+                              ...bankDetails,
+                              adminSignature,
+                              adminName,
+                              adminDesignation,
+                              requiredDocuments: updatedDocs,
+                              adminRole: 'ADMIN'
+                            })
+                          });
+                        } catch (e) {
+                          console.warn("Backend settings sync error:", e);
+                        }
                         toast.success(`${doc.label} marked as ${!doc.required ? 'Mandatory' : 'Optional'}`);
                       }}
                       style={{
@@ -850,8 +903,33 @@ const Settings: React.FC = () => {
                     {/* Delete Item Button */}
                     <button
                       type="button"
-                      onClick={() => {
-                        setRequiredDocuments(prev => prev.filter((_, i) => i !== dIdx));
+                      onClick={async () => {
+                        const updatedDocs = requiredDocuments.filter((_, i) => i !== dIdx);
+                        setRequiredDocuments(updatedDocs);
+                        localStorage.setItem('requiredDocuments', JSON.stringify(updatedDocs));
+                        try {
+                          const apiUrl = getApiUrl();
+                          const userRole = localStorage.getItem('userRole') || 'ADMIN';
+                          const userName = localStorage.getItem('loggedInUser') || 'Admin';
+                          await fetch(`${apiUrl}/settings`, {
+                            method: 'POST',
+                            headers: { 
+                              'Content-Type': 'application/json',
+                              'x-user-role': userRole,
+                              'x-user-name': userName
+                            },
+                            body: JSON.stringify({
+                              ...bankDetails,
+                              adminSignature,
+                              adminName,
+                              adminDesignation,
+                              requiredDocuments: updatedDocs,
+                              adminRole: 'ADMIN'
+                            })
+                          });
+                        } catch (e) {
+                          console.warn("Backend settings sync error:", e);
+                        }
                         toast.success(`Removed "${doc.label}" from checklist.`);
                       }}
                       style={{

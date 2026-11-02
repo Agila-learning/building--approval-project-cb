@@ -51,6 +51,7 @@ const Maintenance: React.FC = () => {
 
   // Logs state
   const [logsSearchTerm, setLogsSearchTerm] = useState('');
+  const [viewSearchTerm, setViewSearchTerm] = useState('');
   const [auditLogs, setAuditLogs] = useState<any[]>(() => {
     try {
       const saved = localStorage.getItem('maintenance_audit_logs');
@@ -105,14 +106,20 @@ const Maintenance: React.FC = () => {
 
   const selectedCase = cases.find(c => (c.id === selectedCaseId || c.application_number === selectedCaseId));
 
+  const getCandidateName = (c: any) => {
+    if (!c) return 'Unknown Applicant';
+    return c.property?.owner_name || c.fullData?.customerName || c.customerName || c.clientName || c.name || 'Unknown Applicant';
+  };
+
   // Add audit log helper
-  const addAuditLog = (action: string, targetId: string, details: string) => {
+  const addAuditLog = (action: string, targetId: string, details: string, candidateName?: string) => {
     const newLog = {
       id: `LOG-${Date.now().toString().slice(-6)}`,
       timestamp: new Date().toISOString(),
       displayDate: new Date().toLocaleString('en-GB'),
       action,
       targetId,
+      candidateName: candidateName || 'Unknown Applicant',
       user: localStorage.getItem('loggedInUser') || 'Admin',
       details
     };
@@ -180,14 +187,16 @@ const Maintenance: React.FC = () => {
         } catch (e) {}
       }
 
-      // Record Audit Log
+      // Record Audit Log with Candidate Name
+      const candName = getCandidateName(selectedCase);
       addAuditLog(
         'STATUS_REVERT',
         selectedCase.application_number || selectedCase.id,
-        `Reverted from "${prevStatus}" to "${targetStatus}". Reason: ${revertReason.trim()}`
+        `Reverted from "${prevStatus}" to "${targetStatus}". Reason: ${revertReason.trim()}`,
+        candName
       );
 
-      toast.success(`Application ${selectedCase.application_number || selectedCase.id} successfully updated to ${targetStatus}!`);
+      toast.success(`Application ${selectedCase.application_number || selectedCase.id} for "${candName}" updated to ${targetStatus}!`);
       
       // Reset form
       setSelectedCaseId('');
@@ -305,7 +314,7 @@ const Maintenance: React.FC = () => {
               boxShadow: activeTab === 'view' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'
             }}
           >
-            <Database size={16} /> System Health View
+            <Database size={16} /> All Applications & Audit ({cases.length})
           </button>
         </div>
       </div>
@@ -531,7 +540,7 @@ const Maintenance: React.FC = () => {
                   <th style={{ padding: '0.75rem 1rem' }}>Log ID</th>
                   <th style={{ padding: '0.75rem 1rem' }}>Timestamp</th>
                   <th style={{ padding: '0.75rem 1rem' }}>Action Type</th>
-                  <th style={{ padding: '0.75rem 1rem' }}>Target Proposal</th>
+                  <th style={{ padding: '0.75rem 1rem' }}>Application ID & Candidate</th>
                   <th style={{ padding: '0.75rem 1rem' }}>Initiated By</th>
                   <th style={{ padding: '0.75rem 1rem' }}>Details & Remarks</th>
                 </tr>
@@ -553,7 +562,12 @@ const Maintenance: React.FC = () => {
                         {log.action}
                       </span>
                     </td>
-                    <td style={{ padding: '0.75rem 1rem', fontWeight: 600 }}>{log.targetId}</td>
+                    <td style={{ padding: '0.75rem 1rem', fontWeight: 600 }}>
+                      <div style={{ color: 'var(--primary-dark)' }}>{log.targetId}</div>
+                      <div style={{ fontSize: '0.75rem', color: '#475569', fontWeight: 500, marginTop: '2px' }}>
+                        👤 {log.candidateName || 'Applicant'}
+                      </div>
+                    </td>
                     <td style={{ padding: '0.75rem 1rem' }}>{log.user}</td>
                     <td style={{ padding: '0.75rem 1rem', color: '#334155' }}>{log.details}</td>
                   </tr>
@@ -572,10 +586,143 @@ const Maintenance: React.FC = () => {
         </div>
       )}
 
-      {/* TAB 3: SYSTEM HEALTH VIEW */}
+      {/* TAB 3: ALL APPLICATIONS & AUDIT INSPECTION */}
       {activeTab === 'view' && (
         <div>
-          {/* Health Metrics Grid */}
+          {/* Applications Search & Registry Card */}
+          <div className="card" style={{ padding: '1.5rem', marginBottom: '1.5rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '1rem' }}>
+              <div>
+                <h3 style={{ fontSize: '1.15rem', fontWeight: 700, color: 'var(--primary-dark)', margin: '0 0 0.25rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <Database size={18} color="#2563eb" /> All System Applications & Audit Inspection
+                </h3>
+                <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', margin: 0 }}>
+                  Search and inspect any application dossier. Quickly jump to details or revert stages directly.
+                </p>
+              </div>
+
+              <div style={{ position: 'relative', width: '300px' }}>
+                <Search size={16} color="#94a3b8" style={{ position: 'absolute', top: '50%', right: '0.75rem', transform: 'translateY(-50%)' }} />
+                <input
+                  type="text"
+                  placeholder="Search by ID, candidate, phone..."
+                  value={viewSearchTerm}
+                  onChange={(e) => setViewSearchTerm(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '0.55rem 2rem 0.55rem 0.75rem',
+                    borderRadius: '0.375rem',
+                    border: '1px solid var(--border-color)',
+                    fontSize: '0.85rem'
+                  }}
+                />
+              </div>
+            </div>
+
+            <div className="table-responsive">
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
+                <thead>
+                  <tr style={{ backgroundColor: '#f8fafc', borderBottom: '2px solid var(--border-color)', color: '#475569' }}>
+                    <th style={{ padding: '0.75rem 1rem' }}>Application ID</th>
+                    <th style={{ padding: '0.75rem 1rem' }}>Candidate Name</th>
+                    <th style={{ padding: '0.75rem 1rem' }}>Contact & Location</th>
+                    <th style={{ padding: '0.75rem 1rem' }}>Type</th>
+                    <th style={{ padding: '0.75rem 1rem' }}>Current Status</th>
+                    <th style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {cases
+                    .filter((c: any) => {
+                      if (!viewSearchTerm.trim()) return true;
+                      const term = viewSearchTerm.toLowerCase();
+                      const appNo = (c.application_number || c.id || '').toLowerCase();
+                      const cust = getCandidateName(c).toLowerCase();
+                      const phone = (c.property?.owner_phone || c.fullData?.mobile || c.mobile || '').toLowerCase();
+                      const loc = (c.property?.city || c.fullData?.propertyDetails?.city || c.property?.village || '').toLowerCase();
+                      return appNo.includes(term) || cust.includes(term) || phone.includes(term) || loc.includes(term);
+                    })
+                    .map((c: any) => {
+                      const appNo = c.application_number || c.id;
+                      const candName = getCandidateName(c);
+                      const phone = c.property?.owner_phone || c.fullData?.mobile || c.mobile || '—';
+                      const loc = c.property?.city || c.fullData?.propertyDetails?.city || c.property?.village || '—';
+                      const st = c.status || 'NEW';
+
+                      return (
+                        <tr key={c.id || appNo} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                          <td style={{ padding: '0.75rem 1rem', fontWeight: 700, color: 'var(--primary)' }}>
+                            {appNo}
+                          </td>
+                          <td style={{ padding: '0.75rem 1rem', fontWeight: 600, color: '#1e293b' }}>
+                            {candName}
+                          </td>
+                          <td style={{ padding: '0.75rem 1rem', color: '#64748b' }}>
+                            <div>{phone}</div>
+                            <div style={{ fontSize: '0.75rem' }}>{loc}</div>
+                          </td>
+                          <td style={{ padding: '0.75rem 1rem' }}>
+                            {c.approval_type || c.fullData?.serviceType || 'Building Approval'}
+                          </td>
+                          <td style={{ padding: '0.75rem 1rem' }}>
+                            <span style={{
+                              padding: '0.2rem 0.6rem',
+                              borderRadius: '1rem',
+                              fontSize: '0.75rem',
+                              fontWeight: 700,
+                              backgroundColor: st === 'APPROVED' ? 'rgba(34, 160, 107, 0.1)' : st === 'REJECTED' ? '#fee2e2' : '#fef3c7',
+                              color: st === 'APPROVED' ? 'var(--success-green)' : st === 'REJECTED' ? 'var(--error-red)' : 'var(--warning-gold)'
+                            }}>
+                              {st.replace(/_/g, ' ')}
+                            </span>
+                          </td>
+                          <td style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>
+                            <div style={{ display: 'inline-flex', gap: '0.5rem' }}>
+                              <button
+                                onClick={() => navigate(`/admin/applications/${appNo}`)}
+                                style={{
+                                  padding: '0.35rem 0.65rem',
+                                  borderRadius: '0.25rem',
+                                  border: '1px solid #bfdbfe',
+                                  backgroundColor: '#eff6ff',
+                                  color: '#1d4ed8',
+                                  fontSize: '0.75rem',
+                                  fontWeight: 600,
+                                  cursor: 'pointer'
+                                }}
+                              >
+                                View Dossier
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setSelectedCaseId(c.id || appNo);
+                                  setActiveTab('revert');
+                                  navigate('/admin/maintenance/revert');
+                                }}
+                                style={{
+                                  padding: '0.35rem 0.65rem',
+                                  borderRadius: '0.25rem',
+                                  border: '1px solid #fde68a',
+                                  backgroundColor: '#fffbeb',
+                                  color: '#b45309',
+                                  fontSize: '0.75rem',
+                                  fontWeight: 600,
+                                  cursor: 'pointer'
+                                }}
+                              >
+                                Revert Stage
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Health Metrics Grid & Diagnostics */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
             
             <div className="card" style={{ padding: '1.25rem' }}>

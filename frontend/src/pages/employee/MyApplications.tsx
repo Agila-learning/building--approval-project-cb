@@ -76,24 +76,28 @@ const MyApplications: React.FC = () => {
     setTimeout(() => setCopiedId(null), 2500);
   };
 
-  const tabs = ['All', 'In Progress', 'Documents Pending', 'Verification', 'Approved'];
+  const tabs = ['All', 'In Progress', 'Documents Pending', 'Verification', 'Approved', 'Rejected'];
 
   const matchesTab = (status: string, tab: string) => {
     if (tab === 'All') return true;
     const s = (status || '').toUpperCase();
+    const clean = s.replace(/[\s_-]+/g, '');
     if (tab === 'Documents Pending') {
-      return ['DOCUMENT_COLLECTION', 'DOCUMENTS_PENDING', 'DOCUMENTS PENDING', 'INTAKE', 'ACTION_NEEDED', 'ACTION REQUIRED', 'NEW', 'DRAFT'].includes(s);
+      return ['DOCUMENT_COLLECTION', 'DOCUMENTS_PENDING', 'DOCUMENTS PENDING', 'INTAKE', 'ACTION_NEEDED', 'ACTION REQUIRED', 'NEW', 'DRAFT', 'PENDING_DOCUMENTS'].includes(s) || clean.includes('PENDING') || clean.includes('INTAKE') || clean === 'DRAFT';
     }
     if (tab === 'Verification') {
-      return ['DOCUMENTS_VERIFICATION', 'SCRUTINY', 'SITE INSPECTION', 'UNDER REVIEW', 'SUBMITTED', 'SUBMITTED_FOR_APPROVAL', 'VERIFICATION', 'GOV VERIFICATION', 'WORKER VERIFIED'].includes(s);
+      return ['DOCUMENTS_VERIFICATION', 'SCRUTINY', 'SITE INSPECTION', 'UNDER REVIEW', 'SUBMITTED', 'SUBMITTED_FOR_APPROVAL', 'VERIFICATION', 'GOV VERIFICATION', 'WORKER VERIFIED'].includes(s) || clean.includes('VERIF') || clean.includes('REVIEW') || clean.includes('INSPECTION');
     }
     if (tab === 'Approved') {
-      return ['APPROVED', 'COMPLETED'].includes(s);
+      return ['APPROVED', 'COMPLETED'].includes(s) || clean.includes('APPROV') || clean.includes('COMPLETE');
+    }
+    if (tab === 'Rejected') {
+      return s === 'REJECTED' || clean.includes('REJECT');
     }
     if (tab === 'In Progress') {
-      return !['APPROVED', 'COMPLETED', 'REJECTED'].includes(s);
+      return !['APPROVED', 'COMPLETED', 'REJECTED'].includes(s) && !clean.includes('APPROV') && !clean.includes('REJECT');
     }
-    return s === tab.toUpperCase();
+    return s === tab.toUpperCase() || clean === tab.toUpperCase().replace(/[\s_-]+/g, '');
   };
 
   const formatStatus = (status: string) => {
