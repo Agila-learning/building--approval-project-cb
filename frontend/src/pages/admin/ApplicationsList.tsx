@@ -109,10 +109,12 @@ const ApplicationsList: React.FC = () => {
 
   // Synchronize search input with URL search param if provided
   React.useEffect(() => {
-    if (queryParam !== null) {
+    if (queryParam !== null && queryParam !== undefined) {
       setSearchTerm(queryParam);
+    } else if (!location.search.includes('search=') && !location.search.includes('q=')) {
+      setSearchTerm('');
     }
-  }, [queryParam]);
+  }, [queryParam, location.search]);
 
   const computeDaysElapsed = (rawDate: any, status?: string, updatedDate?: any) => {
     if (!rawDate) return 0;
@@ -307,24 +309,40 @@ const ApplicationsList: React.FC = () => {
   // Determine current active filter key
   const activeFilterKey = React.useMemo(() => {
     if (filterParam === 'current_month' && !statusParam) return 'current_month';
-    if (statusParam) return statusParam.toLowerCase();
-    if (filterParam) return filterParam.toLowerCase();
+    if (statusParam) return String(statusParam).toLowerCase();
+    if (filterParam) return String(filterParam).toLowerCase();
     return '';
   }, [filterParam, statusParam]);
 
   const filteredApplications = applications.filter(app => {
-    const matchesSearch = searchTerm === '' || 
-      app.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      app.customer.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      app.location.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      app.type.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (app.appType || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (app.status || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (app.mobile || '').includes(searchTerm);
+    if (!app) return false;
+    const term = (searchTerm || '').trim().toLowerCase();
+    const appId = String(app.id || '').toLowerCase();
+    const appCust = String(app.customer || '').toLowerCase();
+    const appLoc = String(app.location || '').toLowerCase();
+    const appType = String(app.type || '').toLowerCase();
+    const appAppType = String(app.appType || '').toLowerCase();
+    const appStatus = String(app.status || '').toLowerCase();
+    const appRawStatus = String(app.rawStatus || '').toLowerCase();
+    const appMobile = String(app.mobile || '').toLowerCase();
+    const appStaff = String(app.staff || '').toLowerCase();
+
+    const words = term ? term.split(/\s+/).filter(Boolean) : [];
+    const matchesSearch = words.length === 0 || words.every(word => 
+      appId.includes(word) ||
+      appCust.includes(word) ||
+      appLoc.includes(word) ||
+      appType.includes(word) ||
+      appAppType.includes(word) ||
+      appStatus.includes(word) ||
+      appRawStatus.includes(word) ||
+      appMobile.includes(word) ||
+      appStaff.includes(word)
+    );
 
     let matchesFilter = true;
     if (filterOn === 'Product' && subFilter !== 'select') {
-      matchesFilter = (app.appType || '').toLowerCase().includes(subFilter.toLowerCase());
+      matchesFilter = (app.appType || '').toLowerCase().includes((subFilter || '').toLowerCase());
     } else if (filterOn === 'Status' && subFilter !== 'select') {
       matchesFilter = matchesFilterStatus(app.status, app.rawStatus, subFilter);
     }
@@ -352,8 +370,8 @@ const ApplicationsList: React.FC = () => {
     } else if (isMaintenanceRevert || isMaintenanceView) {
       matchesMaintenance = true;
     } else if (isMainList) {
-      // If user explicitly applied a filter via URL or dropdown, DO NOT hide completed cases!
-      const hasExplicitFilter = Boolean(filterParam || statusParam || (filterOn === 'Status' && subFilter !== 'select') || (filterOn === 'Product' && subFilter !== 'select'));
+      // If user explicitly searched or applied a filter via URL or dropdown, DO NOT hide completed cases!
+      const hasExplicitFilter = Boolean(term || queryParam || filterParam || statusParam || (filterOn === 'Status' && subFilter !== 'select') || (filterOn === 'Product' && subFilter !== 'select'));
       if (!hasExplicitFilter) {
         matchesMaintenance = !isCompleted; // Hide completed in default main list
       }

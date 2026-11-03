@@ -4,14 +4,15 @@ import {
   LayoutDashboard, FileText,
   CreditCard, PhoneCall, BarChart3,
   UserCog, Settings, LogOut, CheckSquare, Users, Receipt, ClipboardList,
-  X, ChevronLeft, ChevronRight
+  X, ChevronLeft, ChevronRight, Bell
 } from 'lucide-react';
 
 const menuGroups = [
   {
     category: 'Overview',
     items: [
-      { title: 'Dashboard', icon: <LayoutDashboard size={20} strokeWidth={1.5} />, path: '/admin' }
+      { title: 'Dashboard', icon: <LayoutDashboard size={20} strokeWidth={1.5} />, path: '/admin' },
+      { title: 'Notifications', icon: <Bell size={20} strokeWidth={1.5} />, path: '/admin/notifications' }
     ]
   },
   {

@@ -33,16 +33,17 @@ export const getApplicationStatus = (id: string, defaultStatus: string, caseData
   const siteInspection = docs.find((d: any) => d.id === 'site_inspection_report');
   const siteInspectionUploaded = siteInspection && siteInspection.status !== 'Missing';
   
+  const govtApproval = docs.find((d: any) => d.id === 'govt_order' || d.id === 'approval_order' || d.id === 'govt_approval');
+  const govtApprovalUploaded = Boolean((govtApproval && govtApproval.status !== 'Missing') || uploadedFiles['GOVT APPROVAL'] || uploadedFiles['APPROVAL ORDER']);
+
   // Check Final Approval Completion from stage data or status
   const stages = caseData?.fullData?.stages || caseData?.stages || [];
-  const isFinalStageDone = (stages.length >= 5 && stages[4]?.status === 'Completed') || stages.every((s: any) => s.status === 'Completed');
+  const isFinalStageDone = (stages.length >= 5 && stages[4]?.status === 'Completed') || (Array.isArray(stages) && stages.length > 0 && stages.every((s: any) => s.status === 'Completed'));
   const normDefault = (defaultStatus || '').toUpperCase().trim();
 
-  if (normDefault === 'FINALLY APPROVED' || normDefault === 'FINAL APPROVAL' || isFinalStageDone) {
+  if (normDefault === 'FINALLY APPROVED' || normDefault === 'FINAL APPROVAL' || isFinalStageDone || govtApprovalUploaded) {
     return 'Finally Approved';
   }
-
-  if (govtApprovalUploaded) return 'Finally Approved';
   if (siteInspectionUploaded && govtTrackingNumber) return 'Site Inspection';
   if (govtTrackingNumber) return 'Gov Verification';
   if (allCustomerDocsVerified && buildingPlanUploaded) return 'Submitted';

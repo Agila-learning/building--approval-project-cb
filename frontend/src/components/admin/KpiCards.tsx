@@ -15,12 +15,12 @@ const isGovReview = (status: string) => {
 };
 
 const isApproved = (status: string) => {
-  const s = (status || '').toUpperCase();
-  return ['APPROVED', 'COMPLETED'].includes(s);
+  const s = (status || '').toUpperCase().trim();
+  return ['APPROVED', 'COMPLETED', 'FINALLY APPROVED', 'FINAL APPROVAL', 'FINALLY_APPROVED', 'FINAL_APPROVAL', 'APPLICATION COMPLETED', 'SANCTIONED'].includes(s) || s.includes('APPROV') || s.includes('COMPLET');
 };
 
 const isRejected = (status: string) => {
-  const s = (status || '').toUpperCase();
+  const s = (status || '').toUpperCase().trim();
   return s === 'REJECTED';
 };
 
@@ -28,6 +28,7 @@ const KpiCards: React.FC = () => {
   const navigate = useNavigate();
   const [kpi, setKpi] = useState({ total: 0, active: 0, docsPending: 0, govReview: 0, approved: 0 });
   const [staffPresent, setStaffPresent] = useState(0);
+  const [totalLeads, setTotalLeads] = useState(0);
 
   useEffect(() => {
     const fetchCases = async () => {
@@ -47,7 +48,7 @@ const KpiCards: React.FC = () => {
 
         const mappedApps = allApps.map((a: any) => {
           const appNo = a.application_number || a.id;
-          const status = getApplicationStatus(appNo, a.status);
+          const status = getApplicationStatus(appNo, a.status, a);
           return { ...a, dynamicStatus: status };
         });
 
@@ -58,6 +59,15 @@ const KpiCards: React.FC = () => {
         const approved = mappedApps.filter((a: any) => isApproved(a.dynamicStatus) || isApproved(a.status)).length;
 
         setKpi({ total, active, docsPending, govReview, approved });
+
+        // Fetch Leads count
+        try {
+          const leadsRes = await fetch(`${apiUrl}/leads`);
+          if (leadsRes.ok) {
+            const leadsData = await leadsRes.json();
+            setTotalLeads(Array.isArray(leadsData) ? leadsData.length : 0);
+          }
+        } catch (e) {}
 
         // Fetch today's attendance count from backend API & local
         const today = new Date().toISOString().split('T')[0];
@@ -93,98 +103,202 @@ const KpiCards: React.FC = () => {
     {
       label: 'Total Applications',
       value: kpi.total,
-      sub: kpi.total === 0 ? 'No applications yet' : `${kpi.active} active`,
-      iconBg: 'rgba(30, 58, 138, 0.05)',
-      iconColor: 'var(--primary-dark)',
-      subColor: 'var(--success-green)',
+      sub: `${kpi.active} Active Cases`,
+      badgeText: 'Total Filed',
+      badgeBg: '#eff6ff',
+      badgeColor: '#1d4ed8',
+      gradient: 'linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%)',
+      accentColor: '#2563eb',
+      iconBg: '#dbeafe',
+      iconColor: '#1e40af',
       Icon: Users,
       path: '/admin/applications?filter=all',
     },
     {
-      label: 'Active Applications',
+      label: 'Active Pipeline',
       value: kpi.active,
-      sub: kpi.active === 0 ? 'None active' : `${kpi.active} in progress`,
-      iconBg: 'rgba(201, 106, 74, 0.1)',
-      iconColor: 'var(--accent)',
-      subColor: 'var(--accent)',
+      sub: 'Currently in progress',
+      badgeText: 'Under Process',
+      badgeBg: '#f0fdf4',
+      badgeColor: '#15803d',
+      gradient: 'linear-gradient(135deg, #0d9488 0%, #14b8a6 100%)',
+      accentColor: '#0d9488',
+      iconBg: '#ccfbf1',
+      iconColor: '#0f766e',
       Icon: FileText,
       path: '/admin/applications?filter=active',
     },
     {
       label: 'Pending Documents',
       value: kpi.docsPending,
-      sub: kpi.docsPending === 0 ? 'All clear' : 'Waiting for upload',
-      iconBg: 'rgba(214, 167, 86, 0.1)',
-      iconColor: 'var(--warning)',
-      subColor: 'var(--text-secondary)',
+      sub: kpi.docsPending === 0 ? 'All uploaded' : 'Action required',
+      badgeText: kpi.docsPending > 0 ? 'Requires Action' : 'Cleared',
+      badgeBg: kpi.docsPending > 0 ? '#fef3c7' : '#f1f5f9',
+      badgeColor: kpi.docsPending > 0 ? '#b45309' : '#64748b',
+      gradient: 'linear-gradient(135deg, #ea580c 0%, #f97316 100%)',
+      accentColor: '#f97316',
+      iconBg: '#ffedd5',
+      iconColor: '#c2410c',
       Icon: AlertTriangle,
       path: '/admin/applications?status=docs_pending',
     },
     {
       label: 'Government Review',
       value: kpi.govReview,
-      sub: kpi.govReview === 0 ? 'None submitted' : 'Processing',
-      iconBg: 'rgba(23, 37, 84, 0.05)',
-      iconColor: 'var(--primary)',
-      subColor: 'var(--text-secondary)',
+      sub: 'DTCP / Municipal Scrutiny',
+      badgeText: 'Official Review',
+      badgeBg: '#f5f3ff',
+      badgeColor: '#6d28d9',
+      gradient: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+      accentColor: '#6366f1',
+      iconBg: '#ede9fe',
+      iconColor: '#6d28d9',
       Icon: Building,
       path: '/admin/applications?status=gov_review',
     },
     {
-      label: 'Approved',
+      label: 'Finally Approved',
       value: kpi.approved,
-      sub: kpi.approved === 0 ? 'None this month' : 'Completed',
-      iconBg: 'rgba(67, 104, 80, 0.1)',
-      iconColor: 'var(--success-green)',
-      subColor: 'var(--success-green)',
+      sub: 'Sanction order issued',
+      badgeText: 'Cleared',
+      badgeBg: '#dcfce7',
+      badgeColor: '#166534',
+      gradient: 'linear-gradient(135deg, #059669 0%, #10b981 100%)',
+      accentColor: '#10b981',
+      iconBg: '#dcfce7',
+      iconColor: '#15803d',
       Icon: CheckCircle2,
       path: '/admin/applications?status=approved',
     },
     {
-      label: 'Staff Present',
+      label: 'Staff Present Today',
       value: staffPresent,
-      sub: staffPresent === 0 ? 'No check-ins today' : `${staffPresent} staff active`,
-      iconBg: 'rgba(34, 160, 107, 0.1)',
-      iconColor: 'var(--success-green)',
-      subColor: 'var(--success-green)',
+      sub: 'Attendance verified',
+      badgeText: 'On Duty',
+      badgeBg: '#ecfeff',
+      badgeColor: '#0e7490',
+      gradient: 'linear-gradient(135deg, #0284c7 0%, #38bdf8 100%)',
+      accentColor: '#0284c7',
+      iconBg: '#e0f2fe',
+      iconColor: '#0369a1',
       Icon: UserCheck,
       path: '/admin/attendance',
     },
   ];
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
-      {cards.map(({ label, value, sub, iconBg, iconColor, subColor, Icon, path }) => (
+    <div style={{ 
+      display: 'grid', 
+      gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', 
+      gap: '1.25rem', 
+      marginBottom: '2rem' 
+    }}>
+      {cards.map(({ label, value, sub, badgeText, badgeBg, badgeColor, accentColor, iconBg, iconColor, Icon, path }) => (
         <div
           key={label}
-          className="card kpi-card"
+          className="kpi-card-premium"
           onClick={() => navigate(path)}
           role="button"
           tabIndex={0}
-          title={`Filter by ${label}`}
+          title={`Click to view ${label}`}
           style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '1rem',
-            padding: '1rem',
+            position: 'relative',
+            backgroundColor: '#ffffff',
+            borderRadius: '1rem',
+            padding: '1.25rem 1.35rem',
             cursor: 'pointer',
-            transition: 'transform 0.2s, box-shadow 0.2s',
+            border: '1px solid #e2e8f0',
+            boxShadow: '0 4px 12px -2px rgba(15, 23, 42, 0.05), 0 2px 4px -2px rgba(15, 23, 42, 0.03)',
+            transition: 'all 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
+            overflow: 'hidden',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'space-between'
           }}
         >
-          <div style={{ width: '40px', height: '40px', borderRadius: '50%', backgroundColor: iconBg, color: iconColor, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-            <Icon size={20} strokeWidth={1.5} />
+          {/* Subtle top accent gradient bar */}
+          <div style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            height: '4px',
+            backgroundColor: accentColor
+          }} />
+
+          {/* Card Top Row */}
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '0.875rem' }}>
+            <div style={{
+              width: '44px',
+              height: '44px',
+              borderRadius: '0.75rem',
+              backgroundColor: iconBg,
+              color: iconColor,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: '0 2px 6px rgba(0,0,0,0.04)'
+            }}>
+              <Icon size={22} strokeWidth={1.8} />
+            </div>
+
+            <span style={{
+              padding: '0.2rem 0.65rem',
+              borderRadius: '2rem',
+              backgroundColor: badgeBg,
+              color: badgeColor,
+              fontSize: '0.72rem',
+              fontWeight: 700,
+              letterSpacing: '0.02em'
+            }}>
+              {badgeText}
+            </span>
           </div>
+
+          {/* Card Middle: Value & Label */}
           <div>
-            <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.2rem' }}>{label}</div>
-            <div style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--primary-dark)', fontFamily: 'var(--font-heading)', lineHeight: 1 }}>{value}</div>
-            <div style={{ fontSize: '0.75rem', color: subColor, fontWeight: 500, marginTop: '0.2rem' }}>{sub}</div>
+            <div style={{ 
+              fontSize: '1.85rem', 
+              fontWeight: 800, 
+              color: '#0f172a', 
+              letterSpacing: '-0.03em',
+              lineHeight: 1.1,
+              marginBottom: '0.35rem'
+            }}>
+              {value}
+            </div>
+            <div style={{ 
+              fontSize: '0.85rem', 
+              fontWeight: 600, 
+              color: '#475569',
+              marginBottom: '0.4rem'
+            }}>
+              {label}
+            </div>
+          </div>
+
+          {/* Card Bottom: Subtext */}
+          <div style={{ 
+            fontSize: '0.75rem', 
+            color: '#64748b', 
+            fontWeight: 500,
+            borderTop: '1px solid #f1f5f9',
+            paddingTop: '0.5rem',
+            marginTop: '0.25rem',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between'
+          }}>
+            <span>{sub}</span>
+            <span style={{ color: accentColor, fontWeight: 700, fontSize: '0.8rem' }}>→</span>
           </div>
         </div>
       ))}
       <style>{`
-        .kpi-card:hover {
+        .kpi-card-premium:hover {
           transform: translateY(-4px);
-          box-shadow: 0 12px 24px rgba(23, 37, 84, 0.12);
+          box-shadow: 0 16px 28px -6px rgba(15, 23, 42, 0.12), 0 8px 12px -4px rgba(15, 23, 42, 0.06) !important;
+          border-color: #cbd5e1 !important;
         }
       `}</style>
     </div>

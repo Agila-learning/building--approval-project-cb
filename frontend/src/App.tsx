@@ -40,6 +40,7 @@ import ApplicationEdit from './pages/admin/ApplicationEdit';
 import ApplicationView from './pages/admin/ApplicationView';
 import DocumentsManagement from './pages/admin/DocumentsManagement';
 import Maintenance from './pages/admin/Maintenance';
+import NotificationsList from './pages/admin/NotificationsList';
 
 function App() {
   useEffect(() => {
@@ -165,6 +166,7 @@ function App() {
             <Route path="submissions/*" element={<div style={{padding:'2rem'}}><h2>Submissions Module</h2><p>Coming soon...</p></div>} />
             <Route path="tasks/*" element={<div style={{padding:'2rem'}}><h2>Tasks Module</h2><p>Coming soon...</p></div>} />
             <Route path="followups" element={<FollowUpsList />} />
+            <Route path="notifications" element={<NotificationsList />} />
             <Route path="reports/*" element={<Reports />} />
             <Route path="settings/*" element={<Settings />} />
             

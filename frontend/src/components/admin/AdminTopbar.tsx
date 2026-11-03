@@ -415,6 +415,25 @@ const AdminTopbar: React.FC<AdminTopbarProps> = ({ toggleSidebar }) => {
                       </div>
                     )}
                   </div>
+                  <div style={{ padding: '0.75rem 1rem', borderTop: '1px solid var(--border-color)', textAlign: 'center', backgroundColor: '#f8fafc' }}>
+                    <button
+                      onClick={() => {
+                        setShowNotifications(false);
+                        navigate('/admin/notifications');
+                      }}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: 'var(--primary)',
+                        fontSize: '0.8125rem',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        padding: '0.2rem'
+                      }}
+                    >
+                      View All Notifications →
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
