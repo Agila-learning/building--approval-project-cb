@@ -126,6 +126,22 @@ const ApplicationView: React.FC = () => {
     }
   }, [id, userRole, loggedInUser, staffId]);
 
+  useEffect(() => {
+    // Load bank settings for preview
+    const loadBank = async () => {
+      try {
+        const local = localStorage.getItem('companyBankDetails');
+        if (local) setBankSettings(JSON.parse(local));
+        const res = await fetch(`${getApiUrl()}/settings`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.bankDetails) setBankSettings(data.bankDetails);
+        }
+      } catch (_) {}
+    };
+    loadBank();
+  }, []);
+
   if (isForbidden) {
     return (
       <div style={{ maxWidth: '600px', margin: '4rem auto', padding: '3rem 2rem', backgroundColor: '#fef2f2', borderRadius: '0.75rem', border: '1px solid #fca5a5', textAlign: 'center' }}>
@@ -167,22 +183,6 @@ const ApplicationView: React.FC = () => {
   const isPaymentCompleted = stages[2]?.status === 'Completed' || currentStatus === 'Payment Completed' || fullData.payment?.paymentStatus === 'Paid';
   const isSiteVisitCompleted = stages[3]?.status === 'Completed' || currentStatus === 'Site Visit Completed';
   const isFinalApproved = stages[4]?.status === 'Completed' || currentStatus === 'Finally Approved' || currentStatus === 'Final Approval' || currentStatus === 'Application Completed' || currentStatus === 'Approved';
-
-  useEffect(() => {
-    // Load bank settings for preview
-    const loadBank = async () => {
-      try {
-        const local = localStorage.getItem('companyBankDetails');
-        if (local) setBankSettings(JSON.parse(local));
-        const res = await fetch(`${getApiUrl()}/settings`);
-        if (res.ok) {
-          const data = await res.json();
-          if (data?.bankDetails) setBankSettings(data.bankDetails);
-        }
-      } catch (_) {}
-    };
-    loadBank();
-  }, []);
 
   const handleSendPaymentRequest = async (channel: 'email' | 'whatsapp') => {
     setIsSendingPaymentRequest(true);
