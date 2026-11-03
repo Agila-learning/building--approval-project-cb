@@ -34,11 +34,18 @@ export class AttendanceController {
   // GET /attendance
   async getAttendance(req: Request, res: Response) {
     try {
-      const { date, staffName, staffId } = req.query;
+      const { date, fromDate, toDate, staffName, staffId } = req.query;
       let records = loadAttendanceRecords();
 
       if (date) {
         records = records.filter(r => r.date === String(date));
+      } else {
+        if (fromDate) {
+          records = records.filter(r => r.date >= String(fromDate));
+        }
+        if (toDate) {
+          records = records.filter(r => r.date <= String(toDate));
+        }
       }
       if (staffName) {
         records = records.filter(r => r.name.toLowerCase() === String(staffName).toLowerCase());
@@ -46,6 +53,12 @@ export class AttendanceController {
       if (staffId) {
         records = records.filter(r => r.id === String(staffId));
       }
+
+      // Sort by date descending, then name ascending
+      records.sort((a, b) => {
+        if (a.date !== b.date) return (b.date || '').localeCompare(a.date || '');
+        return (a.name || '').localeCompare(b.name || '');
+      });
 
       res.json(records);
     } catch (error: any) {

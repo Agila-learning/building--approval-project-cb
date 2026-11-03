@@ -22,9 +22,14 @@ const isGovReviewStatus = (status: string, rawStatus?: string) => {
 };
 
 const isApprovedStatus = (status: string, rawStatus?: string) => {
-  const s = (status || '').toUpperCase();
-  const r = (rawStatus || '').toUpperCase();
-  return ['APPROVED', 'COMPLETED'].includes(s) || ['APPROVED', 'COMPLETED'].includes(r);
+  const s = (status || '').toUpperCase().trim();
+  const r = (rawStatus || '').toUpperCase().trim();
+  const approvedTokens = [
+    'APPROVED', 'COMPLETED', 'FINALLY APPROVED', 'FINAL APPROVAL',
+    'FINALLY_APPROVED', 'FINAL_APPROVAL', 'APPLICATION COMPLETED', 'SANCTIONED'
+  ];
+  if (approvedTokens.includes(s) || approvedTokens.includes(r)) return true;
+  return s.includes('APPROV') || r.includes('APPROV') || s.includes('COMPLET') || r.includes('COMPLET') || s.includes('SANCTION') || r.includes('SANCTION');
 };
 
 const isRejectedStatus = (status: string, rawStatus?: string) => {
@@ -71,7 +76,7 @@ const matchesFilterStatus = (appStatus: string, rawStatus?: string, filterValue?
     return nApp.includes('SUBMIT') || nRaw.includes('SUBMIT');
   }
 
-  if (nFilter.includes('APPROV') || nFilter.includes('COMPLETE')) {
+  if (nFilter.includes('APPROV') || nFilter.includes('COMPLETE') || nFilter.includes('FINAL')) {
     return isApprovedStatus(appStatus, rawStatus);
   }
 
@@ -364,10 +369,17 @@ const ApplicationsList: React.FC = () => {
     if (filterParam === 'current_month') parts.push('Current Month');
     if (statusParam === 'docs_pending') parts.push('Pending Documents');
     else if (statusParam === 'gov_review') parts.push('Government Review');
-    else if (statusParam === 'approved') parts.push('Approved');
+    else if (statusParam === 'approved') parts.push('Finally Approved');
     else if (statusParam === 'rejected') parts.push('Rejected');
     else if (statusParam === 'active' && !parts.includes('Active')) parts.push('Active');
     else if (statusParam) parts.push(`Status: ${statusParam}`);
+    
+    if (filterOn === 'Status' && subFilter !== 'select') {
+      parts.push(`Status: ${subFilter === 'Approved' ? 'Finally Approved / Completed' : subFilter}`);
+    } else if (filterOn === 'Product' && subFilter !== 'select') {
+      parts.push(`Product: ${subFilter}`);
+    }
+
     return parts.length > 0 ? parts.join(' • ') : null;
   };
 
@@ -535,7 +547,7 @@ const ApplicationsList: React.FC = () => {
               transition: 'all 0.15s ease'
             }}
           >
-            Approved <span style={{ padding: '0.1rem 0.45rem', borderRadius: '1rem', backgroundColor: activeFilterKey === 'approved' ? 'rgba(255,255,255,0.2)' : 'var(--bg-secondary)', fontSize: '0.75rem' }}>{filterCounts.approved}</span>
+            Finally Approved <span style={{ padding: '0.1rem 0.45rem', borderRadius: '1rem', backgroundColor: activeFilterKey === 'approved' ? 'rgba(255,255,255,0.2)' : 'var(--bg-secondary)', fontSize: '0.75rem' }}>{filterCounts.approved}</span>
           </button>
 
           <button
@@ -670,11 +682,35 @@ const ApplicationsList: React.FC = () => {
                         <option value="Documents Pending">Documents Pending (Draft / Intake)</option>
                         <option value="Verification">Verification & Review (Scrutiny / Inspection)</option>
                         <option value="Submitted">Submitted for Approval</option>
-                        <option value="Approved">Approved / Completed</option>
+                        <option value="Approved">Finally Approved / Completed</option>
                         <option value="Rejected">Rejected</option>
                       </>
                     )}
                   </select>
+                </div>
+              )}
+              {(filterOn !== 'select' || subFilter !== 'select') && (
+                <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+                  <button
+                    onClick={() => { setFilterOn('select'); setSubFilter('select'); }}
+                    style={{
+                      padding: '0.5rem 0.85rem',
+                      borderRadius: '0.375rem',
+                      border: '1px solid var(--border-color)',
+                      backgroundColor: '#f1f5f9',
+                      color: 'var(--primary-dark)',
+                      fontSize: '0.8125rem',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.35rem',
+                      transition: 'all 0.15s ease'
+                    }}
+                    title="Reset Dropdown Filters"
+                  >
+                    <X size={14} /> Reset Filter
+                  </button>
                 </div>
               )}
             </div>

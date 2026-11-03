@@ -50,8 +50,13 @@ const StatusBadge: React.FC<StatusBadgeProps> = ({ type, value }) => {
         break;
       case 'APPROVED':
       case 'COMPLETED':
+      case 'FINALLY_APPROVED':
+      case 'FINALLY APPROVED':
+      case 'FINAL_APPROVAL':
+      case 'FINAL APPROVAL':
+      case 'APPLICATION_COMPLETED':
         bgColor = 'rgba(34, 160, 107, 0.1)'; color = 'var(--success-green)'; 
-        formattedValue = value.replace(/_/g, ' ');
+        formattedValue = 'FINALLY APPROVED';
         break;
       case 'REJECTED':
         bgColor = '#fee2e2'; color = 'var(--error-red)'; 

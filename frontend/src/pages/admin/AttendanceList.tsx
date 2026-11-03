@@ -7,24 +7,71 @@ const AttendanceList: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All Status');
   const [attendance, setAttendance] = useState<any[]>([]);
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const todayStr = new Date().toISOString().split('T')[0];
+  const [fromDate, setFromDate] = useState(todayStr);
+  const [toDate, setToDate] = useState(todayStr);
+  const [activeDatePreset, setActiveDatePreset] = useState<'today' | 'yesterday' | 'this_week' | 'this_month' | 'all' | 'custom'>('today');
+
+  const setPreset = (preset: 'today' | 'yesterday' | 'this_week' | 'this_month' | 'all') => {
+    setActiveDatePreset(preset);
+    const now = new Date();
+    if (preset === 'today') {
+      setFromDate(todayStr);
+      setToDate(todayStr);
+    } else if (preset === 'yesterday') {
+      const y = new Date();
+      y.setDate(y.getDate() - 1);
+      const yStr = y.toISOString().split('T')[0];
+      setFromDate(yStr);
+      setToDate(yStr);
+    } else if (preset === 'this_week') {
+      const day = now.getDay();
+      const diff = now.getDate() - day + (day === 0 ? -6 : 1);
+      const monday = new Date(new Date().setDate(diff)).toISOString().split('T')[0];
+      setFromDate(monday);
+      setToDate(todayStr);
+    } else if (preset === 'this_month') {
+      const firstDay = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+      setFromDate(firstDay);
+      setToDate(todayStr);
+    } else if (preset === 'all') {
+      setFromDate('');
+      setToDate('');
+    }
+  };
 
   const loadAttendance = async () => {
     const localRecords = JSON.parse(localStorage.getItem('employeeAttendance') || '[]');
-    const dateRecords = localRecords.filter((r: any) => r.date === selectedDate);
-    setAttendance(dateRecords);
+    const dateFilteredLocal = localRecords.filter((r: any) => {
+      if (fromDate && r.date < fromDate) return false;
+      if (toDate && r.date > toDate) return false;
+      return true;
+    });
+    setAttendance(dateFilteredLocal);
 
     try {
-      const res = await fetch(`${getApiUrl()}/attendance?date=${selectedDate}`);
+      const queryParams = new URLSearchParams();
+      if (fromDate) queryParams.set('fromDate', fromDate);
+      if (toDate) queryParams.set('toDate', toDate);
+      if (fromDate && toDate && fromDate === toDate) {
+        queryParams.set('date', fromDate);
+      }
+
+      const res = await fetch(`${getApiUrl()}/attendance?${queryParams.toString()}`);
       if (res.ok) {
         const apiRecords = await res.json();
         if (Array.isArray(apiRecords)) {
           // Merge api records with local records to ensure complete real-time view
           const merged = [...apiRecords];
-          dateRecords.forEach((lr: any) => {
-            if (!merged.some(m => m.id === lr.id || m.name?.toLowerCase() === lr.name?.toLowerCase())) {
+          dateFilteredLocal.forEach((lr: any) => {
+            if (!merged.some(m => (m.id && m.id === lr.id && m.date === lr.date) || (m.name?.toLowerCase() === lr.name?.toLowerCase() && m.date === lr.date))) {
               merged.push(lr);
             }
+          });
+          // Sort by date descending, then name
+          merged.sort((a, b) => {
+            if (a.date !== b.date) return (b.date || '').localeCompare(a.date || '');
+            return (a.name || '').localeCompare(b.name || '');
           });
           setAttendance(merged);
         }
@@ -42,7 +89,7 @@ const AttendanceList: React.FC = () => {
       clearInterval(interval);
       window.removeEventListener('storage', loadAttendance);
     };
-  }, [selectedDate]);
+  }, [fromDate, toDate]);
 
   // Export Modal State
   const [showExportModal, setShowExportModal] = useState(false);
@@ -130,21 +177,74 @@ const AttendanceList: React.FC = () => {
 
   return (
     <div style={{ backgroundColor: '#F8FAFC', minHeight: '100%', paddingBottom: '2rem' }}>
-      {/* 1. PAGE HEADER */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'flex-start', marginBottom: '2rem', flexWrap: 'wrap', gap: '1rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
-          
-          {/* Functional Date Picker */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.625rem 1rem', backgroundColor: 'var(--bg-surface)', borderRadius: '0.75rem', border: '1px solid var(--border-color)', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
-            <Calendar size={18} color="var(--primary)" /> 
-            <input 
-              type="date"
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-              style={{ border: 'none', outline: 'none', backgroundColor: 'transparent', fontWeight: 600, color: 'var(--primary-dark)', cursor: 'pointer', fontFamily: 'inherit' }}
-            />
+      {/* 1. PAGE HEADER WITH DATE RANGE FILTER */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem', backgroundColor: 'var(--bg-surface)', padding: '1.25rem 1.5rem', borderRadius: '1rem', border: '1px solid var(--border-color)', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <Calendar size={18} color="var(--primary)" />
+            <span style={{ fontSize: '0.875rem', fontWeight: 700, color: 'var(--primary-dark)' }}>Filter Attendance by Date Range:</span>
           </div>
           
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+            {/* From Date */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.45rem 0.75rem', backgroundColor: '#f8fafc', borderRadius: '0.5rem', border: '1px solid var(--border-color)' }}>
+              <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#64748b' }}>From:</span>
+              <input 
+                type="date"
+                value={fromDate}
+                onChange={(e) => { setFromDate(e.target.value); setActiveDatePreset('custom'); }}
+                style={{ border: 'none', outline: 'none', backgroundColor: 'transparent', fontWeight: 600, color: 'var(--primary-dark)', cursor: 'pointer', fontSize: '0.8125rem' }}
+              />
+            </div>
+
+            {/* To Date */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.45rem 0.75rem', backgroundColor: '#f8fafc', borderRadius: '0.5rem', border: '1px solid var(--border-color)' }}>
+              <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#64748b' }}>To:</span>
+              <input 
+                type="date"
+                value={toDate}
+                onChange={(e) => { setToDate(e.target.value); setActiveDatePreset('custom'); }}
+                style={{ border: 'none', outline: 'none', backgroundColor: 'transparent', fontWeight: 600, color: 'var(--primary-dark)', cursor: 'pointer', fontSize: '0.8125rem' }}
+              />
+            </div>
+
+            {/* Quick Presets */}
+            <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
+              {(['today', 'yesterday', 'this_week', 'this_month', 'all'] as const).map(preset => {
+                const labels: Record<string, string> = {
+                  today: 'Today',
+                  yesterday: 'Yesterday',
+                  this_week: 'This Week',
+                  this_month: 'This Month',
+                  all: 'All Records'
+                };
+                const isActive = activeDatePreset === preset;
+                return (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => setPreset(preset)}
+                    style={{
+                      padding: '0.35rem 0.75rem',
+                      borderRadius: '1.5rem',
+                      border: isActive ? '1px solid var(--primary)' : '1px solid var(--border-color)',
+                      backgroundColor: isActive ? 'var(--primary)' : '#ffffff',
+                      color: isActive ? '#ffffff' : '#475569',
+                      fontSize: '0.75rem',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease'
+                    }}
+                  >
+                    {labels[preset]}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
           <button onClick={() => setShowExportModal(true)} className="btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.625rem 1.25rem', borderRadius: '0.75rem', boxShadow: '0 4px 6px -1px rgba(11, 99, 206, 0.2)' }}>
             <Download size={18} /> Export Report
           </button>
@@ -160,7 +260,7 @@ const AttendanceList: React.FC = () => {
             <div>
               <div style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Total Employees</div>
               <div style={{ fontSize: '2rem', fontWeight: 800, color: 'var(--primary-dark)', lineHeight: 1 }}>{totalEmployees}</div>
-              <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.5rem', fontWeight: 500 }}>Active Staff</div>
+              <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.5rem', fontWeight: 500 }}>Active Staff in Period</div>
             </div>
             <div style={{ width: '40px', height: '40px', borderRadius: '0.75rem', backgroundColor: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)' }}>
               <Users size={20} />
@@ -174,7 +274,7 @@ const AttendanceList: React.FC = () => {
         <div style={{ backgroundColor: 'var(--bg-surface)', borderRadius: '1rem', padding: '1.25rem', position: 'relative', overflow: 'hidden', border: '1px solid var(--border-color)', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.02)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', position: 'relative', zIndex: 2 }}>
             <div>
-              <div style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Present Today</div>
+              <div style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Present</div>
               <div style={{ fontSize: '2rem', fontWeight: 800, color: 'var(--primary-dark)', lineHeight: 1 }}>{presentCount}</div>
               <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.5rem', fontWeight: 500 }}>{presentPercentage}% Attendance</div>
             </div>
@@ -275,7 +375,8 @@ const AttendanceList: React.FC = () => {
             <thead>
               <tr style={{ backgroundColor: 'var(--bg-surface)', borderBottom: '1px solid #e2e8f0' }}>
                 <th style={{ padding: '0.875rem 1.25rem', fontSize: '0.75rem', fontWeight: 700, color: '#64748b', width: '60px' }}>#</th>
-                <th style={{ padding: '0.875rem 1.25rem', fontSize: '0.75rem', fontWeight: 700, color: '#64748b', width: '120px' }}>Emp ID</th>
+                <th style={{ padding: '0.875rem 1.25rem', fontSize: '0.75rem', fontWeight: 700, color: '#64748b', width: '110px' }}>Date</th>
+                <th style={{ padding: '0.875rem 1.25rem', fontSize: '0.75rem', fontWeight: 700, color: '#64748b', width: '110px' }}>Emp ID</th>
                 <th style={{ padding: '0.875rem 1.25rem', fontSize: '0.75rem', fontWeight: 700, color: '#64748b' }}>Employee Details</th>
                 <th style={{ padding: '0.875rem 1.25rem', fontSize: '0.75rem', fontWeight: 700, color: '#64748b' }}>Check In</th>
                 <th style={{ padding: '0.875rem 1.25rem', fontSize: '0.75rem', fontWeight: 700, color: '#64748b' }}>Check Out</th>
@@ -291,6 +392,10 @@ const AttendanceList: React.FC = () => {
                     <div style={{ width: '28px', height: '28px', borderRadius: '0.5rem', backgroundColor: '#eff6ff', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: 700 }}>
                       {index + 1}
                     </div>
+                  </td>
+
+                  <td style={{ padding: '0.875rem 1.25rem', fontSize: '0.8125rem', fontWeight: 600, color: '#475569', whiteSpace: 'nowrap' }}>
+                    {record.date || '—'}
                   </td>
                   
                   <td style={{ padding: '0.875rem 1.25rem', fontSize: '0.875rem', fontWeight: 700, color: 'var(--primary-dark)' }}>

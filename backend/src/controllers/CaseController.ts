@@ -10,25 +10,25 @@ export function buildDefaultStages(caseData?: any) {
   const createdDate = caseData?.created_at ? new Date(caseData.created_at).toISOString() : now;
 
   const isCompletedStage = (key: string) => {
-    if (['FINAL APPROVAL', 'APPLICATION COMPLETED', 'APPROVED', 'CLOSED'].includes(currentStatus)) return true;
+    if (['FINAL APPROVAL', 'FINALLY APPROVED', 'APPLICATION COMPLETED', 'APPROVED', 'CLOSED'].includes(currentStatus)) return true;
     if (key === 'stage_submitted') return true;
     if (key === 'stage_doc_completed' || key === 'stage_doc_verification') {
-      return ['DOCUMENT COMPLETED', 'DOCUMENTS_VERIFIED', 'PAYMENT', 'PAYMENT PROCESS', 'PAYMENT_COMPLETED', 'SITE VISIT', 'SITE VISIT COMPLETED', 'FINAL APPROVAL', 'APPLICATION COMPLETED', 'APPROVED', 'CLOSED'].includes(currentStatus);
+      return ['DOCUMENT COMPLETED', 'DOCUMENTS_VERIFIED', 'PAYMENT', 'PAYMENT PROCESS', 'PAYMENT_COMPLETED', 'SITE VISIT', 'SITE VISIT COMPLETED', 'FINAL APPROVAL', 'FINALLY APPROVED', 'APPLICATION COMPLETED', 'APPROVED', 'CLOSED'].includes(currentStatus);
     }
     if (key === 'stage_payment') {
-      return ['PAYMENT_COMPLETED', 'SITE VISIT', 'SITE VISIT COMPLETED', 'FINAL APPROVAL', 'APPLICATION COMPLETED', 'APPROVED', 'CLOSED'].includes(currentStatus);
+      return ['PAYMENT_COMPLETED', 'SITE VISIT', 'SITE VISIT COMPLETED', 'FINAL APPROVAL', 'FINALLY APPROVED', 'APPLICATION COMPLETED', 'APPROVED', 'CLOSED'].includes(currentStatus);
     }
     if (key === 'stage_site_visit') {
-      return ['SITE VISIT COMPLETED', 'FINAL APPROVAL', 'APPLICATION COMPLETED', 'APPROVED', 'CLOSED'].includes(currentStatus);
+      return ['SITE VISIT COMPLETED', 'FINAL APPROVAL', 'FINALLY APPROVED', 'APPLICATION COMPLETED', 'APPROVED', 'CLOSED'].includes(currentStatus);
     }
     if (key === 'stage_final_approval' || key === 'stage_completed' || key === 'stage_final_review') {
-      return ['FINAL APPROVAL', 'APPLICATION COMPLETED', 'APPROVED', 'CLOSED'].includes(currentStatus);
+      return ['FINAL APPROVAL', 'FINALLY APPROVED', 'APPLICATION COMPLETED', 'APPROVED', 'CLOSED'].includes(currentStatus);
     }
     return false;
   };
 
   const isInProgressStage = (key: string) => {
-    if (['FINAL APPROVAL', 'APPLICATION COMPLETED', 'APPROVED', 'CLOSED'].includes(currentStatus)) return false;
+    if (['FINAL APPROVAL', 'FINALLY APPROVED', 'APPLICATION COMPLETED', 'APPROVED', 'CLOSED'].includes(currentStatus)) return false;
     if (key === 'stage_submitted') return false;
     if (key === 'stage_doc_completed' || key === 'stage_doc_verification') {
       return ['APPLICATION SUBMITTED', 'DOCUMENTS_VERIFICATION', 'DOCUMENTS_PENDING', 'DOCUMENT_COLLECTION', 'INTAKE', 'SUBMITTED', 'NEW', 'DRAFT'].includes(currentStatus);
@@ -795,8 +795,8 @@ export class CaseController {
             }
           });
 
-          // If status moved to Approved / Final Approval / Application Completed, send approval email to customer
-          const isApprovedStatus = Boolean(updated.status && ['Final Approval', 'Approved', 'Application Completed', 'SANCTIONED'].includes(updated.status));
+          // If status moved to Approved / Finally Approved / Application Completed, send approval email to customer
+          const isApprovedStatus = Boolean(updated.status && ['Finally Approved', 'Final Approval', 'Approved', 'Application Completed', 'SANCTIONED'].includes(updated.status));
           const fullDataObj = (updated.fullData as any) || {};
           if (isApprovedStatus && !fullDataObj.completionEmailSent) {
             const customerEmail = updated.property?.owner_email || fullDataObj.email || fullDataObj.customerEmail || fullDataObj.applicant?.email;
@@ -957,6 +957,11 @@ export class CaseController {
       const activeStage = stages.find(s => s.status === 'In Progress') || (stages.every(s => s.status === 'Completed') ? stages[stages.length - 1] : stages[0]);
       overallStatus = activeStage.name;
 
+      // If all stages are completed or stage 4 (Final Approval) is completed, mark status as Finally Approved!
+      if (stages.every(s => s.status === 'Completed') || (stageIndex === 4 && status === 'Completed') || stages[4]?.status === 'Completed') {
+        overallStatus = 'Finally Approved';
+      }
+
       const previousStatus = found.status;
       const fullData = {
         ...((found.fullData as any) || {}),
@@ -965,8 +970,8 @@ export class CaseController {
 
       let completionEmailSent = (found.fullData as any)?.completionEmailSent || false;
 
-      // If moving to Final Approval / Application Completed and not already sent, trigger Brevo completion email!
-      if ((overallStatus === 'Final Approval' || overallStatus === 'Application Completed' || (stageIndex === 4 && status === 'Completed')) && !completionEmailSent) {
+      // If moving to Finally Approved / Application Completed and not already sent, trigger Brevo completion email!
+      if ((overallStatus === 'Finally Approved' || overallStatus === 'Final Approval' || overallStatus === 'Application Completed' || (stageIndex === 4 && status === 'Completed')) && !completionEmailSent) {
         const full = (found.fullData as any) || {};
         const customerEmail = found.property?.owner_email || full.email || full.customerEmail || full.applicant?.email;
         const customerName = found.property?.owner_name || full.customerName || full.applicant?.name || 'Valued Applicant';

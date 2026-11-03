@@ -3,7 +3,8 @@ import { useLocation, Link } from 'react-router-dom';
 import { 
   Search, CheckCircle2, FileText, Calendar, Building2, MapPin, 
   XCircle, Clock, ExternalLink, Loader2, AlertTriangle, UserCheck,
-  CreditCard, Eye, ShieldCheck, Phone, Mail, HelpCircle, ArrowRight
+  CreditCard, Eye, ShieldCheck, Phone, Mail, HelpCircle, ArrowRight,
+  MessageCircle
 } from 'lucide-react';
 import { getApiUrl } from '../config/api';
 
@@ -23,7 +24,7 @@ const OFFICIAL_STAGES: { key: string; name: string; description: string }[] = [
   { key: 'stage_doc_completed', name: 'Document Completed', description: 'Document upload via secure link, worker verification, and official Admin document approval.' },
   { key: 'stage_payment', name: 'Payment', description: 'Statutory fees calculation, customer payment completion, and official receipt confirmation.' },
   { key: 'stage_site_visit', name: 'Site Visit Completed', description: 'Authorized field officer site visit, physical boundary inspection, and geo-verification.' },
-  { key: 'stage_final_approval', name: 'Final Approval', description: 'Executive planning authority final scrutiny, sanction order sanctioned, and completion certificate dispatched.' },
+  { key: 'stage_final_approval', name: 'Finally Approved', description: 'Executive planning authority final scrutiny, sanction order sanctioned, and completion certificate dispatched.' },
 ];
 
 const STATUS_TO_STAGE_INDEX: Record<string, number> = {
@@ -59,6 +60,8 @@ const STATUS_TO_STAGE_INDEX: Record<string, number> = {
   'FINAL_REVIEW': 4,
   'SCRUTINY': 4,
   'FINAL APPROVAL': 4,
+  'FINALLY APPROVED': 4,
+  'FINALLY_APPROVED': 4,
   'APPLICATION COMPLETED': 4,
   'APPROVED': 4,
   'SANCTIONED': 4,
@@ -190,6 +193,23 @@ const TrackApplication: React.FC = () => {
   const [liveDocs, setLiveDocs] = useState<any[]>([]);
   const [stagesList, setStagesList] = useState<StageItem[]>([]);
   const [error, setError] = useState('');
+  const [bankDetails, setBankDetails] = useState<any>(null);
+  const [copiedUpi, setCopiedUpi] = useState(false);
+
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        const local = localStorage.getItem('companyBankDetails');
+        if (local) setBankDetails(JSON.parse(local));
+        const res = await fetch(`${getApiUrl()}/settings`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.bankDetails) setBankDetails(data.bankDetails);
+        }
+      } catch (_) {}
+    };
+    loadSettings();
+  }, []);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -677,6 +697,126 @@ const TrackApplication: React.FC = () => {
                         </div>
                       );
                     })}
+                  </div>
+
+                  {/* Official Fee Payment & Settlement Section */}
+                  <div style={{ marginTop: '2rem' }}>
+                    <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--text-primary, #1e293b)', marginBottom: '1rem', borderBottom: '2px solid var(--border-color, #e2e8f0)', paddingBottom: '0.6rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <CreditCard size={20} color="var(--primary, #1e3a8a)" /> Application Fee & Payment Details
+                    </h3>
+
+                    {/* Case 1: Already Paid */}
+                    {(appData?.fullData?.payment?.paymentStatus === 'Paid' || appData?.paymentStatus === 'Paid' || stagesList[2]?.status === 'Completed') ? (
+                      <div style={{ padding: '1.25rem', borderRadius: '0.75rem', backgroundColor: '#f0fdf4', border: '1.5px solid #86efac' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                          <span style={{ fontSize: '0.8125rem', fontWeight: 700, color: '#166534', backgroundColor: '#dcfce7', padding: '0.2rem 0.75rem', borderRadius: '1rem', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                            <CheckCircle2 size={15} /> Payment Confirmed & Verified
+                          </span>
+                          <span style={{ fontSize: '1.1rem', fontWeight: 800, color: '#166534' }}>
+                            ₹{(appData.fullData?.payment?.amount || appData.fullData?.paidAmount || appData.paidAmount || 15000).toLocaleString('en-IN')}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: '0.8125rem', color: '#15803d', lineHeight: 1.6 }}>
+                          <div>• Receipt No: <strong>{appData.fullData?.payment?.receiptNumber || 'RCP-CONFIRMED'}</strong></div>
+                          <div>• Method: <strong>{appData.fullData?.payment?.paymentMethod || 'UPI / QR Code'}</strong></div>
+                          <div>• Tx ID / Ref: <strong>{appData.fullData?.payment?.transactionId || 'Verified by Admin'}</strong></div>
+                          {appData.fullData?.payment?.verifiedAt && (
+                            <div>• Verified Date: {new Date(appData.fullData.payment.verifiedAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</div>
+                          )}
+                        </div>
+                      </div>
+                    ) : (
+                      /* Case 2: Payment Pending or Required */
+                      <div style={{ padding: '1.25rem', borderRadius: '0.75rem', backgroundColor: '#eff6ff', border: '1.5px solid #93c5fd' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                          <div style={{ fontSize: '0.9rem', fontWeight: 700, color: '#1e40af' }}>
+                            Approval Processing Fee Due:
+                          </div>
+                          <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#1e3a8a' }}>
+                            ₹{(appData?.fullData?.feesAmount || appData?.feesAmount || 15000).toLocaleString('en-IN')}
+                          </div>
+                        </div>
+
+                        {/* QR Code and UPI ID */}
+                        <div style={{ backgroundColor: '#ffffff', borderRadius: '0.5rem', padding: '1rem', border: '1px solid #dbeafe', marginBottom: '0.75rem', textAlign: 'center' }}>
+                          <div style={{ fontSize: '0.8125rem', fontWeight: 700, color: '#1e3a8a', marginBottom: '0.5rem' }}>
+                            Scan QR Code with PhonePe, Google Pay, or Paytm:
+                          </div>
+                          {bankDetails?.qrCodeUrl ? (
+                            <img 
+                              src={bankDetails.qrCodeUrl} 
+                              alt="Company Payment QR" 
+                              style={{ width: '170px', height: '170px', objectFit: 'contain', margin: '0.25rem auto 0.75rem', borderRadius: '0.5rem', border: '1px solid #e2e8f0', display: 'block' }} 
+                            />
+                          ) : (
+                            <div style={{ padding: '1rem', backgroundColor: '#f8fafc', borderRadius: '0.5rem', margin: '0.5rem 0', fontSize: '0.8125rem', color: '#64748b' }}>
+                              Official CB Construction UPI Payment Gateway
+                            </div>
+                          )}
+
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.25rem' }}>
+                            <span style={{ fontSize: '0.85rem', color: '#334155' }}>UPI ID: <strong>{bankDetails?.upiId || 'cbconstruction@upi'}</strong></span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                navigator.clipboard.writeText(bankDetails?.upiId || 'cbconstruction@upi');
+                                setCopiedUpi(true);
+                                setTimeout(() => setCopiedUpi(false), 2000);
+                              }}
+                              style={{
+                                padding: '0.25rem 0.6rem',
+                                fontSize: '0.75rem',
+                                borderRadius: '0.25rem',
+                                border: '1px solid #cbd5e1',
+                                backgroundColor: copiedUpi ? '#dcfce7' : '#f8fafc',
+                                color: copiedUpi ? '#166534' : 'var(--primary, #1e3a8a)',
+                                cursor: 'pointer',
+                                fontWeight: 600
+                              }}
+                            >
+                              {copiedUpi ? '✓ Copied!' : 'Copy UPI ID'}
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Bank Transfer Details */}
+                        {bankDetails?.accountNumber && (
+                          <div style={{ fontSize: '0.8rem', color: '#1e40af', backgroundColor: '#ffffff', padding: '0.75rem 1rem', borderRadius: '0.5rem', border: '1px solid #dbeafe', marginBottom: '0.75rem', lineHeight: 1.5 }}>
+                            <div style={{ fontWeight: 700, marginBottom: '0.2rem' }}>Bank Transfer (NEFT / IMPS):</div>
+                            <div>• Bank: <strong>{bankDetails.bankName || 'HDFC Bank'}</strong> ({bankDetails.branch || 'Main Branch'})</div>
+                            <div>• A/C No: <strong>{bankDetails.accountNumber}</strong></div>
+                            <div>• IFSC: <strong>{bankDetails.ifsc}</strong> | Name: <strong>{bankDetails.accountHolder || 'CB Building Approvals'}</strong></div>
+                          </div>
+                        )}
+
+                        {/* Cash payment instruction */}
+                        <div style={{ fontSize: '0.775rem', color: '#475569', backgroundColor: '#ffffff', padding: '0.6rem 0.85rem', borderRadius: '0.5rem', border: '1px solid #e2e8f0', lineHeight: 1.4, marginBottom: '0.75rem' }}>
+                          💵 <strong>Paying in Cash?</strong> You can pay directly in cash at our office. Our officer will immediately register your payment and issue an official voucher.
+                        </div>
+
+                        <div style={{ textAlign: 'center' }}>
+                          <a
+                            href={`https://wa.me/918940206541?text=${encodeURIComponent(`Hello CB Approvals, I have made payment for Application #${appData?.application_number || appData?.id}. Here is my transaction proof:`)}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '0.4rem',
+                              padding: '0.5rem 1rem',
+                              borderRadius: '0.5rem',
+                              backgroundColor: '#25D366',
+                              color: 'white',
+                              textDecoration: 'none',
+                              fontSize: '0.8125rem',
+                              fontWeight: 700
+                            }}
+                          >
+                            <MessageCircle size={15} /> Share Payment Proof on WhatsApp
+                          </a>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Support Info Box */}

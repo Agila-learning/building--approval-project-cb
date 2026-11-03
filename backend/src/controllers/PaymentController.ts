@@ -134,7 +134,12 @@ export class PaymentController {
         return res.status(400).json({ error: 'Valid payment amount is required.' });
       }
 
-      const cleanTxId = (transactionId || '').trim();
+      const isCash = String(paymentMethod || '').toLowerCase().includes('cash');
+      let cleanTxId = (transactionId || '').trim();
+      if (isCash && !cleanTxId) {
+        cleanTxId = `CASH-${Date.now().toString().slice(-6)}`;
+      }
+
       if (paymentStatus === 'Paid' && !cleanTxId) {
         return res.status(400).json({ error: 'Transaction ID / UTR is required for verified payments.' });
       }
@@ -152,8 +157,8 @@ export class PaymentController {
         return res.status(404).json({ error: `Application not found for: ${caseId}` });
       }
 
-      // PREVENT DUPLICATE PAYMENTS AND DUPLICATE TRANSACTION RECORDS
-      if (cleanTxId) {
+      // PREVENT DUPLICATE PAYMENTS AND DUPLICATE TRANSACTION RECORDS (except auto-generated cash receipts)
+      if (cleanTxId && !isCash) {
         const allCases = await prisma.case.findMany({
           select: { id: true, application_number: true, fullData: true }
         });
@@ -410,6 +415,121 @@ export class PaymentController {
       res.json(paymentsList);
     } catch (error: any) {
       console.error('Error listing payments:', error);
+      res.status(500).json({ error: error.message });
+    }
+  }
+
+  // POST /payments/send-request
+  async sendPaymentRequest(req: Request, res: Response) {
+    try {
+      const { caseId, amount, notes = '' } = req.body;
+      if (!caseId) {
+        return res.status(400).json({ error: 'Case ID / Proposal Number is required.' });
+      }
+
+      const isObjectId = /^[0-9a-fA-F]{24}$/.test(caseId);
+      const targetCase = await prisma.case.findFirst({
+        where: isObjectId
+          ? { OR: [{ id: caseId }, { application_number: caseId }] }
+          : { application_number: caseId },
+        include: { property: true }
+      });
+
+      if (!targetCase) {
+        return res.status(404).json({ error: `Application not found for: ${caseId}` });
+      }
+
+      const fullData = (targetCase.fullData as any) || {};
+      const settings = loadStoredSettings();
+      const bank = settings.bankDetails || {};
+      const customerEmail = targetCase.property?.owner_email || fullData.email || fullData.customerEmail;
+      const customerName = targetCase.property?.owner_name || fullData.customerName || 'Valued Applicant';
+      const customerPhone = targetCase.property?.owner_phone || fullData.mobile || '';
+      const proposalNumber = targetCase.application_number || targetCase.id;
+      const requestedAmount = parseFloat(amount || fullData.feesAmount || 15000);
+
+      const upiId = bank.upiId || 'cbconstruction@upi';
+      const accountHolder = bank.accountHolder || 'CB BUILDING APPROVALS';
+      const accountNumber = bank.accountNumber || '';
+      const ifsc = bank.ifsc || '';
+      const bankName = bank.bankName || '';
+      const branch = bank.branch || '';
+      const qrCodeUrl = bank.qrCodeUrl || '';
+
+      const origin = (req.headers.origin as string) || process.env.FRONTEND_URL || 'https://building-approval-app.vercel.app';
+      const trackUrl = `${origin.replace(/\/$/, '')}/track-application?id=${proposalNumber}&mobile=${customerPhone}`;
+
+      let emailSent = false;
+      if (customerEmail) {
+        try {
+          await brevoService.notifyPaymentRequest({
+            customerEmail,
+            customerName,
+            proposalNumber,
+            amount: requestedAmount,
+            upiId,
+            accountHolder,
+            accountNumber,
+            ifsc,
+            bankName,
+            branch,
+            qrCodeUrl,
+            trackUrl,
+            notes
+          });
+          emailSent = true;
+        } catch (emailErr: any) {
+          console.warn('Failed to send payment request email:', emailErr.message);
+        }
+      }
+
+      // Format WhatsApp prefilled message
+      const formattedAmount = `₹${requestedAmount.toLocaleString('en-IN')}`;
+      const waLines = [
+        `*CB BUILDING APPROVALS - PAYMENT REQUEST*`,
+        ``,
+        `Dear *${customerName}*,`,
+        `Your application documents for Proposal *#${proposalNumber}* have been reviewed & verified!`,
+        ``,
+        `Please complete the stage approval fee payment of *${formattedAmount}* to initiate site inspection & technical scrutiny.`,
+        ``,
+        `*Payment Options:*`,
+        `1. *UPI ID:* ${upiId}`,
+        accountNumber ? `2. *Bank Transfer:* A/C: ${accountNumber}, IFSC: ${ifsc}, Bank: ${bankName}` : '',
+        `3. *Cash Payment:* Accepted directly at our office.`,
+        ``,
+        `*Track & View Live Application:*`,
+        `${trackUrl}`,
+        ``,
+        notes ? `*Note:* ${notes}` : '',
+        `Once paid, kindly share your transaction UTR or receipt here for instant verification.`
+      ].filter(Boolean).join('\n');
+
+      const cleanPhone = customerPhone.replace(/\D/g, '').replace(/^0+/, '');
+      const waPhone = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone;
+      const whatsappUrl = `https://wa.me/${waPhone}?text=${encodeURIComponent(waLines)}`;
+
+      res.json({
+        success: true,
+        message: emailSent
+          ? `Payment request email sent successfully to ${customerEmail}`
+          : 'Payment request generated (no customer email on file).',
+        emailSent,
+        customerEmail,
+        customerPhone,
+        whatsappUrl,
+        bankDetails: {
+          upiId,
+          accountHolder,
+          accountNumber,
+          ifsc,
+          bankName,
+          qrCodeUrl,
+          amount: requestedAmount
+        }
+      });
+    } catch (error: any) {
+      console.error('Error sending payment request:', error);
       res.status(500).json({ error: error.message });
     }
   }

@@ -42,6 +42,17 @@ const AdminTopbar: React.FC<AdminTopbarProps> = ({ toggleSidebar }) => {
   const [userName, setUserName] = useState('Admin User');
   const [userRole, setUserRole] = useState('Administrator');
   const profileRef = useRef<HTMLDivElement>(null);
+  const [globalSearch, setGlobalSearch] = useState('');
+
+  const handleGlobalSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    const q = globalSearch.trim();
+    if (q) {
+      navigate(`/admin/applications?search=${encodeURIComponent(q)}`);
+    } else {
+      navigate('/admin/applications');
+    }
+  };
 
   const loadProfile = () => {
     const pic = localStorage.getItem('profilePicture') || localStorage.getItem('adminProfilePic') || null;
@@ -194,23 +205,86 @@ const AdminTopbar: React.FC<AdminTopbarProps> = ({ toggleSidebar }) => {
 
         {/* Right side: Actions */}
         <div className="topbar-actions" style={{ display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
-          {/* Search */}
-          <div className="hidden-mobile" style={{ position: 'relative', width: '250px' }}>
-            <div style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }}>
-              <Search size={14} />
-            </div>
+          {/* Search Form */}
+          <form 
+            onSubmit={handleGlobalSearch} 
+            className="hidden-mobile" 
+            style={{ position: 'relative', width: '270px' }}
+          >
+            <button
+              type="submit"
+              title="Search applications & customers"
+              style={{
+                position: 'absolute',
+                left: '8px',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                background: 'none',
+                border: 'none',
+                color: 'var(--text-secondary)',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                padding: '3px'
+              }}
+            >
+              <Search size={15} />
+            </button>
             <input 
               type="text" 
+              value={globalSearch}
+              onChange={(e) => setGlobalSearch(e.target.value)}
               placeholder="Search applications, customers..." 
               style={{
-                width: '100%', padding: '0.35rem 1rem 0.35rem 1.8rem', borderRadius: '2rem',
-                border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-secondary)',
-                fontSize: '0.8rem', outline: 'none', color: 'var(--text-primary)', transition: 'border-color 0.2s'
+                width: '100%',
+                padding: '0.4rem 2.2rem 0.4rem 2rem',
+                borderRadius: '2rem',
+                border: '1px solid var(--border-color)',
+                backgroundColor: 'var(--bg-secondary)',
+                fontSize: '0.8125rem',
+                outline: 'none',
+                color: 'var(--text-primary)',
+                transition: 'all 0.2s ease',
+                boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
               }}
-              onFocus={(e) => e.target.style.borderColor = 'var(--primary)'}
-              onBlur={(e) => e.target.style.borderColor = 'var(--border-color)'}
+              onFocus={(e) => {
+                e.target.style.borderColor = 'var(--primary)';
+                e.target.style.backgroundColor = '#ffffff';
+                e.target.style.boxShadow = '0 0 0 3px rgba(30, 58, 138, 0.1)';
+              }}
+              onBlur={(e) => {
+                e.target.style.borderColor = 'var(--border-color)';
+                e.target.style.backgroundColor = 'var(--bg-secondary)';
+                e.target.style.boxShadow = '0 1px 2px rgba(0,0,0,0.03)';
+              }}
             />
-          </div>
+            {globalSearch && (
+              <button
+                type="button"
+                onClick={() => {
+                  setGlobalSearch('');
+                  navigate('/admin/applications');
+                }}
+                title="Clear Search"
+                style={{
+                  position: 'absolute',
+                  right: '8px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--text-secondary)',
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  padding: '2px 5px',
+                  borderRadius: '50%'
+                }}
+              >
+                ✕
+              </button>
+            )}
+          </form>
 
           {/* Quick Actions & Notifications */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', color: 'var(--text-secondary)' }}>

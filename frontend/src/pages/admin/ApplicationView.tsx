@@ -4,7 +4,7 @@ import {
   ArrowLeft, Pencil, CheckCircle2, Clock, AlertCircle, Calendar, 
   User, Building2, MapPin, FileText, Download, Eye, ExternalLink,
   ShieldCheck, ShieldAlert, ArrowRight, UserCheck, X, MessageCircle,
-  CreditCard, Check, Lock, Send
+  CreditCard, Check, Lock, Send, Mail, QrCode
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getApiUrl } from '../../config/api';
@@ -25,7 +25,7 @@ const STAGE_NAMES = [
   'Document Completed',
   'Payment',
   'Site Visit Completed',
-  'Final Approval'
+  'Finally Approved'
 ];
 
 const ApplicationView: React.FC = () => {
@@ -59,6 +59,13 @@ const ApplicationView: React.FC = () => {
   const [payTxId, setPayTxId] = useState('');
   const [payNotes, setPayNotes] = useState('');
   const [isSavingPayment, setIsSavingPayment] = useState(false);
+
+  // Send Payment Request Modal state
+  const [isSendPaymentRequestModalOpen, setIsSendPaymentRequestModalOpen] = useState(false);
+  const [requestAmount, setRequestAmount] = useState('15000');
+  const [requestNote, setRequestNote] = useState('');
+  const [isSendingPaymentRequest, setIsSendingPaymentRequest] = useState(false);
+  const [bankSettings, setBankSettings] = useState<any>(null);
 
   // Site Visit Modal state
   const [isSiteVisitModalOpen, setIsSiteVisitModalOpen] = useState(false);
@@ -159,7 +166,62 @@ const ApplicationView: React.FC = () => {
   const isDocStageCompleted = stages[1]?.status === 'Completed' || currentStatus === 'Document Completed';
   const isPaymentCompleted = stages[2]?.status === 'Completed' || currentStatus === 'Payment Completed' || fullData.payment?.paymentStatus === 'Paid';
   const isSiteVisitCompleted = stages[3]?.status === 'Completed' || currentStatus === 'Site Visit Completed';
-  const isFinalApproved = stages[4]?.status === 'Completed' || currentStatus === 'Final Approval' || currentStatus === 'Application Completed';
+  const isFinalApproved = stages[4]?.status === 'Completed' || currentStatus === 'Finally Approved' || currentStatus === 'Final Approval' || currentStatus === 'Application Completed' || currentStatus === 'Approved';
+
+  useEffect(() => {
+    // Load bank settings for preview
+    const loadBank = async () => {
+      try {
+        const local = localStorage.getItem('companyBankDetails');
+        if (local) setBankSettings(JSON.parse(local));
+        const res = await fetch(`${getApiUrl()}/settings`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.bankDetails) setBankSettings(data.bankDetails);
+        }
+      } catch (_) {}
+    };
+    loadBank();
+  }, []);
+
+  const handleSendPaymentRequest = async (channel: 'email' | 'whatsapp') => {
+    setIsSendingPaymentRequest(true);
+    try {
+      const res = await fetch(`${getApiUrl()}/payments/send-request`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-role': userRole,
+          'x-user-name': loggedInUser
+        },
+        body: JSON.stringify({
+          caseId: caseRecord.id || id,
+          amount: parseFloat(requestAmount) || 15000,
+          notes: requestNote.trim()
+        })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        if (channel === 'email') {
+          if (data.emailSent) {
+            toast.success(`Payment request email dispatched to ${data.customerEmail}!`);
+          } else {
+            toast.error(data.message || 'Customer email not found on file.');
+          }
+        }
+        if (channel === 'whatsapp' && data.whatsappUrl) {
+          window.open(data.whatsappUrl, '_blank');
+        }
+        setIsSendPaymentRequestModalOpen(false);
+      } else {
+        toast.error(data.error || 'Failed to send payment request.');
+      }
+    } catch (e: any) {
+      toast.error('Network error sending payment request.');
+    } finally {
+      setIsSendingPaymentRequest(false);
+    }
+  };
 
   const handleShareWhatsApp = () => {
     const cleanMobile = (property.owner_phone || fullData.mobile || '').replace(/\D/g, '').slice(-10);
@@ -227,7 +289,12 @@ const ApplicationView: React.FC = () => {
 
   const handleSavePayment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!payTxId.trim()) {
+    const isCash = payMethod?.toLowerCase().includes('cash');
+    const finalTxId = isCash && !payTxId.trim()
+      ? `CASH-${Date.now().toString().slice(-6)}`
+      : payTxId.trim();
+
+    if (!finalTxId && !isCash) {
       toast.error('Please enter Transaction ID / UTR.');
       return;
     }
@@ -244,7 +311,7 @@ const ApplicationView: React.FC = () => {
           caseId: caseRecord.id || id,
           amount: parseFloat(payAmount) || 0,
           paymentMethod: payMethod,
-          transactionId: payTxId.trim(),
+          transactionId: finalTxId,
           paymentStatus: 'Paid',
           notes: payNotes.trim(),
           sendEmail: true
@@ -485,14 +552,14 @@ const ApplicationView: React.FC = () => {
                 fontWeight: 700,
                 padding: '0.25rem 0.75rem',
                 borderRadius: '1rem',
-                backgroundColor: currentStatus === 'Application Completed' ? '#dcfce7' : currentStatus === 'Application Submitted' ? '#dbeafe' : '#fef3c7',
-                color: currentStatus === 'Application Completed' ? '#166534' : currentStatus === 'Application Submitted' ? '#1e40af' : '#b45309',
+                backgroundColor: (currentStatus === 'Finally Approved' || currentStatus === 'Final Approval' || currentStatus === 'Application Completed' || currentStatus === 'Approved') ? '#dcfce7' : currentStatus === 'Application Submitted' ? '#dbeafe' : '#fef3c7',
+                color: (currentStatus === 'Finally Approved' || currentStatus === 'Final Approval' || currentStatus === 'Application Completed' || currentStatus === 'Approved') ? '#166534' : currentStatus === 'Application Submitted' ? '#1e40af' : '#b45309',
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '0.35rem'
               }}>
                 <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: 'currentColor' }}></span>
-                {currentStatus}
+                {currentStatus === 'Final Approval' ? 'Finally Approved' : currentStatus}
               </span>
             </div>
             <p style={{ margin: '0.25rem 0 0 0', color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
@@ -877,34 +944,66 @@ const ApplicationView: React.FC = () => {
                       </button>
                     )}
 
-                    {idx === 2 && isAdmin && !isStage2Done && (
-                      <button
-                        type="button"
-                        disabled={!isStage1Done}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (!isStage1Done) {
-                            toast.error('Payment locked: All required documents must be approved by Admin first.');
-                            return;
-                          }
-                          setIsPaymentModalOpen(true);
-                        }}
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '0.4rem',
-                          padding: '0.4rem 0.8rem',
-                          borderRadius: '0.375rem',
-                          backgroundColor: isStage1Done ? 'var(--primary)' : '#cbd5e1',
-                          color: 'white',
-                          border: 'none',
-                          fontWeight: 600,
-                          fontSize: '0.8125rem',
-                          cursor: isStage1Done ? 'pointer' : 'not-allowed'
-                        }}
-                      >
-                        <CreditCard size={15} /> {isStage1Done ? 'Record & Verify Payment' : 'Locked (Docs Approval Required)'}
-                      </button>
+                    {idx === 2 && !isStage2Done && (
+                      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                        {isAdmin && (
+                          <button
+                            type="button"
+                            disabled={!isStage1Done}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (!isStage1Done) {
+                                toast.error('Payment locked: All required documents must be approved by Admin first.');
+                                return;
+                              }
+                              setIsPaymentModalOpen(true);
+                            }}
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '0.4rem',
+                              padding: '0.4rem 0.8rem',
+                              borderRadius: '0.375rem',
+                              backgroundColor: isStage1Done ? 'var(--primary)' : '#cbd5e1',
+                              color: 'white',
+                              border: 'none',
+                              fontWeight: 600,
+                              fontSize: '0.8125rem',
+                              cursor: isStage1Done ? 'pointer' : 'not-allowed'
+                            }}
+                          >
+                            <CreditCard size={15} /> {isStage1Done ? 'Record / Verify Payment' : 'Locked (Docs Approval Required)'}
+                          </button>
+                        )}
+
+                        <button
+                          type="button"
+                          disabled={!isStage1Done}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (!isStage1Done) {
+                              toast.error('Please approve required documents before requesting payment.');
+                              return;
+                            }
+                            setIsSendPaymentRequestModalOpen(true);
+                          }}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.4rem',
+                            padding: '0.4rem 0.8rem',
+                            borderRadius: '0.375rem',
+                            backgroundColor: isStage1Done ? '#0284c7' : '#cbd5e1',
+                            color: 'white',
+                            border: 'none',
+                            fontWeight: 600,
+                            fontSize: '0.8125rem',
+                            cursor: isStage1Done ? 'pointer' : 'not-allowed'
+                          }}
+                        >
+                          <Mail size={15} /> Send Payment Request (Email & WhatsApp)
+                        </button>
+                      </div>
                     )}
 
                     {idx === 3 && !isStage3Done && (
@@ -963,7 +1062,7 @@ const ApplicationView: React.FC = () => {
                           cursor: (isStage0Done && isStage1Done && isStage2Done && isStage3Done) ? 'pointer' : 'not-allowed'
                         }}
                       >
-                        <ShieldCheck size={16} /> Grant Final Approval & Issue Sanction Email
+                        <ShieldCheck size={16} /> Issue Sanction & Mark Finally Approved
                       </button>
                     )}
                   </div>
@@ -1507,14 +1606,18 @@ const ApplicationView: React.FC = () => {
 
               <div style={{ marginBottom: '1rem' }}>
                 <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, color: 'var(--primary-dark)', marginBottom: '0.35rem' }}>
-                  Transaction ID / UTR Number <span style={{ color: '#dc2626' }}>*</span>:
+                  {payMethod === 'Cash' ? (
+                    'Cash Receipt / Voucher No (Optional):'
+                  ) : (
+                    <>Transaction ID / UTR Number <span style={{ color: '#dc2626' }}>*</span>:</>
+                  )}
                 </label>
                 <input
                   type="text"
-                  placeholder="e.g. UPI-20261101987654 or UTR12345678"
+                  placeholder={payMethod === 'Cash' ? 'e.g. CASH-101 (auto-generated if left blank)' : 'e.g. UPI-20261101987654 or UTR12345678'}
                   value={payTxId}
                   onChange={(e) => setPayTxId(e.target.value)}
-                  required
+                  required={payMethod !== 'Cash'}
                   style={{
                     width: '100%',
                     padding: '0.625rem',
@@ -1525,7 +1628,9 @@ const ApplicationView: React.FC = () => {
                   }}
                 />
                 <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block', marginTop: '0.25rem' }}>
-                  System checks against duplicate transaction IDs across all cases.
+                  {payMethod === 'Cash' 
+                    ? 'For cash payments collected at office, receipt number is auto-generated if left blank.' 
+                    : 'System checks against duplicate transaction IDs across all cases.'}
                 </span>
               </div>
 
@@ -1581,6 +1686,184 @@ const ApplicationView: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Send Payment Request Modal */}
+      {isSendPaymentRequestModalOpen && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1050,
+          padding: '1rem'
+        }}>
+          <div style={{
+            backgroundColor: 'var(--bg-surface)',
+            borderRadius: '0.75rem',
+            maxWidth: '520px',
+            width: '100%',
+            overflow: 'hidden',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2)'
+          }}>
+            <div style={{
+              padding: '1.25rem 1.5rem',
+              borderBottom: '1px solid var(--border-color)',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              backgroundColor: '#0284c7',
+              color: 'white'
+            }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700 }}>Request Customer Payment</h3>
+                <span style={{ fontSize: '0.75rem', opacity: 0.9 }}>
+                  Send official email & WhatsApp with UPI QR code & bank details • #{proposalNumber}
+                </span>
+              </div>
+              <button
+                onClick={() => setIsSendPaymentRequestModalOpen(false)}
+                style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', padding: 0 }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div style={{ padding: '1.5rem' }}>
+              <div style={{ marginBottom: '1rem', backgroundColor: '#f0f9ff', padding: '0.75rem 1rem', borderRadius: '0.5rem', border: '1px solid #bae6fd' }}>
+                <div style={{ fontSize: '0.8125rem', color: '#0369a1', fontWeight: 600 }}>
+                  Recipient Customer:
+                </div>
+                <div style={{ fontSize: '0.925rem', fontWeight: 700, color: 'var(--primary-dark)', marginTop: '0.2rem' }}>
+                  {property.owner_name || fullData.customerName || 'Customer'}
+                </div>
+                <div style={{ fontSize: '0.8rem', color: '#475569', marginTop: '0.2rem', display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+                  <span>📧 {property.owner_email || fullData.email || 'No email on file'}</span>
+                  <span>📱 {property.owner_phone || fullData.mobile || 'No phone'}</span>
+                </div>
+              </div>
+
+              <div style={{ marginBottom: '1rem' }}>
+                <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, color: 'var(--primary-dark)', marginBottom: '0.35rem' }}>
+                  Fee Amount to Request (₹):
+                </label>
+                <input
+                  type="number"
+                  value={requestAmount}
+                  onChange={(e) => setRequestAmount(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '0.625rem',
+                    borderRadius: '0.375rem',
+                    border: '1px solid var(--border-color)',
+                    backgroundColor: 'var(--bg-surface)',
+                    fontSize: '0.9rem',
+                    fontWeight: 700
+                  }}
+                />
+              </div>
+
+              {/* Company Payment Info Preview */}
+              <div style={{ marginBottom: '1rem', padding: '0.75rem 1rem', borderRadius: '0.5rem', backgroundColor: '#f8fafc', border: '1px solid var(--border-color)' }}>
+                <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: '0.4rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                  <QrCode size={14} color="var(--primary)" /> Payment Details to be Sent
+                </div>
+                <div style={{ fontSize: '0.8125rem', color: 'var(--primary-dark)', lineHeight: 1.5 }}>
+                  <div>• UPI ID: <strong>{bankSettings?.upiId || 'cbconstruction@upi'}</strong></div>
+                  {bankSettings?.accountNumber && (
+                    <div>• Bank: <strong>{bankSettings.bankName || 'HDFC Bank'}</strong> | A/C: <strong>{bankSettings.accountNumber}</strong> (IFSC: {bankSettings.ifsc})</div>
+                  )}
+                  <div>• QR Code: <strong>{bankSettings?.qrCodeUrl ? '✓ Official Company QR Code attached' : 'Standard UPI attached'}</strong></div>
+                  <div>• Cash Option: <strong>✓ Noted as accepted at office with instant receipt</strong></div>
+                </div>
+              </div>
+
+              <div style={{ marginBottom: '1.25rem' }}>
+                <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, color: 'var(--primary-dark)', marginBottom: '0.35rem' }}>
+                  Custom Message / Note to Customer (Optional):
+                </label>
+                <textarea
+                  rows={2}
+                  value={requestNote}
+                  onChange={(e) => setRequestNote(e.target.value)}
+                  placeholder="e.g. Please make payment so our field officer can schedule the site inspection visit..."
+                  style={{
+                    width: '100%',
+                    padding: '0.625rem',
+                    borderRadius: '0.375rem',
+                    border: '1px solid var(--border-color)',
+                    backgroundColor: 'var(--bg-surface)',
+                    fontSize: '0.85rem',
+                    resize: 'vertical'
+                  }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  onClick={() => setIsSendPaymentRequestModalOpen(false)}
+                  style={{
+                    padding: '0.625rem 1.25rem',
+                    borderRadius: '0.375rem',
+                    backgroundColor: 'var(--bg-surface)',
+                    border: '1px solid var(--border-color)',
+                    fontSize: '0.875rem',
+                    fontWeight: 600,
+                    cursor: 'pointer'
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSendPaymentRequest('whatsapp')}
+                  disabled={isSendingPaymentRequest}
+                  style={{
+                    padding: '0.625rem 1rem',
+                    borderRadius: '0.375rem',
+                    backgroundColor: '#25D366',
+                    color: 'white',
+                    border: 'none',
+                    fontSize: '0.875rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.4rem'
+                  }}
+                >
+                  <MessageCircle size={16} /> Share on WhatsApp
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSendPaymentRequest('email')}
+                  disabled={isSendingPaymentRequest}
+                  style={{
+                    padding: '0.625rem 1.25rem',
+                    borderRadius: '0.375rem',
+                    backgroundColor: '#0284c7',
+                    color: 'white',
+                    border: 'none',
+                    fontSize: '0.875rem',
+                    fontWeight: 600,
+                    cursor: isSendingPaymentRequest ? 'not-allowed' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.4rem'
+                  }}
+                >
+                  <Mail size={16} /> {isSendingPaymentRequest ? 'Sending...' : 'Send Official Email'}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

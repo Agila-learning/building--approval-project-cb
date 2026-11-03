@@ -543,6 +543,89 @@ export class BrevoNotificationService implements NotificationService {
 
     await this.sendEmail(customerEmail, customerName, subject, htmlContent);
   }
+
+  async notifyPaymentRequest(params: {
+    customerEmail: string;
+    customerName: string;
+    proposalNumber: string;
+    amount: number | string;
+    upiId: string;
+    accountHolder?: string;
+    accountNumber?: string;
+    ifsc?: string;
+    bankName?: string;
+    branch?: string;
+    qrCodeUrl?: string;
+    trackUrl: string;
+    notes?: string;
+  }): Promise<void> {
+    const {
+      customerEmail,
+      customerName,
+      proposalNumber,
+      amount,
+      upiId,
+      accountHolder,
+      accountNumber,
+      ifsc,
+      bankName,
+      branch,
+      qrCodeUrl,
+      trackUrl,
+      notes
+    } = params;
+
+    const formattedAmount = typeof amount === 'number' ? `₹${amount.toLocaleString('en-IN')}` : `₹${amount}`;
+    const subject = `Payment Request: Application Fee for Proposal #${proposalNumber} - CB Building Approvals`;
+
+    const bodyParagraphs = [
+      `Your building approval application documents have been successfully reviewed and verified!`,
+      `To proceed with technical scrutiny, municipal fee processing, and site visit scheduling, please complete the approval fee payment of <strong>${formattedAmount}</strong>.`,
+      `<strong>Payment Methods Available:</strong><br/>
+      • <strong>UPI / QR Code:</strong> Scan the attached QR code or transfer to UPI ID: <strong>${upiId}</strong><br/>
+      • <strong>Bank Transfer / NEFT / IMPS:</strong> Account: <strong>${accountNumber || 'Provided below'}</strong>, IFSC: <strong>${ifsc || '—'}</strong>, Bank: <strong>${bankName || '—'}</strong> (${accountHolder || 'CB Building Approvals'})<br/>
+      • <strong>Cash at Office:</strong> You can also pay cash directly at our office. Our officer will immediately issue an official cash voucher for your file.`,
+      notes ? `<strong>Officer Note:</strong> ${notes}` : ''
+    ].filter(Boolean);
+
+    const referenceCard = [
+      { label: 'Proposal Number', value: `#${proposalNumber}` },
+      { label: 'Applicant Name', value: customerName },
+      { label: 'Amount Due', value: formattedAmount },
+      { label: 'Company UPI ID', value: upiId },
+      ...(accountNumber ? [{ label: 'Bank Account & IFSC', value: `${accountNumber} (${ifsc || ''} - ${bankName || ''})` }] : []),
+      ...(branch ? [{ label: 'Branch', value: branch }] : [])
+    ];
+
+    let customHtml = '';
+    if (qrCodeUrl) {
+      customHtml = `
+        <div style="text-align: center; margin: 24px 0; padding: 20px; background-color: #f7f4ec; border-radius: 8px; border: 1px solid #ece6da;">
+          <div style="font-size: 14px; font-weight: bold; color: #1c3d2e; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.5px;">Scan to Pay with Any UPI App (PhonePe / GPay / Paytm)</div>
+          <img src="${qrCodeUrl}" alt="Company Payment QR Code" style="max-width: 220px; max-height: 220px; border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);" />
+          <div style="margin-top: 10px; font-size: 13px; color: #5c5a52;">UPI ID: <strong style="color: #1c3d2e;">${upiId}</strong></div>
+        </div>
+      `;
+    }
+
+    const htmlContent = generateEmailTemplate({
+      eyebrow: 'Payment Request',
+      headline: 'Approval Fee Payment Required',
+      customerName: customerName || 'Valued Applicant',
+      bodyParagraphs,
+      referenceCard,
+      cta: {
+        text: 'View Application & Make Payment',
+        url: trackUrl
+      }
+    });
+
+    const finalHtml = customHtml
+      ? htmlContent.replace('<div style="text-align: center; margin-top: 40px; margin-bottom: 20px;">', `${customHtml}<div style="text-align: center; margin-top: 40px; margin-bottom: 20px;">`)
+      : htmlContent;
+
+    await this.sendEmail(customerEmail, customerName, subject, finalHtml);
+  }
 }
 
 
