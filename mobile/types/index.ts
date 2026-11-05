@@ -97,6 +97,8 @@ export interface Lead {
 export interface AttendanceRecord {
   id?: string;
   _id?: string;
+  name?: string;
+  role?: string;
   staffName?: string;
   userName?: string;
   userId?: string;
@@ -104,5 +106,7 @@ export interface AttendanceRecord {
   checkIn?: string;
   checkInTime?: string;
   checkOut?: string;
-  status: 'Present' | 'Late' | 'Half Day' | 'Absent' | 'PRESENT' | 'HALF_DAY' | 'LEAVE';
+  status: 'Present' | 'Late' | 'Half Day' | 'Absent' | 'PRESENT' | 'HALF_DAY' | 'LEAVE' | 'Leave' | string;
+  avatar?: string;
+  notes?: string;
 }

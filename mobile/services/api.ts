@@ -1,7 +1,7 @@
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://building-approval.onrender.com/api';
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://building-approval-project-cb.onrender.com/api';
 
 const TOKEN_KEY = 'cb_auth_token';
 const USER_KEY = 'cb_auth_user';

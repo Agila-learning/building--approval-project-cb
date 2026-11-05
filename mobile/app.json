@@ -13,7 +13,7 @@
     "android": {
       "package": "com.cbbuildingapprovals.app",
       "adaptiveIcon": {
-        "backgroundColor": "#022F94",
+        "backgroundColor": "#FFFFFF",
         "foregroundImage": "./assets/android-icon-foreground.png"
       },
       "navigationBar": {
@@ -43,7 +43,7 @@
           "image": "./assets/splash-icon.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#022F94"
+          "backgroundColor": "#FFFFFF"
         }
       ],
       [
@@ -63,8 +63,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "d95c1ebc-a3a6-4c53-8914-674ee89f3361"
+        "projectId": "099f5358-4def-42d4-a8f8-7c26aa7ee556"
       }
-    }
+    },
+    "owner": "agila-g"
   }
 }

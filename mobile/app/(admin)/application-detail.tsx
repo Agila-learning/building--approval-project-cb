@@ -735,18 +735,37 @@ export default function ApplicationDetailScreen() {
   return (
     <View style={styles.container}>
       <MobileHeader
-        title={caseData.application_number || caseData.id}
+        title={`App #${caseData.application_number || caseData.id}`}
         showBack
-        rightAction={
-          <TouchableOpacity
-            style={styles.headerEditBtn}
-            onPress={() => setEditModalVisible(true)}
-          >
-            <Ionicons name="create-outline" size={18} color="#FFFFFF" />
-            <Text style={styles.headerEditBtnText}>Edit</Text>
-          </TouchableOpacity>
-        }
       />
+
+      {/* Top Quick Status & Actions Bar */}
+      <View style={styles.topAppBar}>
+        <View style={{ flex: 1, marginRight: 8 }}>
+          <Text style={styles.topAppOwner} numberOfLines={1}>
+            {caseData.property?.owner_name || caseData.fullData?.customerName || 'Customer'}
+          </Text>
+          <Text style={styles.topAppService} numberOfLines={1}>
+            {caseData.approval_type || 'Building Plan Approval'} • {caseData.property?.village || 'Tamil Nadu'}
+          </Text>
+        </View>
+
+        <View style={styles.topAppActions}>
+          <StatusBadge
+            status={caseData.status}
+            caseData={caseData}
+            id={caseData.application_number || caseData.id}
+          />
+          <TouchableOpacity
+            style={styles.inlineEditBtn}
+            onPress={() => setEditModalVisible(true)}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="create-outline" size={14} color="#1044C4" />
+            <Text style={styles.inlineEditBtnText}>Edit</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
 
       {/* STAGE PIPELINE PROGRESS TRACKER */}
       <View style={styles.pipelineBar}>
@@ -1259,7 +1278,7 @@ export default function ApplicationDetailScreen() {
               <View>
                 <Text style={styles.bannerLabel}>Current Status</Text>
                 <View style={{ marginTop: 4 }}>
-                  <StatusBadge status={caseData.status} />
+                  <StatusBadge status={caseData.status} caseData={caseData} id={caseData.application_number || caseData.id} />
                 </View>
               </View>
 
@@ -2197,6 +2216,47 @@ const styles = StyleSheet.create({
     padding: 14,
     paddingBottom: 50,
   },
+  topAppBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  topAppOwner: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  topAppService: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  topAppActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  inlineEditBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  inlineEditBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#1044C4',
+  },
   headerEditBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2288,7 +2348,7 @@ const styles = StyleSheet.create({
   // VIEW SWITCHER TABS
   viewTabContainer: {
     flexDirection: 'row',
-    backgroundColor: '#EDE7DA',
+    backgroundColor: '#F1F5F9',
     padding: 3,
     marginHorizontal: 14,
     marginTop: 10,
@@ -2314,10 +2374,10 @@ const styles = StyleSheet.create({
   viewTabText: {
     fontSize: 11,
     fontWeight: '600',
-    color: Colors.textSecondary,
+    color: '#64748B',
   },
   viewTabTextActive: {
-    color: Colors.primaryDark,
+    color: '#1044C4',
     fontWeight: '800',
   },
 

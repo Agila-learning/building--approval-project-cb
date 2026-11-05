@@ -106,8 +106,21 @@ export const applicationService = {
     return res.data || null;
   },
 
-  async getAttendance(): Promise<AttendanceRecord[]> {
-    const res = await apiRequest<AttendanceRecord[]>('/attendance');
+  async getAttendance(params?: {
+    fromDate?: string;
+    toDate?: string;
+    date?: string;
+    staffName?: string;
+    staffId?: string;
+  }): Promise<AttendanceRecord[]> {
+    const query = new URLSearchParams();
+    if (params?.fromDate) query.append('fromDate', params.fromDate);
+    if (params?.toDate) query.append('toDate', params.toDate);
+    if (params?.date) query.append('date', params.date);
+    if (params?.staffName) query.append('staffName', params.staffName);
+    if (params?.staffId) query.append('staffId', params.staffId);
+    const queryString = query.toString() ? `?${query.toString()}` : '';
+    const res = await apiRequest<AttendanceRecord[]>(`/attendance${queryString}`);
     return res.data || [];
   },
 
