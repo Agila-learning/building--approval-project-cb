@@ -41,29 +41,31 @@ export default function LoginScreen() {
   // Shake Animation for Sad Mascot (Wrong Credentials)
   const triggerShake = () => {
     shakeAnim.setValue(0);
+    const nativeDriver = Platform.OS !== 'web';
     Animated.sequence([
-      Animated.timing(shakeAnim, { toValue: 12, duration: 60, useNativeDriver: true }),
-      Animated.timing(shakeAnim, { toValue: -12, duration: 60, useNativeDriver: true }),
-      Animated.timing(shakeAnim, { toValue: 10, duration: 60, useNativeDriver: true }),
-      Animated.timing(shakeAnim, { toValue: -10, duration: 60, useNativeDriver: true }),
-      Animated.timing(shakeAnim, { toValue: 6, duration: 50, useNativeDriver: true }),
-      Animated.timing(shakeAnim, { toValue: 0, duration: 50, useNativeDriver: true }),
+      Animated.timing(shakeAnim, { toValue: 12, duration: 60, useNativeDriver: nativeDriver }),
+      Animated.timing(shakeAnim, { toValue: -12, duration: 60, useNativeDriver: nativeDriver }),
+      Animated.timing(shakeAnim, { toValue: 10, duration: 60, useNativeDriver: nativeDriver }),
+      Animated.timing(shakeAnim, { toValue: -10, duration: 60, useNativeDriver: nativeDriver }),
+      Animated.timing(shakeAnim, { toValue: 6, duration: 50, useNativeDriver: nativeDriver }),
+      Animated.timing(shakeAnim, { toValue: 0, duration: 50, useNativeDriver: nativeDriver }),
     ]).start();
   };
 
   // Bounce Animation for Happy Mascot (Success)
   const triggerBounce = () => {
     bounceAnim.setValue(0.85);
+    const nativeDriver = Platform.OS !== 'web';
     Animated.spring(bounceAnim, {
       toValue: 1.1,
       friction: 3,
       tension: 40,
-      useNativeDriver: true,
+      useNativeDriver: nativeDriver,
     }).start(() => {
       Animated.spring(bounceAnim, {
         toValue: 1.0,
         friction: 4,
-        useNativeDriver: true,
+        useNativeDriver: nativeDriver,
       }).start();
     });
   };
