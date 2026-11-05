@@ -1,12 +1,24 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Building2, X, KeyRound, CheckCircle2, ArrowRight } from 'lucide-react';
+import { 
+  User, 
+  Lock, 
+  Eye, 
+  EyeOff, 
+  ShieldCheck, 
+  ArrowRight, 
+  X, 
+  KeyRound, 
+  CheckCircle2 
+} from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getApiUrl } from '../config/api';
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(true);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const navigate = useNavigate();
 
@@ -143,7 +155,7 @@ const Login: React.FC = () => {
         } catch (e) {}
       }
 
-      toast.error('Could not connect to authentication server. Please check your network connection.');
+      toast.error('Unable to reach server. Please check your internet connection.');
     } finally {
       setIsLoggingIn(false);
     }
@@ -159,7 +171,7 @@ const Login: React.FC = () => {
     setIsSubmittingForgot(true);
     try {
       const apiUrl = getApiUrl();
-      const res = await fetch(`${apiUrl}/forgot-password`, {
+      const res = await fetch(`${apiUrl}/verify-account`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ identifier: forgotIdentifier.trim() })
@@ -252,125 +264,529 @@ const Login: React.FC = () => {
   };
 
   return (
-    <div style={{ 
-      display: 'flex', 
+    <div style={{
+      position: 'relative',
       minHeight: '100vh',
+      display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: 'var(--primary-dark)',
-      backgroundImage: `linear-gradient(to bottom, rgba(30, 58, 138, 0.75), rgba(23, 37, 84, 0.90)), url('/assets/modern_architecture_login.jpg')`,
-      backgroundSize: 'cover',
-      backgroundPosition: 'center',
-      padding: '2rem'
+      backgroundColor: '#FAF9F6', // Soft ivory background
+      padding: '2rem 1.5rem',
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+      overflow: 'hidden'
     }}>
       
-      {/* Centered Login Form Container */}
-      <div style={{ 
-        backgroundColor: 'rgba(255, 255, 255, 0.95)', 
-        backdropFilter: 'blur(10px)',
-        padding: '2rem 2.5rem',
-        borderRadius: '1rem',
-        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
-        width: '100%', 
-        maxWidth: '380px',
+      {/* Decorative Corner Flowing Curves (Top-Right Navy & Gold) */}
+      <svg
+        style={{
+          position: 'absolute',
+          top: 0,
+          right: 0,
+          width: '420px',
+          height: '320px',
+          pointerEvents: 'none',
+          zIndex: 1,
+          opacity: 0.85
+        }}
+        viewBox="0 0 420 320"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <path
+          d="M100 0C180 80 280 120 420 80V0H100Z"
+          fill="#0B2545"
+          fillOpacity="0.12"
+        />
+        <path
+          d="M220 0C300 70 350 110 420 140V0H220Z"
+          fill="#134074"
+          fillOpacity="0.2"
+        />
+        <path
+          d="M320 0C370 45 395 75 420 90V0H320Z"
+          fill="#D4AF37"
+          fillOpacity="0.3"
+        />
+      </svg>
+
+      {/* Decorative Corner Flowing Curves (Bottom-Left Navy & Gold) */}
+      <svg
+        style={{
+          position: 'absolute',
+          bottom: 0,
+          left: 0,
+          width: '460px',
+          height: '300px',
+          pointerEvents: 'none',
+          zIndex: 1,
+          opacity: 0.75
+        }}
+        viewBox="0 0 460 300"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <path
+          d="M0 160C120 180 260 220 380 300H0V160Z"
+          fill="#134074"
+          fillOpacity="0.1"
+        />
+        <path
+          d="M0 220C90 230 180 260 260 300H0V220Z"
+          fill="#D4AF37"
+          fillOpacity="0.2"
+        />
+      </svg>
+
+      {/* Main Layout Container: Split Desktop Branding on Left, Login Card on Right (Screenshot 2) */}
+      <div style={{
         position: 'relative',
-        zIndex: 10
+        zIndex: 10,
+        display: 'flex',
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: '4.5rem',
+        width: '100%',
+        maxWidth: '1040px',
+        margin: '0 auto',
       }}>
-        <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', marginBottom: '1rem' }}>
-            <img src="/assets/logo.jpeg" alt="CB Building Approvals Logo" style={{ width: '60px', height: '60px', objectFit: 'contain', marginBottom: '0.5rem', borderRadius: '8px', mixBlendMode: 'multiply' }} />
-            <div style={{ fontSize: '1.5rem', fontWeight: 900, color: '#cc0000', fontFamily: 'var(--font-heading)', letterSpacing: '0.05em', WebkitTextStroke: '0.5px #cc0000', textShadow: '0px 0px 1px rgba(204,0,0,0.5)', whiteSpace: 'nowrap' }}>CB BUILDING APPROVALS</div>
-          </div>
-        </div>
-
-        <form onSubmit={handleLogin}>
-          <div className="form-group" style={{ marginBottom: '1rem' }}>
-            <label className="form-label" style={{ color: 'var(--primary-dark)', fontWeight: 600, fontSize: '0.9rem', marginBottom: '0.25rem' }}>Email / Mobile / Staff ID</label>
-            <input 
-              type="text" 
-              className="form-input" 
-              placeholder="Enter your email, mobile, or ID"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              style={{ backgroundColor: 'white', border: '1px solid #d1d5db', padding: '0.6rem 0.75rem', fontSize: '0.9rem' }}
-            />
-          </div>
-
-          <div className="form-group" style={{ marginBottom: '1rem' }}>
-            <label className="form-label" style={{ color: 'var(--primary-dark)', fontWeight: 600, fontSize: '0.9rem', marginBottom: '0.25rem' }}>Password</label>
-            <input 
-              type="password" 
-              className="form-input" 
-              placeholder="••••••••"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              style={{ backgroundColor: 'white', border: '1px solid #d1d5db', padding: '0.6rem 0.75rem', fontSize: '0.9rem' }}
-            />
-          </div>
-
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '1rem 0 1.5rem 0', fontSize: '0.8rem' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: 'var(--primary-dark)', fontWeight: 500 }}>
-              <input type="checkbox" defaultChecked style={{ accentColor: 'var(--primary)', width: '0.9rem', height: '0.9rem' }} /> Remember me
-            </label>
-            <button
-              type="button"
-              onClick={() => {
-                setForgotStep(1);
-                setForgotIdentifier(email);
-                setShowForgotModal(true);
+        
+        {/* Left Column: Branding, Tagline & Architectural Building Illustration */}
+        <div style={{
+          flex: '1 1 360px',
+          maxWidth: '440px',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'flex-start',
+          justifyContent: 'center',
+        }}>
+          {/* CB Logo Badge with Gold & Navy Frame */}
+          <div style={{
+            width: '78px',
+            height: '78px',
+            backgroundColor: '#FFFFFF',
+            borderRadius: '20px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            boxShadow: '0 10px 25px -5px rgba(11, 37, 69, 0.15)',
+            border: '2px solid rgba(212, 175, 55, 0.4)',
+            marginBottom: '1.25rem',
+            padding: '8px'
+          }}>
+            <img
+              src="/assets/cb-logo-badge.png"
+              alt="CB Logo"
+              style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+              onError={(e) => {
+                // Fallback to standard logo if badge not found
+                (e.target as HTMLImageElement).src = '/assets/logo.jpeg';
               }}
-              style={{ background: 'none', border: 'none', color: 'var(--primary)', fontWeight: 600, cursor: 'pointer', padding: 0 }}
-            >
-              Forgot Password?
-            </button>
+            />
           </div>
 
-          <button 
-            type="submit" 
-            disabled={isLoggingIn}
-            className="btn-primary" 
-            style={{ width: '100%', padding: '0.75rem', fontSize: '1rem', fontWeight: 600, opacity: isLoggingIn ? 0.7 : 1 }}
-          >
-            {isLoggingIn ? 'Logging in...' : 'Login →'}
-          </button>
-          
-        </form>
-        <div style={{ marginTop: '1.5rem', textAlign: 'center', fontSize: '0.85rem' }}>
-          <a href="/" style={{ color: '#6b7280', fontWeight: 500, textDecoration: 'none' }} className="hover:text-primary">&larr; Back to Website</a>
+          {/* Company Title */}
+          <h1 style={{
+            fontSize: '1.95rem',
+            fontWeight: 900,
+            color: '#0B2545',
+            margin: '0 0 0.35rem 0',
+            letterSpacing: '0.04em',
+            lineHeight: 1.2
+          }}>
+            CB BUILDING<br />APPROVALS
+          </h1>
+
+          {/* Tagline */}
+          <p style={{
+            fontSize: '0.98rem',
+            color: '#475569',
+            fontWeight: 600,
+            margin: '0 0 1rem 0'
+          }}>
+            Your Approvals. Our Responsibility
+          </p>
+
+          {/* Decorative Horizontal Accent Pill */}
+          <div style={{
+            width: '46px',
+            height: '4px',
+            backgroundColor: '#1044C4',
+            borderRadius: '9999px',
+            marginBottom: '2rem'
+          }} />
+
+          {/* Modern Architectural Building Illustration Graphic */}
+          <div style={{
+            width: '100%',
+            maxWidth: '340px',
+            position: 'relative'
+          }}>
+            <img
+              src="/assets/building-illustration.png"
+              alt="Architectural Building"
+              style={{
+                width: '100%',
+                height: 'auto',
+                display: 'block',
+                borderRadius: '16px',
+                filter: 'drop-shadow(0 15px 25px rgba(11, 37, 69, 0.12))'
+              }}
+            />
+          </div>
         </div>
+
+        {/* Right Column: Premium Login Card */}
+        <div style={{
+          flex: '1 1 380px',
+          maxWidth: '440px',
+          backgroundColor: '#FFFFFF',
+          borderRadius: '24px',
+          padding: '2.5rem 2.25rem',
+          boxShadow: '0 25px 60px -15px rgba(11, 37, 69, 0.14)',
+          border: '1px solid rgba(226, 232, 240, 0.9)',
+          position: 'relative',
+          overflow: 'hidden'
+        }}>
+
+          {/* Decorative Curved Navy & Gold Accent at top of card */}
+          <div style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            height: '6px',
+            background: 'linear-gradient(90deg, #0B2545 0%, #1044C4 65%, #D4AF37 100%)'
+          }} />
+
+          {/* Card Header */}
+          <div style={{ marginBottom: '1.75rem' }}>
+            <h2 style={{
+              fontSize: '1.85rem',
+              fontWeight: 800,
+              color: '#0B2545',
+              margin: '0 0 0.35rem 0',
+              letterSpacing: '-0.02em'
+            }}>
+              Welcome Back!
+            </h2>
+            <p style={{
+              fontSize: '0.92rem',
+              color: '#64748B',
+              margin: '0 0 1rem 0'
+            }}>
+              Sign in to continue your journey
+            </p>
+
+            {/* Segmented Blue Accent Bar (matching Screenshot 2) */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <div style={{ width: '38px', height: '4px', backgroundColor: '#1044C4', borderRadius: '9999px' }} />
+              <div style={{ width: '38px', height: '4px', backgroundColor: '#E2E8F0', borderRadius: '9999px' }} />
+            </div>
+          </div>
+
+          {/* Login Form */}
+          <form onSubmit={handleLogin}>
+            
+            {/* Field 1: Mobile / Email / Username */}
+            <div style={{ marginBottom: '1.25rem' }}>
+              <label style={{
+                display: 'block',
+                fontSize: '0.84rem',
+                fontWeight: 700,
+                color: '#334155',
+                marginBottom: '0.45rem'
+              }}>
+                Mobile / Email / Username
+              </label>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                backgroundColor: '#F8FAFC',
+                border: '1.5px solid #E2E8F0',
+                borderRadius: '12px',
+                padding: '0.65rem 0.95rem',
+                transition: 'border-color 0.2s ease'
+              }}>
+                <User size={18} color="#94A3B8" style={{ marginRight: '0.65rem', flexShrink: 0 }} />
+                <input
+                  type="text"
+                  placeholder="Enter your mobile number, email or username"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  style={{
+                    width: '100%',
+                    border: 'none',
+                    background: 'transparent',
+                    fontSize: '0.88rem',
+                    color: '#0F172A',
+                    outline: 'none',
+                    fontWeight: 500
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Field 2: Password */}
+            <div style={{ marginBottom: '1.25rem' }}>
+              <label style={{
+                display: 'block',
+                fontSize: '0.84rem',
+                fontWeight: 700,
+                color: '#334155',
+                marginBottom: '0.45rem'
+              }}>
+                Password
+              </label>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                backgroundColor: '#F8FAFC',
+                border: '1.5px solid #E2E8F0',
+                borderRadius: '12px',
+                padding: '0.65rem 0.95rem',
+                transition: 'border-color 0.2s ease'
+              }}>
+                <Lock size={18} color="#94A3B8" style={{ marginRight: '0.65rem', flexShrink: 0 }} />
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="Enter your password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  style={{
+                    width: '100%',
+                    border: 'none',
+                    background: 'transparent',
+                    fontSize: '0.88rem',
+                    color: '#0F172A',
+                    outline: 'none',
+                    fontWeight: 500
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    padding: 0,
+                    cursor: 'pointer',
+                    color: '#94A3B8',
+                    display: 'flex',
+                    alignItems: 'center'
+                  }}
+                  tabIndex={-1}
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
+            </div>
+
+            {/* Remember Me & Forgot Password Row */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              marginBottom: '1.75rem',
+              fontSize: '0.85rem'
+            }}>
+              <label style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.45rem',
+                color: '#475569',
+                cursor: 'pointer',
+                fontWeight: 600,
+                userSelect: 'none'
+              }}>
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  style={{
+                    accentColor: '#1044C4',
+                    width: '1rem',
+                    height: '1rem',
+                    cursor: 'pointer',
+                    borderRadius: '4px'
+                  }}
+                />
+                Remember Me
+              </label>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setForgotStep(1);
+                  setForgotIdentifier(email);
+                  setShowForgotModal(true);
+                }}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#1044C4',
+                  fontWeight: 700,
+                  fontSize: '0.85rem',
+                  cursor: 'pointer',
+                  padding: 0
+                }}
+              >
+                Forgot Password?
+              </button>
+            </div>
+
+            {/* Large Full-Width Navy-Blue Button with Right Arrow */}
+            <button
+              type="submit"
+              disabled={isLoggingIn}
+              style={{
+                width: '100%',
+                padding: '0.85rem 1.25rem',
+                backgroundColor: '#1044C4',
+                background: 'linear-gradient(135deg, #0B2545 0%, #1044C4 100%)',
+                color: '#FFFFFF',
+                border: 'none',
+                borderRadius: '12px',
+                fontSize: '0.98rem',
+                fontWeight: 700,
+                cursor: isLoggingIn ? 'not-allowed' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '0.65rem',
+                boxShadow: '0 8px 20px -4px rgba(16, 68, 196, 0.45)',
+                transition: 'all 0.2s ease',
+                opacity: isLoggingIn ? 0.75 : 1
+              }}
+            >
+              <span>{isLoggingIn ? 'Signing In...' : 'Sign In'}</span>
+              <ArrowRight size={18} />
+            </button>
+
+          </form>
+
+          {/* Secure & Trusted Footer Badge */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginTop: '2rem',
+            position: 'relative'
+          }}>
+            <div style={{
+              position: 'absolute',
+              top: '50%',
+              left: 0,
+              right: 0,
+              height: '1px',
+              backgroundColor: '#E2E8F0',
+              zIndex: 1
+            }} />
+            <div style={{
+              position: 'relative',
+              zIndex: 2,
+              backgroundColor: '#FFFFFF',
+              padding: '0 0.85rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+              color: '#475569',
+              fontSize: '0.78rem',
+              fontWeight: 700,
+              letterSpacing: '0.02em'
+            }}>
+              <ShieldCheck size={16} color="#1044C4" />
+              <span>Secure & Trusted</span>
+            </div>
+          </div>
+
+          {/* Back to Website Link */}
+          <div style={{ marginTop: '1.5rem', textAlign: 'center' }}>
+            <a
+              href="/"
+              style={{
+                color: '#64748B',
+                fontSize: '0.84rem',
+                fontWeight: 600,
+                textDecoration: 'none'
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.color = '#0B2545')}
+              onMouseLeave={(e) => (e.currentTarget.style.color = '#64748B')}
+            >
+              &larr; Back to Website
+            </a>
+          </div>
+
+        </div>
+
       </div>
 
       {/* Forgot Password Modal */}
       {showForgotModal && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15, 23, 42, 0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, backdropFilter: 'blur(4px)', padding: '1rem' }}>
-          <div style={{ backgroundColor: '#ffffff', borderRadius: '0.75rem', width: '100%', maxWidth: '420px', padding: '2rem', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2)', position: 'relative' }}>
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(11, 37, 69, 0.6)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          backdropFilter: 'blur(4px)',
+          padding: '1rem'
+        }}>
+          <div style={{
+            backgroundColor: '#ffffff',
+            borderRadius: '16px',
+            width: '100%',
+            maxWidth: '430px',
+            padding: '2.25rem',
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+            position: 'relative'
+          }}>
             
             <button 
               onClick={() => setShowForgotModal(false)} 
-              style={{ position: 'absolute', top: '1.25rem', right: '1.25rem', background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}
+              style={{
+                position: 'absolute',
+                top: '1.25rem',
+                right: '1.25rem',
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                color: '#64748b'
+              }}
             >
               <X size={20} />
             </button>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.75rem' }}>
-              <div style={{ padding: '0.5rem', backgroundColor: '#eff6ff', borderRadius: '0.5rem', color: '#2563eb' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
+              <div style={{
+                padding: '0.6rem',
+                backgroundColor: '#EFF6FF',
+                borderRadius: '10px',
+                color: '#1044C4'
+              }}>
                 <KeyRound size={22} />
               </div>
-              <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--primary-dark)', margin: 0 }}>
+              <h3 style={{ fontSize: '1.3rem', fontWeight: 800, color: '#0B2545', margin: 0 }}>
                 {forgotStep === 1 ? 'Reset Password' : 'Set New Password'}
               </h3>
             </div>
 
             {forgotStep === 1 ? (
               <form onSubmit={handleVerifyAccount}>
-                <p style={{ fontSize: '0.875rem', color: '#64748b', marginBottom: '1.25rem' }}>
+                <p style={{ fontSize: '0.88rem', color: '#64748b', marginBottom: '1.25rem', lineHeight: 1.5 }}>
                   Enter your registered email address, mobile number, or username to verify your account.
                 </p>
 
                 <div style={{ marginBottom: '1.25rem' }}>
-                  <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#334155', marginBottom: '0.35rem' }}>
+                  <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, color: '#334155', marginBottom: '0.4rem' }}>
                     Email Address or Mobile Number
                   </label>
                   <input
@@ -379,7 +795,16 @@ const Login: React.FC = () => {
                     value={forgotIdentifier}
                     onChange={(e) => setForgotIdentifier(e.target.value)}
                     placeholder="e.g. admin@test.com or 9840123456"
-                    style={{ width: '100%', padding: '0.65rem 0.85rem', borderRadius: '0.375rem', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
+                    style={{
+                      width: '100%',
+                      padding: '0.7rem 0.85rem',
+                      borderRadius: '10px',
+                      border: '1.5px solid #CBD5E1',
+                      fontSize: '0.9rem',
+                      backgroundColor: '#F8FAFC',
+                      outline: 'none',
+                      color: '#0F172A'
+                    }}
                   />
                 </div>
 
@@ -387,15 +812,35 @@ const Login: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setShowForgotModal(false)}
-                    style={{ padding: '0.6rem 1rem', borderRadius: '0.375rem', border: '1px solid #cbd5e1', backgroundColor: '#ffffff', color: '#475569', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer' }}
+                    style={{
+                      padding: '0.65rem 1.1rem',
+                      borderRadius: '8px',
+                      border: '1.5px solid #CBD5E1',
+                      backgroundColor: '#FFFFFF',
+                      color: '#475569',
+                      fontSize: '0.85rem',
+                      fontWeight: 700,
+                      cursor: 'pointer'
+                    }}
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={isSubmittingForgot}
-                    className="btn-primary"
-                    style={{ padding: '0.6rem 1.25rem', fontSize: '0.85rem', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
+                    style={{
+                      padding: '0.65rem 1.35rem',
+                      borderRadius: '8px',
+                      border: 'none',
+                      backgroundColor: '#1044C4',
+                      color: '#FFFFFF',
+                      fontSize: '0.85rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.4rem'
+                    }}
                   >
                     {isSubmittingForgot ? 'Verifying...' : 'Continue →'}
                   </button>
@@ -403,12 +848,12 @@ const Login: React.FC = () => {
               </form>
             ) : (
               <form onSubmit={handleResetPassword}>
-                <p style={{ fontSize: '0.875rem', color: '#64748b', marginBottom: '1.25rem' }}>
+                <p style={{ fontSize: '0.88rem', color: '#64748b', marginBottom: '1.25rem', lineHeight: 1.5 }}>
                   Account verified for <strong>{forgotIdentifier}</strong>. Please enter your new login password.
                 </p>
 
                 <div style={{ marginBottom: '1rem' }}>
-                  <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#334155', marginBottom: '0.35rem' }}>
+                  <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, color: '#334155', marginBottom: '0.4rem' }}>
                     New Password (min 6 characters)
                   </label>
                   <input
@@ -417,12 +862,21 @@ const Login: React.FC = () => {
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
                     placeholder="••••••••"
-                    style={{ width: '100%', padding: '0.65rem 0.85rem', borderRadius: '0.375rem', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
+                    style={{
+                      width: '100%',
+                      padding: '0.7rem 0.85rem',
+                      borderRadius: '10px',
+                      border: '1.5px solid #CBD5E1',
+                      fontSize: '0.9rem',
+                      backgroundColor: '#F8FAFC',
+                      outline: 'none',
+                      color: '#0F172A'
+                    }}
                   />
                 </div>
 
                 <div style={{ marginBottom: '1.5rem' }}>
-                  <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#334155', marginBottom: '0.35rem' }}>
+                  <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, color: '#334155', marginBottom: '0.4rem' }}>
                     Confirm New Password
                   </label>
                   <input
@@ -431,7 +885,16 @@ const Login: React.FC = () => {
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     placeholder="••••••••"
-                    style={{ width: '100%', padding: '0.65rem 0.85rem', borderRadius: '0.375rem', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
+                    style={{
+                      width: '100%',
+                      padding: '0.7rem 0.85rem',
+                      borderRadius: '10px',
+                      border: '1.5px solid #CBD5E1',
+                      fontSize: '0.9rem',
+                      backgroundColor: '#F8FAFC',
+                      outline: 'none',
+                      color: '#0F172A'
+                    }}
                   />
                 </div>
 
@@ -439,15 +902,35 @@ const Login: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setForgotStep(1)}
-                    style={{ padding: '0.6rem 1rem', borderRadius: '0.375rem', border: '1px solid #cbd5e1', backgroundColor: '#ffffff', color: '#475569', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer' }}
+                    style={{
+                      padding: '0.65rem 1.1rem',
+                      borderRadius: '8px',
+                      border: '1.5px solid #CBD5E1',
+                      backgroundColor: '#FFFFFF',
+                      color: '#475569',
+                      fontSize: '0.85rem',
+                      fontWeight: 700,
+                      cursor: 'pointer'
+                    }}
                   >
                     Back
                   </button>
                   <button
                     type="submit"
                     disabled={isSubmittingForgot}
-                    className="btn-primary"
-                    style={{ padding: '0.6rem 1.25rem', fontSize: '0.85rem', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '0.35rem', backgroundColor: '#16a34a', borderColor: '#16a34a' }}
+                    style={{
+                      padding: '0.65rem 1.35rem',
+                      borderRadius: '8px',
+                      border: 'none',
+                      backgroundColor: '#16A34A',
+                      color: '#FFFFFF',
+                      fontSize: '0.85rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.4rem'
+                    }}
                   >
                     {isSubmittingForgot ? 'Saving...' : 'Update Password & Login'}
                   </button>

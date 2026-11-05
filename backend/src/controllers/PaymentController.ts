@@ -273,7 +273,7 @@ export class PaymentController {
 
       if (sendEmail && paymentStatus === 'Paid' && customerEmail) {
         try {
-          const origin = req.headers.origin || 'http://localhost:5173';
+          const origin = (req.headers.origin as string) || process.env.FRONTEND_URL || 'https://building-approval-app.vercel.app';
           await brevoService.notifyPaymentSuccess({
             customerEmail,
             customerName,

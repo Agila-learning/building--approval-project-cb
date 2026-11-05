@@ -5,10 +5,10 @@ export const Colors = {
   accent: '#E9A83A',
   gold: '#D6A756',
   
-  bgPrimary: '#F7F4EE',     // Ivory
-  bgSecondary: '#EDE7DA',   // Soft Sand
+  bgPrimary: '#FFFFFF',     // Pure White
+  bgSecondary: '#F8FAFC',   // Crisp light slate
   bgSurface: '#FFFFFF',     // White
-  background: '#F7F4EE',
+  background: '#FFFFFF',
   card: '#FFFFFF',
   
   textPrimary: '#1C2420',

@@ -367,7 +367,7 @@ export default function ApplicationsListScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC', // Crisp modern light background
+    backgroundColor: '#FFFFFF', // Clean White background
   },
   center: {
     flex: 1,

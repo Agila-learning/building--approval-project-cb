@@ -90,6 +90,7 @@ export async function apiRequest<T = any>(
     const token = await storage.getToken();
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
+      'Origin': 'https://building-approval-app.vercel.app',
       ...(options.headers as Record<string, string>),
     };
 

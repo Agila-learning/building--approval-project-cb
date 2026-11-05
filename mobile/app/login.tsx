@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
   Animated,
   Image,
+  Alert,
 } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -19,25 +20,25 @@ import { Colors } from '../constants/theme';
 import { apiRequest } from '../services/api';
 import { Ionicons } from '@expo/vector-icons';
 
-type MascotState = 'idle' | 'covering_eyes' | 'sad' | 'happy';
+type MascotState = 'idle' | 'sad' | 'happy';
 
 export default function LoginScreen() {
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(true);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
-  const [successMessage, setSuccessMessage] = useState('');
   const [mascotState, setMascotState] = useState<MascotState>('idle');
+  const [loggedInUser, setLoggedInUser] = useState<any>(null);
 
   const { login } = useAuth();
 
   // Animation Refs
   const shakeAnim = useRef(new Animated.Value(0)).current;
   const bounceAnim = useRef(new Animated.Value(1)).current;
-  const tearAnim = useRef(new Animated.Value(0)).current;
 
-  // Shake Animation for Sad Mascot
+  // Shake Animation for Sad Mascot (Wrong Credentials)
   const triggerShake = () => {
     shakeAnim.setValue(0);
     Animated.sequence([
@@ -48,23 +49,13 @@ export default function LoginScreen() {
       Animated.timing(shakeAnim, { toValue: 6, duration: 50, useNativeDriver: true }),
       Animated.timing(shakeAnim, { toValue: 0, duration: 50, useNativeDriver: true }),
     ]).start();
-
-    // Tear drop animation
-    tearAnim.setValue(0);
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(tearAnim, { toValue: 14, duration: 600, useNativeDriver: true }),
-        Animated.timing(tearAnim, { toValue: 0, duration: 200, useNativeDriver: true }),
-      ]),
-      { iterations: 3 }
-    ).start();
   };
 
-  // Bounce Animation for Happy Mascot
+  // Bounce Animation for Happy Mascot (Success)
   const triggerBounce = () => {
-    bounceAnim.setValue(0.8);
+    bounceAnim.setValue(0.85);
     Animated.spring(bounceAnim, {
-      toValue: 1.15,
+      toValue: 1.1,
       friction: 3,
       tension: 40,
       useNativeDriver: true,
@@ -77,9 +68,18 @@ export default function LoginScreen() {
     });
   };
 
+  const proceedToDashboard = (user: any) => {
+    if (user?.role === 'ADMIN') {
+      router.replace('/(admin)');
+    } else if (user?.role === 'CLIENT_READONLY') {
+      router.replace('/(customer)');
+    } else {
+      router.replace('/(employee)');
+    }
+  };
+
   const handleLogin = async () => {
     setErrorMessage('');
-    setSuccessMessage('');
 
     if (!identifier.trim() || !password.trim()) {
       setMascotState('sad');
@@ -90,30 +90,31 @@ export default function LoginScreen() {
 
     setLoading(true);
 
-    // 1. Admin login fallback credentials
-    if (identifier.trim() === 'admin@test.com' || identifier.trim() === 'admin') {
+    // 1. Admin Login Fallback Credentials
+    if (identifier.trim().toLowerCase() === 'admin@test.com' || identifier.trim().toLowerCase() === 'admin') {
       if (password === 'admin123') {
-        setMascotState('happy');
-        setSuccessMessage('🎉 Login Successful! Welcome Master Admin!');
-        triggerBounce();
-
-        await login({
+        const adminUser = {
           id: 'admin_master',
           name: 'Master Admin',
           phone: '9999999999',
-          role: 'ADMIN',
-          status: 'Active',
-        });
+          role: 'ADMIN' as const,
+          status: 'Active' as const,
+        };
+        setLoggedInUser(adminUser);
+        setMascotState('happy');
+        triggerBounce();
+        await login(adminUser);
+        setLoading(false);
 
+        // Auto proceed after short celebration or user can tap continue
         setTimeout(() => {
-          setLoading(false);
-          router.replace('/(admin)');
-        }, 900);
+          proceedToDashboard(adminUser);
+        }, 1500);
         return;
       } else {
         setLoading(false);
         setMascotState('sad');
-        setErrorMessage('❌ Wrong credentials! Password does not match. Please check once.');
+        setErrorMessage('Invalid Credentials. Please try again.');
         triggerShake();
         return;
       }
@@ -125,56 +126,51 @@ export default function LoginScreen() {
         method: 'POST',
         body: JSON.stringify({
           phone: identifier.trim(),
+          email: identifier.trim(),
           password: password.trim(),
         }),
       });
 
       if (res.data && res.data.user) {
         const u = res.data.user;
+        const userObj = {
+          id: u.id,
+          name: u.name,
+          phone: u.phone,
+          email: u.email,
+          role: u.role,
+          status: u.status || 'Active',
+        };
+        setLoggedInUser(userObj);
         setMascotState('happy');
-        setSuccessMessage(`🎉 Welcome back, ${u.name || 'User'}!`);
         triggerBounce();
 
-        await login(
-          {
-            id: u.id,
-            name: u.name,
-            phone: u.phone,
-            email: u.email,
-            role: u.role,
-            status: u.status || 'Active',
-          },
-          res.data.token
-        );
+        await login(userObj as any, res.data.token);
+        setLoading(false);
 
         setTimeout(() => {
-          setLoading(false);
-          if (u.role === 'ADMIN') {
-            router.replace('/(admin)');
-          } else if (u.role === 'CLIENT_READONLY') {
-            router.replace('/(customer)');
-          } else {
-            router.replace('/(employee)');
-          }
-        }, 900);
+          proceedToDashboard(userObj);
+        }, 1500);
       } else {
         setLoading(false);
         setMascotState('sad');
         setErrorMessage(
-          res.error || '❌ Wrong credentials! User not found or incorrect password. Please check once.'
+          res.error || 'Invalid Credentials. Please try again.'
         );
         triggerShake();
       }
     } catch (err: any) {
       setLoading(false);
       setMascotState('sad');
-      setErrorMessage('❌ Connection error! Unable to reach backend server. Please try again.');
+      setErrorMessage('Connection error. Please check your network and try again.');
       triggerShake();
     }
   };
 
+  const isSuccess = mascotState === 'happy';
+
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={[styles.safeArea, isSuccess ? styles.bgSuccess : styles.bgWarm]}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={{ flex: 1 }}
@@ -182,24 +178,25 @@ export default function LoginScreen() {
         <ScrollView
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
         >
-          {/* Header Branding with Official Logo */}
+          {/* Top Decorative Header with Logo */}
           <View style={styles.header}>
-            <View style={styles.logoWrap}>
+            <View style={[styles.logoCard, isSuccess ? styles.logoCardGreen : styles.logoCardOrange]}>
               <Image
-                source={require('../assets/logo.jpeg')}
+                source={require('../assets/cb-logo-badge.png')}
                 style={styles.logoImage}
-                resizeMode="cover"
+                resizeMode="contain"
               />
             </View>
-            <Text style={styles.companyName}>CB BUILDING APPROVALS</Text>
-            <Text style={styles.tagline}>Your Approvals, Our Responsibility</Text>
+            <Text style={styles.companyTitle}>CB BUILDING APPROVALS</Text>
+            <Text style={styles.companyTagline}>Your Approvals. Our Responsibility</Text>
           </View>
 
-          {/* Cute Animated Monkey Mascot */}
+          {/* Monkey Mascot Visual */}
           <Animated.View
             style={[
-              styles.mascotContainer,
+              styles.mascotWrap,
               {
                 transform: [
                   { translateX: shakeAnim },
@@ -208,192 +205,164 @@ export default function LoginScreen() {
               },
             ]}
           >
-            <View style={styles.mascotHead}>
-              {/* Cute Round Ears */}
-              <View style={[styles.ear, styles.earLeft]}>
-                <View style={styles.innerEar} />
-              </View>
-              <View style={[styles.ear, styles.earRight]}>
-                <View style={styles.innerEar} />
-              </View>
-
-              {/* Face Center */}
-              <View style={styles.faceArea}>
-                {mascotState === 'happy' ? (
-                  /* Happy Celebration State */
-                  <View style={styles.mascotMoodWrap}>
-                    <View style={styles.partyBadge}>
-                      <Text style={styles.partyText}>🎉 YAAY!</Text>
-                    </View>
-                    <View style={styles.eyesRow}>
-                      <Text style={styles.mascotBigEmoji}>😄</Text>
-                    </View>
-                    <Text style={styles.mascotStatusText}>Welcome back!</Text>
-                  </View>
-                ) : mascotState === 'sad' ? (
-                  /* Sad Error State */
-                  <View style={styles.mascotMoodWrap}>
-                    <View style={styles.eyesRow}>
-                      <View style={styles.sadEyeWrap}>
-                        <Text style={styles.mascotBigEmoji}>🥺</Text>
-                        <Animated.View
-                          style={[
-                            styles.tearDrop,
-                            { transform: [{ translateY: tearAnim }] },
-                          ]}
-                        />
-                      </View>
-                    </View>
-                    <View style={styles.sadBadge}>
-                      <Text style={styles.sadBadgeText}>WRONG CREDENTIALS</Text>
-                    </View>
-                  </View>
-                ) : mascotState === 'covering_eyes' ? (
-                  /* Covering Eyes State (Typing Password) */
-                  <View style={styles.mascotMoodWrap}>
-                    <Text style={styles.mascotBigEmoji}>🙈</Text>
-                    <Text style={styles.peekText}>Shh! Password is safe</Text>
-                  </View>
-                ) : (
-                  /* Default / Cute Idle Monkey Face */
-                  <View style={styles.mascotMoodWrap}>
-                    <View style={styles.eyesRow}>
-                      <View style={styles.normalEye}>
-                        <View style={styles.pupil}>
-                          <View style={styles.specular} />
-                        </View>
-                      </View>
-                      <View style={styles.normalEye}>
-                        <View style={styles.pupil}>
-                          <View style={styles.specular} />
-                        </View>
-                      </View>
-                    </View>
-                    <View style={styles.snout}>
-                      <View style={styles.nose} />
-                      <View style={styles.smileCurve} />
-                    </View>
-                  </View>
-                )}
-              </View>
-            </View>
+            {isSuccess ? (
+              // Happy Monkey from Screenshot 1 right side
+              <Image
+                source={require('../assets/monkey-happy.png')}
+                style={styles.monkeyImageHappy}
+                resizeMode="contain"
+              />
+            ) : (
+              // Sad / Neutral Monkey from Screenshot 1 left side
+              <Image
+                source={require('../assets/monkey-sad.png')}
+                style={styles.monkeyImageSad}
+                resizeMode="contain"
+              />
+            )}
           </Animated.View>
 
-          {/* Feedback Banners */}
-          {errorMessage ? (
-            <View style={styles.errorBanner}>
-              <Ionicons name="alert-circle" size={20} color="#DC2626" />
-              <Text style={styles.errorBannerText}>{errorMessage}</Text>
-            </View>
-          ) : null}
+          {/* Card Section: Switches cleanly between Login Form and Success State */}
+          {isSuccess ? (
+            /* SUCCESS CARD STATE (Screenshot 1 Right) */
+            <View style={styles.successCard}>
+              <View style={styles.checkIconWrap}>
+                <Ionicons name="checkmark-circle" size={54} color="#16A34A" />
+              </View>
 
-          {successMessage ? (
-            <View style={styles.successBanner}>
-              <Ionicons name="checkmark-circle" size={20} color="#15803D" />
-              <Text style={styles.successBannerText}>{successMessage}</Text>
-            </View>
-          ) : null}
+              <Text style={styles.successTitle}>Welcome Back!</Text>
+              <Text style={styles.successSubtitle}>You have successfully signed in.</Text>
 
-          {/* Card Form */}
-          <View style={styles.formCard}>
-            <Text style={styles.formTitle}>Sign In</Text>
-            <Text style={styles.formSubtitle}>Access approvals, tracking & billing</Text>
-
-            {/* Identifier Input */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Mobile / Email / Username</Text>
-              <View
-                style={[
-                  styles.inputWrap,
-                  errorMessage ? styles.inputWrapError : null,
-                ]}
+              <TouchableOpacity
+                style={styles.continueBtn}
+                onPress={() => proceedToDashboard(loggedInUser)}
+                activeOpacity={0.85}
               >
-                <Ionicons name="person-outline" size={18} color={Colors.textSecondary} />
+                <Text style={styles.continueBtnText}>Continue</Text>
+                <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
+              </TouchableOpacity>
+            </View>
+          ) : (
+            /* LOGIN CARD STATE (Screenshot 1 Left) */
+            <View style={styles.loginCard}>
+              <Text style={styles.cardHeading}>Sign In</Text>
+              <Text style={styles.cardSubtitle}>Access approvals, tracking & billing</Text>
+
+              {/* Username / Mobile / Email Field */}
+              <View style={styles.inputContainer}>
+                <Ionicons name="person-outline" size={18} color="#64748B" style={styles.fieldIcon} />
                 <TextInput
-                  style={styles.textInput}
-                  placeholder="admin@test.com or registered mobile"
+                  style={styles.inputField}
+                  placeholder="Mobile / Email / Username"
                   placeholderTextColor="#94A3B8"
                   value={identifier}
                   autoCapitalize="none"
-                  onFocus={() => {
-                    if (mascotState !== 'sad' && mascotState !== 'happy') {
-                      setMascotState('idle');
-                    }
-                  }}
                   onChangeText={(t) => {
                     setIdentifier(t);
                     if (errorMessage) setErrorMessage('');
                   }}
                 />
               </View>
-            </View>
 
-            {/* Password Input */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Password</Text>
-              <View
-                style={[
-                  styles.inputWrap,
-                  errorMessage ? styles.inputWrapError : null,
-                ]}
-              >
-                <Ionicons name="lock-closed-outline" size={18} color={Colors.textSecondary} />
+              {/* Password Field */}
+              <View style={styles.inputContainer}>
+                <Ionicons name="lock-closed-outline" size={18} color="#64748B" style={styles.fieldIcon} />
                 <TextInput
-                  style={styles.textInput}
-                  placeholder="Enter password (e.g. admin123)"
+                  style={styles.inputField}
+                  placeholder="Password"
                   placeholderTextColor="#94A3B8"
                   secureTextEntry={!showPassword}
                   value={password}
-                  onFocus={() => {
-                    if (mascotState !== 'sad' && mascotState !== 'happy') {
-                      setMascotState(showPassword ? 'idle' : 'covering_eyes');
-                    }
-                  }}
-                  onBlur={() => {
-                    if (mascotState === 'covering_eyes') {
-                      setMascotState('idle');
-                    }
-                  }}
                   onChangeText={(t) => {
                     setPassword(t);
                     if (errorMessage) setErrorMessage('');
                   }}
                 />
                 <TouchableOpacity
-                  onPress={() => {
-                    const next = !showPassword;
-                    setShowPassword(next);
-                    if (next) setMascotState('idle');
-                    else setMascotState('covering_eyes');
-                  }}
-                  style={styles.eyeBtn}
+                  onPress={() => setShowPassword(!showPassword)}
+                  style={styles.eyeToggle}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
                   <Ionicons
                     name={showPassword ? 'eye-off-outline' : 'eye-outline'}
                     size={20}
-                    color={Colors.textSecondary}
+                    color="#64748B"
                   />
                 </TouchableOpacity>
               </View>
-            </View>
 
-            {/* Login Button */}
-            <TouchableOpacity
-              style={[styles.loginBtn, loading && { opacity: 0.7 }]}
-              onPress={handleLogin}
-              disabled={loading}
-              activeOpacity={0.8}
-            >
-              {loading ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
-              ) : (
-                <View style={styles.loginBtnInner}>
-                  <Text style={styles.loginBtnText}>Sign In</Text>
-                  <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
+              {/* Remember Me & Forgot Password Row */}
+              <View style={styles.optionsRow}>
+                <TouchableOpacity
+                  style={styles.rememberWrap}
+                  onPress={() => setRememberMe(!rememberMe)}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.checkbox, rememberMe && styles.checkboxActive]}>
+                    {rememberMe && <Ionicons name="checkmark" size={13} color="#FFFFFF" />}
+                  </View>
+                  <Text style={styles.rememberText}>Remember Me</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={() => {
+                    Alert.alert(
+                      'Forgot Password?',
+                      'Please contact Master Admin or visit the web portal to reset your password.'
+                    );
+                  }}
+                >
+                  <Text style={styles.forgotLink}>Forgot Password?</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Orange Gradient Sign In Button */}
+              <TouchableOpacity
+                style={[styles.signInBtn, loading && { opacity: 0.7 }]}
+                onPress={handleLogin}
+                disabled={loading}
+                activeOpacity={0.85}
+              >
+                {loading ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <View style={styles.btnContentRow}>
+                    <Text style={styles.signInBtnText}>Sign In</Text>
+                    <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
+                  </View>
+                )}
+              </TouchableOpacity>
+
+              {/* Secure & Trusted Badge */}
+              <View style={styles.secureBadgeRow}>
+                <View style={styles.secureDivider} />
+                <View style={styles.secureContent}>
+                  <Ionicons name="shield-checkmark" size={15} color="#1044C4" />
+                  <Text style={styles.secureText}>Secure & Trusted</Text>
                 </View>
-              )}
-            </TouchableOpacity>
-          </View>
+                <View style={styles.secureDivider} />
+              </View>
+
+              {/* Red Error Message Pill (matches Screenshot 1) */}
+              {errorMessage ? (
+                <View style={styles.errorAlertBox}>
+                  <Ionicons name="alert-circle" size={18} color="#DC2626" />
+                  <Text style={styles.errorAlertText}>{errorMessage}</Text>
+                </View>
+              ) : null}
+            </View>
+          )}
+
+          {/* Bottom City Landscape for Success View */}
+          {isSuccess && (
+            <View style={styles.bottomLandscapeWrap}>
+              <Image
+                source={require('../assets/city-landscape.png')}
+                style={styles.landscapeImage}
+                resizeMode="contain"
+              />
+            </View>
+          )}
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -403,365 +372,300 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#022F94',
+  },
+  bgWarm: {
+    backgroundColor: '#FFF7ED', // Warm peach / cream background
+  },
+  bgSuccess: {
+    backgroundColor: '#F0FDF4', // Fresh light green background
   },
   scrollContent: {
     flexGrow: 1,
-    padding: 20,
+    paddingHorizontal: 22,
+    paddingTop: 16,
+    paddingBottom: 28,
+    alignItems: 'center',
     justifyContent: 'center',
-    maxWidth: 460,
+    maxWidth: 440,
     width: '100%',
     alignSelf: 'center',
   },
+
+  /* Header Branding */
   header: {
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 8,
   },
-  logoWrap: {
+  logoCard: {
     width: 68,
     height: 68,
-    borderRadius: 18,
+    borderRadius: 20,
     backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 10,
-    borderWidth: 2.5,
-    borderColor: '#D6A756',
+    marginBottom: 8,
+    borderWidth: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
-    elevation: 6,
-    overflow: 'hidden',
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  logoCardOrange: {
+    borderColor: '#FDBA74',
+  },
+  logoCardGreen: {
+    borderColor: '#86EFAC',
   },
   logoImage: {
-    width: 64,
-    height: 64,
-    borderRadius: 16,
+    width: 50,
+    height: 50,
   },
-  companyName: {
-    fontSize: 18,
+  companyTitle: {
+    fontSize: 16,
     fontWeight: '900',
-    color: '#FFFFFF',
+    color: '#0F172A',
     letterSpacing: 0.5,
   },
-  tagline: {
-    fontSize: 12,
-    color: '#D6A756',
+  companyTagline: {
+    fontSize: 11,
+    color: '#64748B',
     fontWeight: '600',
     marginTop: 2,
   },
 
-  /* Mascot Styles */
-  mascotContainer: {
-    alignItems: 'center',
-    marginVertical: 10,
-  },
-  mascotHead: {
-    width: 100,
-    height: 90,
-    backgroundColor: '#8B5A2B',
-    borderRadius: 45,
-    position: 'relative',
+  /* Mascot Illustration */
+  mascotWrap: {
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#5D3A1A',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 5,
-    elevation: 4,
+    marginVertical: 6,
+    height: 165,
+    width: '100%',
   },
-  ear: {
-    position: 'absolute',
-    top: 15,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#8B5A2B',
-    borderWidth: 2,
-    borderColor: '#5D3A1A',
-    justifyContent: 'center',
-    alignItems: 'center',
+  monkeyImageSad: {
+    width: 250,
+    height: 160,
   },
-  earLeft: {
-    left: -14,
+  monkeyImageHappy: {
+    width: 260,
+    height: 165,
   },
-  earRight: {
-    right: -14,
-  },
-  innerEar: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    backgroundColor: '#F7C59F',
-  },
-  faceArea: {
-    width: 76,
-    height: 66,
-    backgroundColor: '#F7C59F',
-    borderRadius: 33,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingTop: 4,
-  },
-  eyesRow: {
-    flexDirection: 'row',
-    gap: 16,
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  normalEye: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
+
+  /* Login Form Card */
+  loginCard: {
+    width: '100%',
     backgroundColor: '#FFFFFF',
-    justifyContent: 'center',
-    alignItems: 'center',
+    borderRadius: 24,
+    padding: 22,
+    shadowColor: '#1E293B',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.08,
+    shadowRadius: 18,
+    elevation: 5,
     borderWidth: 1,
-    borderColor: '#333333',
+    borderColor: '#F1F5F9',
   },
-  pupil: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#1E293B',
-    position: 'relative',
-  },
-  specular: {
-    width: 2.5,
-    height: 2.5,
-    borderRadius: 1.5,
-    backgroundColor: '#FFFFFF',
-    position: 'absolute',
-    top: 1,
-    left: 1,
-  },
-  mascotMoodWrap: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  mascotBigEmoji: {
-    fontSize: 28,
-  },
-  mascotStatusText: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#15803D',
-    marginTop: 2,
-  },
-  peekText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#64748B',
-    marginTop: 2,
-  },
-  snout: {
-    alignItems: 'center',
-  },
-  nose: {
-    width: 10,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#3E2723',
-  },
-  smileCurve: {
-    width: 18,
-    height: 8,
-    borderBottomWidth: 2,
-    borderBottomColor: '#3E2723',
-    borderBottomLeftRadius: 9,
-    borderBottomRightRadius: 9,
-    marginTop: 2,
-  },
-
-  /* Mascot State Overlays */
-  happyEye: {
-    alignItems: 'center',
-  },
-  mouthHappy: {
-    marginTop: -4,
-  },
-  partyBadge: {
-    position: 'absolute',
-    top: -22,
-    backgroundColor: '#15803D',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 10,
-  },
-  partyText: {
-    color: '#FFFFFF',
-    fontSize: 10,
-    fontWeight: '900',
-  },
-  sadEyeWrap: {
-    position: 'relative',
-    alignItems: 'center',
-  },
-  sadEye: {
+  cardHeading: {
     fontSize: 20,
-  },
-  tearDrop: {
-    position: 'absolute',
-    bottom: -6,
-    width: 5,
-    height: 8,
-    backgroundColor: '#38BDF8',
-    borderRadius: 3,
-  },
-  mouthSad: {
-    marginTop: -4,
-  },
-  sadBadge: {
-    position: 'absolute',
-    top: -22,
-    backgroundColor: '#DC2626',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 10,
-  },
-  sadBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 9,
-    fontWeight: '900',
-  },
-  pawCover: {
-    alignItems: 'center',
-  },
-  pawEmoji: {
-    fontSize: 32,
-  },
-  mascotEmoji: {
-    fontSize: 22,
-  },
-
-  /* Banners */
-  errorBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#FEE2E2',
-    borderWidth: 1.5,
-    borderColor: '#DC2626',
-    borderRadius: 10,
-    padding: 12,
-    marginBottom: 14,
-  },
-  errorBannerText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#B91C1C',
-    flex: 1,
-  },
-  successBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#DCFCE7',
-    borderWidth: 1.5,
-    borderColor: '#15803D',
-    borderRadius: 10,
-    padding: 12,
-    marginBottom: 14,
-  },
-  successBannerText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#15803D',
-    flex: 1,
-  },
-
-  /* Form Card */
-  formCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 10,
-    elevation: 6,
-  },
-  formTitle: {
-    fontSize: 18,
     fontWeight: '800',
     color: '#0F172A',
   },
-  formSubtitle: {
+  cardSubtitle: {
     fontSize: 12,
     color: '#64748B',
     marginTop: 2,
     marginBottom: 16,
   },
-  inputGroup: {
-    marginBottom: 14,
-  },
-  inputLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#334155',
-    marginBottom: 6,
-  },
-  inputWrap: {
+
+  /* Input Fields */
+  inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
     backgroundColor: '#F8FAFC',
     borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: Platform.OS === 'web' ? 10 : 6,
+    borderColor: '#E2E8F0',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: Platform.OS === 'web' ? 12 : 8,
+    marginBottom: 14,
   },
-  inputWrapError: {
-    borderColor: '#DC2626',
-    backgroundColor: '#FFF5F5',
+  fieldIcon: {
+    marginRight: 10,
   },
-  textInput: {
+  inputField: {
     flex: 1,
     fontSize: 13,
     color: '#0F172A',
   },
-  eyeBtn: {
+  eyeToggle: {
     padding: 4,
   },
-  loginBtn: {
-    backgroundColor: Colors.primary,
-    borderRadius: 10,
-    paddingVertical: 13,
+
+  /* Options Row */
+  optionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 6,
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.3,
-    shadowRadius: 5,
-    elevation: 3,
+    marginTop: 2,
+    marginBottom: 18,
   },
-  loginBtnInner: {
+  rememberWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
   },
-  loginBtnText: {
+  checkbox: {
+    width: 18,
+    height: 18,
+    borderRadius: 5,
+    borderWidth: 1.5,
+    borderColor: '#94A3B8',
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  checkboxActive: {
+    backgroundColor: '#1044C4',
+    borderColor: '#1044C4',
+  },
+  rememberText: {
+    fontSize: 12,
+    color: '#475569',
+    fontWeight: '600',
+  },
+  forgotLink: {
+    fontSize: 12,
+    color: '#1044C4',
+    fontWeight: '700',
+  },
+
+  /* Sign In Button (Orange Warm Theme from Screenshot 1) */
+  signInBtn: {
+    backgroundColor: '#EA580C',
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#EA580C',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  btnContentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  signInBtnText: {
     color: '#FFFFFF',
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '800',
   },
-  testAccountBtn: {
+
+  /* Secure Badge */
+  secureBadgeRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    marginTop: 14,
-    paddingVertical: 8,
-    backgroundColor: '#EFF6FF',
-    borderRadius: 8,
+    marginTop: 18,
   },
-  testAccountText: {
-    fontSize: 12,
-    color: Colors.primary,
+  secureDivider: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#E2E8F0',
+  },
+  secureContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 12,
+  },
+  secureText: {
+    fontSize: 11,
     fontWeight: '700',
+    color: '#475569',
+  },
+
+  /* Error Alert Box */
+  errorAlertBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginTop: 14,
+  },
+  errorAlertText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#DC2626',
+    flex: 1,
+  },
+
+  /* Success Card (Screenshot 1 Right) */
+  successCard: {
+    width: '100%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    paddingVertical: 32,
+    paddingHorizontal: 24,
+    alignItems: 'center',
+    shadowColor: '#16A34A',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 20,
+    elevation: 6,
+    borderWidth: 1,
+    borderColor: '#DCFCE7',
+  },
+  checkIconWrap: {
+    marginBottom: 12,
+  },
+  successTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginBottom: 4,
+  },
+  successSubtitle: {
+    fontSize: 13,
+    color: '#64748B',
+    marginBottom: 24,
+  },
+  continueBtn: {
+    width: '100%',
+    backgroundColor: '#16A34A',
+    borderRadius: 14,
+    paddingVertical: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    shadowColor: '#16A34A',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  continueBtnText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '800',
+  },
+
+  /* Bottom Landscape */
+  bottomLandscapeWrap: {
+    width: '100%',
+    alignItems: 'center',
+    marginTop: 14,
+  },
+  landscapeImage: {
+    width: '100%',
+    height: 75,
   },
 });

@@ -40,7 +40,7 @@ const REQUIRED_DOCS = [
   'FINAL_APPROVAL',
 ];
 
-const WEB_BASE_URL = 'https://building-approval.vercel.app';
+const WEB_BASE_URL = 'https://building-approval-app.vercel.app';
 
 // Workflow Stages matching Web App
 type WorkflowStage =
@@ -649,7 +649,7 @@ export default function ApplicationDetailScreen() {
     }
   };
 
-  // Send Re-upload Request via WhatsApp
+  // Send Re-upload Request via WhatsApp & Backend Email
   const handleSendReuploadRequest = async () => {
     if (!caseData || selectedForReupload.length === 0) {
       Alert.alert('Select Documents', 'Please select at least one document to request re-upload.');
@@ -673,7 +673,29 @@ export default function ApplicationDetailScreen() {
       : `https://wa.me/?text=${encodeURIComponent(message)}`;
 
     try {
-      await Linking.openURL(waUrl);
+      // 1. Notify Backend & Trigger Customer Email via Brevo for each document
+      for (const docKey of selectedForReupload) {
+        try {
+          await applicationService.verifyDocumentStatus({
+            caseId: caseData.id,
+            documentKey: docKey,
+            status: 'Re-upload Required',
+            reuploadReason: 'Please upload a clearer and updated copy of this document.',
+          });
+        } catch (e) {
+          console.warn('Failed to verifyDocumentStatus for doc:', docKey, e);
+        }
+      }
+
+      // 2. Open WhatsApp link
+      try {
+        await Linking.openURL(waUrl);
+      } catch {
+        Share.share({
+          title: `Re-upload Request - ${appNum}`,
+          message,
+        });
+      }
 
       const updatedTracking = {
         ...(caseData.linkTracking || {}),
@@ -686,13 +708,9 @@ export default function ApplicationDetailScreen() {
 
       setReuploadModalVisible(false);
       setSelectedForReupload([]);
-      Alert.alert('Success', 'Re-upload request sent via WhatsApp!');
-    } catch {
-      Share.share({
-        title: `Re-upload Request - ${appNum}`,
-        message,
-      });
-      setReuploadModalVisible(false);
+      Alert.alert('Success', 'Re-upload notification email dispatched to customer and WhatsApp message opened!');
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Failed to process re-upload request.');
     } finally {
       setSendingReupload(false);
     }

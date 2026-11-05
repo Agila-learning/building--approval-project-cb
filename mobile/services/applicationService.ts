@@ -37,6 +37,20 @@ export const applicationService = {
     return { data: res.data, error: res.error };
   },
 
+  async verifyDocumentStatus(payload: {
+    caseId: string;
+    documentKey: string;
+    status: 'Verified' | 'Worker Verified' | 'Pending Review' | 'Re-upload Required';
+    rejectionReason?: string;
+    reuploadReason?: string;
+  }): Promise<{ data?: any; error?: string }> {
+    const res = await apiRequest('/documents/verify-status', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    return { data: res.data, error: res.error };
+  },
+
   async delete(id: string): Promise<{ error?: string }> {
     const res = await apiRequest(`/cases/${id}`, {
       method: 'DELETE',

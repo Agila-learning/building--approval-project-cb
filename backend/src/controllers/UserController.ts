@@ -92,7 +92,7 @@ export const createUser = async (req: Request, res: Response) => {
 
     // 4. Send Real Login Credentials Email via Brevo
     if (cleanEmail) {
-      const origin = req.headers.origin || 'http://localhost:5175';
+      const origin = (req.headers.origin as string) || process.env.FRONTEND_URL || 'https://building-approval-app.vercel.app';
       notificationService.notifyStaffCredentials({
         staffEmail: cleanEmail,
         staffName: newUser.name,

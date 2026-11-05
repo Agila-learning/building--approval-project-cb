@@ -398,14 +398,14 @@ export class CaseController {
 
       // 9. Send Email Confirmation via Brevo with Reference Number & Mobile Number
       if (customerEmail) {
-        const origin = req.headers.origin || 'http://localhost:5173';
+        const origin = (req.headers.origin as string) || process.env.FRONTEND_URL || 'https://building-approval-app.vercel.app';
         notificationService.notifyApplicationSubmitted({
           customerEmail,
           customerName,
           applicationNumber: newCase.application_number as string,
           mobileNumber: cleanMobile,
           propertyAddress: newCase.property?.address || data.fullData?.propertyDetails?.streetName,
-          trackUrl: `${origin}/track-application?id=${newCase.application_number}&mobile=${cleanMobile}`
+          trackUrl: `${origin.replace(/\/$/, '')}/track-application?id=${newCase.application_number}&mobile=${cleanMobile}`
         }).catch(err => {
           console.error("Failed to send application confirmation email via Brevo:", err);
         });
@@ -765,7 +765,7 @@ export class CaseController {
           });
 
           if (newlyAssignedStaffUser.email) {
-            const origin = req.headers.origin || 'http://localhost:5173';
+            const origin = (req.headers.origin as string) || process.env.FRONTEND_URL || 'https://building-approval-app.vercel.app';
             notificationService.notifyCaseAssignedToStaff({
               staffEmail: newlyAssignedStaffUser.email,
               staffName: newlyAssignedStaffUser.name,
@@ -773,7 +773,7 @@ export class CaseController {
               customerName: updated.property?.owner_name || (updated.fullData as any)?.customerName || 'Valued Applicant',
               mobileNumber: updated.property?.owner_phone || (updated.fullData as any)?.mobile || '',
               propertyAddress: updated.property?.address || (updated.fullData as any)?.propertyDetails?.streetName || '',
-              portalUrl: `${origin}/employee/applications`
+              portalUrl: `${origin.replace(/\/$/, '')}/employee/applications`
             }).catch(err => {
               console.error("Failed to send staff assignment email:", err);
             });
@@ -828,6 +828,11 @@ export class CaseController {
                 console.error('[Brevo SMTP] Failed to send approval email in updateCase:', err);
               });
             }
+          } else if (!isApprovedStatus) {
+            // Send live stage status advancement notification to customer via Brevo
+            notificationService.notifyStatusChange(updated.id, existing.status as any, updated.status as any).catch(err => {
+              console.error('[Brevo SMTP] Failed to send status change notification:', err);
+            });
           }
         } else if (data.uploadedFiles && JSON.stringify(data.uploadedFiles) !== JSON.stringify(existing.uploadedFiles)) {
           await prisma.notification.create({

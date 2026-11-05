@@ -180,8 +180,11 @@ export class BrevoNotificationService implements NotificationService {
   }
 
   private async getCustomerDetails(caseId: string) {
-    const caseData = await prisma.case.findUnique({
-      where: { id: caseId },
+    const isObjectId = /^[0-9a-fA-F]{24}$/.test(caseId);
+    const caseData = await prisma.case.findFirst({
+      where: isObjectId
+        ? { OR: [{ id: caseId }, { application_number: caseId }] }
+        : { application_number: caseId },
       include: {
         property: true
       }
@@ -189,12 +192,32 @@ export class BrevoNotificationService implements NotificationService {
 
     if (!caseData || !caseData.property) return null;
 
-    // Look up the customer User by the property's owner_phone
-    const customer = await prisma.user.findUnique({
-      where: { phone: caseData.property.owner_phone }
-    });
+    const full = (caseData.fullData as any) || {};
+    let customerEmail = caseData.property.owner_email || full.email || full.customerEmail || full.applicant?.email;
+    let customerName = caseData.property.owner_name || full.customerName || full.applicant?.name || 'Valued Applicant';
+    let customerPhone = caseData.property.owner_phone || full.mobile || full.phone;
 
-    return { caseData, customer };
+    // Fallback: Look up User by phone if email wasn't on property directly
+    if (!customerEmail && customerPhone) {
+      try {
+        const customerUser = await prisma.user.findUnique({
+          where: { phone: customerPhone }
+        });
+        if (customerUser?.email) customerEmail = customerUser.email;
+        if (customerUser?.name) customerName = customerUser.name;
+      } catch {}
+    }
+
+    if (!customerEmail) return null;
+
+    return {
+      caseData,
+      customer: {
+        email: customerEmail,
+        name: customerName,
+        phone: customerPhone || ''
+      }
+    };
   }
 
   async notifyStatusChange(caseId: string, oldStatus: CaseStatus, newStatus: CaseStatus): Promise<void> {
@@ -202,8 +225,10 @@ export class BrevoNotificationService implements NotificationService {
     if (!result || !result.customer || !result.customer.email) return;
 
     const { caseData, customer } = result;
+    const appNum = caseData.application_number || caseId;
+    const frontendUrl = (process.env.FRONTEND_URL || 'https://building-approval-app.vercel.app').replace(/\/$/, '');
 
-    const subject = `Update on your Building Application (${caseId.substring(0,8)})`;
+    const subject = `Update on your Building Application (${appNum})`;
     const htmlContent = generateEmailTemplate({
       eyebrow: 'Status Update',
       headline: 'Your Application. Now Moving Forward.',
@@ -212,14 +237,14 @@ export class BrevoNotificationService implements NotificationService {
         'The status of your building application has officially advanced. Our team is actively processing your documents and ensuring everything aligns with government requirements.'
       ],
       referenceCard: [
-        { label: 'Application ID', value: caseId.substring(0,8) },
+        { label: 'Application ID', value: appNum },
         { label: 'Property Address', value: caseData.property?.address || 'N/A' },
-        { label: 'Previous Status', value: oldStatus.replace(/_/g, ' ') },
-        { label: 'Current Status', value: newStatus.replace(/_/g, ' ') }
+        { label: 'Previous Status', value: (oldStatus || '').replace(/_/g, ' ') },
+        { label: 'Current Status', value: (newStatus || '').replace(/_/g, ' ') }
       ],
       cta: {
         text: 'Track Application Status',
-        url: 'https://building-approval.vercel.app/track-application'
+        url: `${frontendUrl}/track-application?id=${appNum}&mobile=${customer.phone || ''}`
       }
     });
 
@@ -346,7 +371,7 @@ export class BrevoNotificationService implements NotificationService {
       ],
       cta: {
         text: 'Track Your Application Now',
-        url: trackUrl || 'http://localhost:5175/track'
+        url: trackUrl || `${(process.env.FRONTEND_URL || 'https://building-approval-app.vercel.app').replace(/\/$/, '')}/track-application`
       }
     });
 
@@ -363,6 +388,7 @@ export class BrevoNotificationService implements NotificationService {
     loginUrl?: string;
   }): Promise<void> {
     const { staffEmail, staffName, staffId, phone, password, role, loginUrl } = params;
+    const frontendUrl = (process.env.FRONTEND_URL || 'https://building-approval-app.vercel.app').replace(/\/$/, '');
     const subject = `Welcome to the Team! Your Login Credentials - CB Building Approvals`;
     const htmlContent = generateEmailTemplate({
       eyebrow: 'Employee Portal Onboarding',
@@ -381,7 +407,7 @@ export class BrevoNotificationService implements NotificationService {
       ],
       cta: {
         text: 'Log In to Staff Portal',
-        url: loginUrl || 'http://localhost:5175/login'
+        url: loginUrl || `${frontendUrl}/login`
       }
     });
 
@@ -398,6 +424,7 @@ export class BrevoNotificationService implements NotificationService {
     portalUrl?: string;
   }): Promise<void> {
     const { staffEmail, staffName, applicationNumber, customerName, mobileNumber, propertyAddress, portalUrl } = params;
+    const frontendUrl = (process.env.FRONTEND_URL || 'https://building-approval-app.vercel.app').replace(/\/$/, '');
     const subject = `New Project Assigned: ${applicationNumber} - CB Building Approvals`;
     const htmlContent = generateEmailTemplate({
       eyebrow: 'Project Assignment',
@@ -415,7 +442,7 @@ export class BrevoNotificationService implements NotificationService {
       ],
       cta: {
         text: 'Open Application in Staff Portal',
-        url: portalUrl || 'http://localhost:5175/employee/applications'
+        url: portalUrl || `${frontendUrl}/employee/applications`
       }
     });
 
@@ -430,6 +457,7 @@ export class BrevoNotificationService implements NotificationService {
     trackUrl: string;
   }): Promise<void> {
     const { customerEmail, customerName, applicationNumber, product, trackUrl } = params;
+    const frontendUrl = (process.env.FRONTEND_URL || 'https://building-approval-app.vercel.app').replace(/\/$/, '');
     const subject = `Congratulations! Application Completed: ${applicationNumber} - CB Building Approvals`;
     const htmlContent = generateEmailTemplate({
       eyebrow: 'Approval Complete',
@@ -450,7 +478,7 @@ export class BrevoNotificationService implements NotificationService {
       ],
       cta: {
         text: 'View Completed Application',
-        url: trackUrl || 'http://localhost:5173/track-application'
+        url: trackUrl || `${frontendUrl}/track-application?id=${applicationNumber}`
       }
     });
 
@@ -480,6 +508,7 @@ export class BrevoNotificationService implements NotificationService {
       receiptUrl
     } = params;
 
+    const frontendUrl = (process.env.FRONTEND_URL || 'https://building-approval-app.vercel.app').replace(/\/$/, '');
     const formattedAmount = typeof amountPaid === 'number' ? `₹${amountPaid.toLocaleString('en-IN')}` : `₹${amountPaid}`;
     const subject = `Payment Received & Verified: Proposal #${proposalNumber} - CB Building Approvals`;
     const htmlContent = generateEmailTemplate({
@@ -502,7 +531,7 @@ export class BrevoNotificationService implements NotificationService {
       ],
       cta: {
         text: 'View Official Payment Receipt',
-        url: receiptUrl || `http://localhost:5173/print/receipt/${proposalNumber}`
+        url: receiptUrl || `${frontendUrl}/print/receipt/${proposalNumber}`
       }
     });
 
