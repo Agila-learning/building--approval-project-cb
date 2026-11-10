@@ -22,16 +22,20 @@ const Navbar: React.FC = () => {
 
   return (
     <header className="site-header" style={{ 
-      position: 'sticky', 
+      position: 'fixed', 
       top: 0, 
       left: 0,
       right: 0,
       width: '100%',
+      height: '70px',
       margin: 0,
       padding: 0,
       zIndex: 1000, 
-      backgroundColor: 'var(--bg-surface)',
+      backgroundColor: 'rgba(255, 255, 255, 0.98)',
+      backdropFilter: 'blur(8px)',
+      WebkitBackdropFilter: 'blur(8px)',
       borderBottom: '1px solid var(--border-color)',
+      boxShadow: '0 2px 10px rgba(0, 0, 0, 0.05)',
     }}>
       <div className="container" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', height: '70px' }}>
         
@@ -100,7 +104,9 @@ const Navbar: React.FC = () => {
           backgroundColor: 'var(--bg-surface)', 
           borderBottom: '1px solid var(--border-color)',
           padding: '1.5rem',
-          boxShadow: 'var(--shadow-md)'
+          boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.15)',
+          maxHeight: 'calc(100vh - 70px)',
+          overflowY: 'auto'
         }}>
           <ul style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', listStyle: 'none', marginBottom: '2rem', padding: 0 }}>
             <li><Link to="/" onClick={() => { setIsMenuOpen(false); window.scrollTo({ top: 0, behavior: 'smooth' }); }} className="nav-link" style={{ display: 'block', ...getLinkStyle('/', '') }}>Home</Link></li>

@@ -420,18 +420,21 @@ const Login: React.FC = () => {
           {/* Modern Architectural Building Illustration Graphic */}
           <div style={{
             width: '100%',
-            maxWidth: '340px',
-            position: 'relative'
+            maxWidth: '380px',
+            position: 'relative',
+            borderRadius: '18px',
+            overflow: 'hidden',
+            boxShadow: '0 20px 40px -15px rgba(11, 37, 69, 0.16)',
+            border: '1px solid rgba(226, 232, 240, 0.85)',
+            backgroundColor: '#FAF9F6'
           }}>
             <img
               src="/assets/building-illustration.png"
-              alt="Architectural Building"
+              alt="CB Architectural Building"
               style={{
                 width: '100%',
                 height: 'auto',
                 display: 'block',
-                borderRadius: '16px',
-                filter: 'drop-shadow(0 15px 25px rgba(11, 37, 69, 0.12))'
               }}
             />
           </div>
