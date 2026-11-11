@@ -14,6 +14,9 @@ export class AuthController {
       }
 
       const cleanMobile = rawInput.replace(/\D/g, '').slice(-10);
+      const cleanPassword = String(password || '').trim();
+      const cleanPasswordMobile = cleanPassword.replace(/\D/g, '').slice(-10);
+      const isMobilePassMatch = cleanMobile.length === 10 && (cleanPassword === cleanMobile || cleanPasswordMobile === cleanMobile || cleanPassword === rawInput);
 
       // Search by email, phone, staffId, or name
       let user = await prisma.user.findFirst({
@@ -49,6 +52,59 @@ export class AuthController {
         }
       }
 
+      // Customer auto-account creation when logging in with mobile number
+      if (!user && cleanMobile.length === 10) {
+        let custName: string | undefined;
+
+        // Check Property
+        const prop = await prisma.property.findFirst({
+          where: { owner_phone: { contains: cleanMobile } }
+        });
+        if (prop?.owner_name) custName = prop.owner_name;
+
+        // Check Lead if not in property
+        if (!custName) {
+          const lead = await prisma.lead.findFirst({
+            where: { phone: { contains: cleanMobile } }
+          });
+          if (lead?.name) custName = lead.name;
+        }
+
+        // Check Cases fullData
+        if (!custName) {
+          const cases = await prisma.case.findMany({
+            take: 30,
+            select: { id: true, property: true, fullData: true }
+          });
+          const matchedCase = cases.find((c: any) => {
+            const ph = c.property?.owner_phone || c.fullData?.mobile || c.fullData?.phone;
+            return ph && String(ph).replace(/\D/g, '').slice(-10) === cleanMobile;
+          });
+          if (matchedCase) custName = (matchedCase.fullData as any)?.customerName || (matchedCase.property as any)?.owner_name;
+        }
+
+        // If this customer exists or is using mobile number as password, auto-create CLIENT_READONLY
+        if (isMobilePassMatch || prop || custName) {
+          const displayName = custName || `Customer (${cleanMobile})`;
+          const defaultCustHash = await bcrypt.hash(cleanMobile, 10);
+          try {
+            user = await prisma.user.create({
+              data: {
+                name: displayName,
+                phone: cleanMobile,
+                role: 'CLIENT_READONLY',
+                password_hash: defaultCustHash,
+                status: 'Active'
+              }
+            });
+          } catch (e) {
+            user = await prisma.user.findFirst({
+              where: { phone: cleanMobile }
+            });
+          }
+        }
+      }
+
       if (!user) {
         return res.status(401).json({ error: 'No account found with this email or mobile number.' });
       }
@@ -57,7 +113,6 @@ export class AuthController {
         return res.status(403).json({ error: 'This account has been deactivated. Please contact administrator.' });
       }
 
-      const cleanPassword = String(password || '').trim();
       let isValidPassword = false;
 
       // 1. Check bcrypt hash
@@ -72,7 +127,21 @@ export class AuthController {
         }
       }
 
-      // 2. Fallback check: default passwords or direct match
+      // 2. Customer login: mobile number used as password
+      if (!isValidPassword) {
+        if (
+          user.role === 'CLIENT_READONLY' &&
+          (cleanPassword === user.phone ||
+           cleanPasswordMobile === user.phone ||
+           (cleanMobile.length === 10 && (cleanPassword === cleanMobile || cleanPasswordMobile === cleanMobile)))
+        ) {
+          isValidPassword = true;
+        } else if (isMobilePassMatch && user.phone && (user.phone === cleanMobile || user.phone.includes(cleanMobile))) {
+          isValidPassword = true;
+        }
+      }
+
+      // 3. Fallback check: default passwords or direct match
       if (!isValidPassword && (
         (user.role === 'ADMIN' && (cleanPassword === 'admin123' || password === 'admin123')) ||
         (user.role === 'STAFF' && (cleanPassword === 'StaffPass@2026' || password === 'StaffPass@2026')) ||

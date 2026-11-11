@@ -691,7 +691,12 @@ export class CaseController {
       if (data.status !== undefined) updatePayload.status = data.status;
       if (data.approval_type !== undefined) updatePayload.approval_type = data.approval_type;
       if (data.approval_number !== undefined) updatePayload.approval_number = data.approval_number;
-      if (data.uploadedFiles !== undefined) updatePayload.uploadedFiles = data.uploadedFiles;
+      if (data.uploadedFiles !== undefined) {
+        updatePayload.uploadedFiles = {
+          ...((existing.uploadedFiles as any) || {}),
+          ...data.uploadedFiles
+        };
+      }
       if (data.linkTracking !== undefined) updatePayload.linkTracking = data.linkTracking;
       if (data.reason !== undefined) updatePayload.reason = data.reason;
 
@@ -739,8 +744,13 @@ export class CaseController {
         ...existingFullData,
         ...newFullData,
         stages: newFullData.stages || existingFullData.stages || buildDefaultStages(existing),
-        documentVerification: newFullData.documentVerification || existingFullData.documentVerification || {},
-        requestedReuploads: newFullData.requestedReuploads || existingFullData.requestedReuploads || [],
+        documentVerification: {
+          ...(existingFullData.documentVerification || {}),
+          ...(newFullData.documentVerification || {}),
+        },
+        requestedReuploads: newFullData.requestedReuploads !== undefined
+          ? newFullData.requestedReuploads
+          : (data.requestedReuploads !== undefined ? data.requestedReuploads : existingFullData.requestedReuploads || []),
         completionEmailSent: newFullData.completionEmailSent !== undefined ? newFullData.completionEmailSent : existingFullData.completionEmailSent,
         ...(targetStaffName !== undefined ? { staff: targetStaffName } : {})
       };

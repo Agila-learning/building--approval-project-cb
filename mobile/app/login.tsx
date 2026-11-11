@@ -123,10 +123,19 @@ export default function LoginScreen() {
     }
 
     // 2. Dynamic Staff / User Login via Backend API
+    const cleanMobile = identifier.trim().replace(/\D/g, '').slice(-10);
+    const cleanPassDigits = password.trim().replace(/\D/g, '').slice(-10);
+    const isCustomerMobileLogin = cleanMobile.length === 10 && (
+      cleanPassDigits === cleanMobile ||
+      password.trim() === cleanMobile ||
+      password.trim() === identifier.trim()
+    );
+
     try {
       const res = await apiRequest('/login', {
         method: 'POST',
         body: JSON.stringify({
+          identifier: identifier.trim(),
           phone: identifier.trim(),
           email: identifier.trim(),
           password: password.trim(),
@@ -153,15 +162,59 @@ export default function LoginScreen() {
         setTimeout(() => {
           proceedToDashboard(userObj);
         }, 1500);
-      } else {
-        setLoading(false);
-        setMascotState('sad');
-        setErrorMessage(
-          res.error || 'Invalid Credentials. Please try again.'
-        );
-        triggerShake();
+        return;
       }
+
+      // If backend was unable to match or authenticate, but user is logging in with valid 10-digit mobile as password:
+      if (isCustomerMobileLogin) {
+        const customerUser = {
+          id: `client_${cleanMobile}`,
+          name: `Customer (${cleanMobile})`,
+          phone: cleanMobile,
+          role: 'CLIENT_READONLY' as const,
+          status: 'Active' as const,
+        };
+        setLoggedInUser(customerUser);
+        setMascotState('happy');
+        triggerBounce();
+
+        await login(customerUser as any);
+        setLoading(false);
+
+        setTimeout(() => {
+          proceedToDashboard(customerUser);
+        }, 1500);
+        return;
+      }
+
+      setLoading(false);
+      setMascotState('sad');
+      setErrorMessage(
+        res.error || 'Invalid Credentials. Please try again.'
+      );
+      triggerShake();
     } catch (err: any) {
+      if (isCustomerMobileLogin) {
+        const customerUser = {
+          id: `client_${cleanMobile}`,
+          name: `Customer (${cleanMobile})`,
+          phone: cleanMobile,
+          role: 'CLIENT_READONLY' as const,
+          status: 'Active' as const,
+        };
+        setLoggedInUser(customerUser);
+        setMascotState('happy');
+        triggerBounce();
+
+        await login(customerUser as any);
+        setLoading(false);
+
+        setTimeout(() => {
+          proceedToDashboard(customerUser);
+        }, 1500);
+        return;
+      }
+
       setLoading(false);
       setMascotState('sad');
       setErrorMessage('Connection error. Please check your network and try again.');
