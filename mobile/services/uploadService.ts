@@ -1,5 +1,6 @@
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
+import { Platform } from 'react-native';
 
 const CLOUDINARY_CLOUD_NAME = process.env.EXPO_PUBLIC_CLOUDINARY_CLOUD_NAME || 'dfou7lxtg';
 const CLOUDINARY_PRESET = process.env.EXPO_PUBLIC_CLOUDINARY_UPLOAD_PRESET || 'ml_default';
@@ -15,11 +16,21 @@ export async function uploadToCloudinary(
     const isPdf = cleanFileName.toLowerCase().endsWith('.pdf');
     const mimeType = mimeTypeOverride || (isPdf ? 'application/pdf' : 'image/jpeg');
 
-    formData.append('file', {
-      uri: fileUri,
-      type: mimeType,
-      name: cleanFileName,
-    } as any);
+    if (Platform.OS === 'web') {
+      if (fileUri.startsWith('data:') || fileUri.startsWith('blob:')) {
+        const response = await fetch(fileUri);
+        const blob = await response.blob();
+        formData.append('file', blob, cleanFileName);
+      } else {
+        formData.append('file', fileUri);
+      }
+    } else {
+      formData.append('file', {
+        uri: fileUri,
+        type: mimeType,
+        name: cleanFileName,
+      } as any);
+    }
 
     formData.append('upload_preset', CLOUDINARY_PRESET);
 
@@ -70,7 +81,7 @@ export const uploadService = {
 
   async pickImage(): Promise<{ uri: string; name: string } | null> {
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ['images'],
       allowsEditing: false,
       quality: 0.8,
     });
@@ -87,6 +98,23 @@ export const uploadService = {
   },
 
   async takePhoto(): Promise<{ uri: string; name: string } | null> {
+    if (Platform.OS === 'web') {
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: false,
+        quality: 0.8,
+      });
+
+      if (result.canceled || !result.assets || result.assets.length === 0) {
+        return null;
+      }
+
+      const asset = result.assets[0];
+      return {
+        uri: asset.uri,
+        name: asset.fileName || `photo_${Date.now()}.jpg`,
+      };
+    }
+
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') {
       throw new Error('Camera permission not granted');
