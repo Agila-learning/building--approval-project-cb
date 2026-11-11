@@ -24,11 +24,16 @@ export const CustomBottomTabBar: React.FC<CustomBottomTabBarProps> = ({
   const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === 'web';
 
-  // Filter primary tabs: adapt for customer portal routes ['index', 'upload']
+  // Filter primary tabs per portal
   const isCustomerTabs = state.routes.some((route: any) => route.name === 'upload');
-  const allowedTabs = isCustomerTabs
-    ? ['index', 'upload']
-    : PRIMARY_TABS;
+  const isEmployeeTabs = state.routes.some((route: any) => route.name === 'attendance');
+
+  let allowedTabs = PRIMARY_TABS;
+  if (isCustomerTabs) {
+    allowedTabs = ['index', 'upload'];
+  } else if (isEmployeeTabs) {
+    allowedTabs = ['index', 'applications', 'attendance'];
+  }
 
   const primaryRoutes = state.routes.filter((route: any) =>
     allowedTabs.includes(route.name)
@@ -124,13 +129,17 @@ export const CustomBottomTabBar: React.FC<CustomBottomTabBarProps> = ({
         );
       })}
 
-      {/* 5th Navigation Item: More (Hamburger Drawer trigger) */}
+      {/* 5th Navigation Item: More (Hamburger Drawer trigger or More Screen) */}
       <TouchableOpacity
         accessibilityRole="button"
         accessibilityLabel="More Options"
         onPress={() => {
           if (onOpenMenu) {
             onOpenMenu();
+          }
+          const hasMoreScreen = state.routes.some((r: any) => r.name === 'more');
+          if (hasMoreScreen) {
+            navigation.navigate('more');
           }
         }}
         activeOpacity={0.7}

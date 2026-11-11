@@ -41,6 +41,15 @@ export default function CustomerLayout() {
             ),
           }}
         />
+        <Tabs.Screen
+          name="more"
+          options={{
+            title: 'More',
+            tabBarIcon: ({ color, size }) => (
+              <Ionicons name="menu-outline" size={size} color={color} />
+            ),
+          }}
+        />
       </Tabs>
 
       {/* Customer Menu Drawer - Opened by "More" button */}

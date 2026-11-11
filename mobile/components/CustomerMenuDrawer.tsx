@@ -30,6 +30,8 @@ export const CustomerMenuDrawer: React.FC<CustomerMenuDrawerProps> = ({
   const [bankModalVisible, setBankModalVisible] = useState(false);
   const [copiedUpi, setCopiedUpi] = useState(false);
 
+  if (!visible) return null;
+
   const handleNavigate = (path: any) => {
     onClose();
     setTimeout(() => {
@@ -317,6 +319,7 @@ const styles = StyleSheet.create({
   overlay: {
     flex: 1,
     flexDirection: 'row',
+    zIndex: 9999,
   },
   backdrop: {
     position: 'absolute',
@@ -325,6 +328,7 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     backgroundColor: 'rgba(15, 23, 42, 0.45)',
+    zIndex: 1,
   },
   drawerContainer: {
     width: '84%',
@@ -334,7 +338,8 @@ const styles = StyleSheet.create({
     shadowColor: '#000',
     shadowOpacity: 0.15,
     shadowRadius: 10,
-    elevation: 16,
+    elevation: 20,
+    zIndex: 10,
   },
   drawerHeader: {
     backgroundColor: Colors.primary,
