@@ -24,14 +24,19 @@ export const CustomBottomTabBar: React.FC<CustomBottomTabBarProps> = ({
   const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === 'web';
 
-  // Strictly filter to the 4 primary tabs
+  // Filter primary tabs: adapt for customer portal routes ['index', 'upload']
+  const isCustomerTabs = state.routes.some((route: any) => route.name === 'upload');
+  const allowedTabs = isCustomerTabs
+    ? ['index', 'upload']
+    : PRIMARY_TABS;
+
   const primaryRoutes = state.routes.filter((route: any) =>
-    PRIMARY_TABS.includes(route.name)
+    allowedTabs.includes(route.name)
   );
 
   // Check if current active route is a primary tab
   const activeRouteName = state.routes[state.index]?.name;
-  const isSubRouteActive = !PRIMARY_TABS.includes(activeRouteName);
+  const isSubRouteActive = !allowedTabs.includes(activeRouteName);
 
   return (
     <View

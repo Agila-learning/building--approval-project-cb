@@ -49,16 +49,51 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
   // Fetch notifications
   const loadNotifications = useCallback(async () => {
     try {
-      const res = await apiRequest<NotificationItem[]>('/notifications');
+      const isCustomer = user?.role === 'CLIENT_READONLY';
+      const cleanPhone = (user?.phone || '').replace(/\D/g, '').slice(-10);
+      const endpoint = isCustomer
+        ? `/notifications?role=CLIENT_READONLY&phone=${encodeURIComponent(cleanPhone)}`
+        : `/notifications?role=${user?.role || ''}`;
+
+      const res = await apiRequest<NotificationItem[]>(endpoint, {
+        headers: {
+          'x-user-role': user?.role || '',
+          'x-user-phone': cleanPhone,
+        },
+      });
+
       if (res.data && Array.isArray(res.data)) {
-        setNotifications(res.data);
-        const unread = res.data.filter((n) => !n.read).length;
+        let list = res.data;
+
+        // Customer Isolation Filter: strictly eliminate all admin/staff alerts
+        if (isCustomer) {
+          list = list.filter((n) => {
+            const t = (n.type || '').toLowerCase();
+            const title = (n.title || '').toLowerCase();
+            if (['attendance', 'lead_created', 'lead_assigned', 'enquiry_created', 'staff_login'].includes(t)) {
+              return false;
+            }
+            if (
+              title.includes('attendance') ||
+              title.includes('lead assigned') ||
+              title.includes('new lead') ||
+              title.includes('new enquiry') ||
+              title.includes('worker assigned')
+            ) {
+              return false;
+            }
+            return true;
+          });
+        }
+
+        setNotifications(list);
+        const unread = list.filter((n) => !n.read).length;
         setUnreadCount(unread > 0 ? unread : 0);
       }
     } catch (err) {
       // safe fallback
     }
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     loadNotifications();
@@ -73,7 +108,13 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
 
   const handleMarkAllRead = async () => {
     try {
-      await apiRequest('/notifications/mark-all-read', { method: 'POST' });
+      await apiRequest('/notifications/mark-all-read', {
+        method: 'POST',
+        headers: {
+          'x-user-role': user?.role || '',
+          'x-user-phone': user?.phone || '',
+        },
+      });
       setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
       setUnreadCount(0);
     } catch {
@@ -84,7 +125,9 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
 
   const handleNotificationPress = (item: NotificationItem) => {
     setModalOpen(false);
-    if (item.case_id) {
+    if (user?.role === 'CLIENT_READONLY') {
+      router.replace('/(customer)');
+    } else if (item.case_id) {
       router.push({
         pathname: '/(admin)/application-detail',
         params: { id: item.case_id },
